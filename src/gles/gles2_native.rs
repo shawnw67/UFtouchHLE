@@ -267,8 +267,15 @@ fn patch_shader_for_native_es2(
     inject_default_float_precision: bool,
     is_vertex_shader: bool,
 ) -> String {
-    let source =
-        patch_shadow_samplers_extension(source, is_vertex_shader, shadow_samplers_ext_supported);
+    // The extension is fragment-only, so a vertex shader, or a source shared
+    // by both stages (Monster Hunter's are, with `#define FRAGMENT` added for
+    // the fragment shader), must emulate the samplers so the stages agree.
+    let shared_by_both_stages = source.contains("FRAGMENT");
+    let source = patch_shadow_samplers_extension(
+        source,
+        is_vertex_shader,
+        shadow_samplers_ext_supported && !is_vertex_shader && !shared_by_both_stages,
+    );
     let lines: Vec<&str> = source.lines().collect();
 
     // Separate lines into categories for hoisting.

@@ -63,43 +63,45 @@ pub fn patch_shadow_samplers_extension(
         }
     }
 
-    if is_vertex_shader || shadow_samplers_ext_supported || !output.contains("shadow2DEXT") {
+    if shadow_samplers_ext_supported || !output.contains("sampler2DShadow") {
         return output;
     }
 
-    let sample_function = if output
+    // Emulate the comparison with an ordinary depth-texture sample, in both
+    // stages: Monster Hunter Portable 2nd G and Freedom Unite share one source
+    // between them, so the vertex shader declares the samplers too.
+    let (sample, sample_proj) = if output
         .lines()
         .any(|line| line.trim_start().starts_with("#version 300 es"))
     {
-        "texture"
+        ("texture", "textureProj")
     } else {
-        "texture2D"
+        ("texture2D", "texture2DProj")
     };
-    let mut output = output
+    let output = output
         .replace("sampler2DShadow", "sampler2D")
+        .replace("shadow2DProjEXT", "touchHLE_shadow2DProjEXT")
         .replace("shadow2DEXT", "touchHLE_shadow2DEXT");
-    let helper = format!(
-        "highp float touchHLE_shadow2DEXT(highp sampler2D shadow_map, highp vec3 shadow_coord) {{\n    highp float depth = {sample_function}(shadow_map, shadow_coord.xy).r;\n    return step(shadow_coord.z, depth);\n}}\n\n"
+    let helpers = format!(
+        "#define touchHLE_shadow2DEXT(s, c) step((c).z, {sample}(s, (c).xy).r)\n\
+         #define touchHLE_shadow2DProjEXT(s, c) step((c).z / (c).w, {sample_proj}(s, c).r)\n"
     );
-    let mut offset = 0;
-    let mut insertion_point = None;
+    // Directives that must come first stay first.
+    let mut insertion_point = 0;
     for line in output.split_inclusive('\n') {
-        if line.trim() == "#define FRAGMENT" {
-            insertion_point = Some(offset + line.len());
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("#version")
+            || trimmed.starts_with("#extension")
+            || trimmed.is_empty()
+            || trimmed.starts_with("//")
+        {
+            insertion_point += line.len();
+        } else {
             break;
         }
-        offset += line.len();
     }
-    let insertion_point = insertion_point.or_else(|| {
-        output.find("void main").map(|main_start| {
-            output[..main_start]
-                .rfind('\n')
-                .map_or(0, |newline| newline + 1)
-        })
-    });
-    if let Some(insertion_point) = insertion_point {
-        output.insert_str(insertion_point, &helper);
-    }
+    let mut output = output;
+    output.insert_str(insertion_point, &helpers);
     output
 }
 
@@ -579,12 +581,24 @@ mod tests {
         assert!(!patched.contains("sampler2DShadow"));
         assert!(patched.contains("uniform highp sampler2D u_shadowMap;"));
         assert!(patched.contains("touchHLE_shadow2DEXT(u_shadowMap, vec3(0.5))"));
-        assert!(patched.contains("texture2D(shadow_map, shadow_coord.xy).r"));
-        assert!(patched.contains("step(shadow_coord.z, depth)"));
+        assert!(patched.contains("step((c).z, texture2D(s, (c).xy).r)"));
         assert!(
-            patched.find("highp float touchHLE_shadow2DEXT").unwrap()
-                < patched.find("void main").unwrap()
+            patched.find("#define touchHLE_shadow2DEXT").unwrap()
+                < patched.find("uniform").unwrap()
         );
+        assert!(patched.starts_with("#version 100\n"));
+    }
+
+    #[test]
+    fn emulates_shadow_samplers_in_vertex_shaders_too() {
+        let src = "#extension GL_EXT_shadow_samplers : require\nuniform sampler2DShadow s;\nvarying vec4 c;\nvoid main() { gl_Position = c; }\n";
+        let patched = patch_shadow_samplers_extension(src, true, false);
+        assert!(!patched.contains("sampler2DShadow"));
+        assert!(patched.contains("uniform sampler2D s;"));
+        let fragment = "uniform sampler2DShadow s;\nvarying vec4 c;\nvoid main() { gl_FragColor = vec4(shadow2DProjEXT(s, c)); }\n";
+        let patched = patch_shadow_samplers_extension(fragment, false, false);
+        assert!(patched.contains("touchHLE_shadow2DProjEXT(s, c)"));
+        assert!(patched.contains("texture2DProj(s, c).r"));
     }
 
     #[test]
