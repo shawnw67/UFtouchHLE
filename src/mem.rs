@@ -802,6 +802,31 @@ impl Mem {
         self.bytes_at(ptr, len)
     }
 
+    /// Like [Mem::cstr_at], but stops after `max_len` bytes if there's no null
+    /// terminator by then.
+    pub fn cstr_at_with_max_len<const MUT: bool>(&self, ptr: Ptr<u8, MUT>, max_len: u32) -> &[u8] {
+        let mut len: u32 = 0;
+        while self.read(ptr + len) != b'\0' {
+            len += 1;
+            if len >= max_len {
+                log!(
+                    "Warning: cstr_at({:?}): hit {}B safety limit without finding null terminator; truncating.",
+                    ptr,
+                    max_len
+                );
+                break;
+            }
+        }
+        self.bytes_at(ptr, len)
+    }
+
+    /// Whether a host pointer points into guest memory.
+    pub fn is_host_ptr_in_guest_mem(&self, host_ptr: *const std::ffi::c_void) -> bool {
+        let host_ptr = host_ptr as usize;
+        let guest_mem_start = self.bytes.cast::<u8>() as usize;
+        (guest_mem_start..guest_mem_start + (1usize << 32)).contains(&host_ptr)
+    }
+
     /// Get a C string (null-terminated) as a string slice, if it is valid
     /// UTF-8, otherwise returning a byte slice. The null terminator is not
     /// included in the slice.

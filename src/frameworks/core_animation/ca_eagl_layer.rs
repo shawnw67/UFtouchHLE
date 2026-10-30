@@ -78,13 +78,7 @@ pub struct FullscreenEaglLayer {
 pub fn find_fullscreen_eagl_layer_with_overlays(
     env: &mut Environment,
 ) -> Option<FullscreenEaglLayer> {
-    if env.options.force_composition
-        || !env
-            .framework_state
-            .opengles
-            .programmable_contexts
-            .is_empty()
-    {
+    if env.options.force_composition {
         return None;
     }
 

@@ -250,7 +250,7 @@ pub fn recomposite_if_necessary(env: &mut Environment, force: bool) -> Option<In
         composition
             .fps_counter
             .get_or_insert_with(FpsCounter::start)
-            .count_frame(format_args!("Core Animation compositor"));
+            .count_frame(format_args!("Core Animation compositor"), true);
     }
 
     // TODO: draw status bar if it's not hidden

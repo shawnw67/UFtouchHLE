@@ -204,7 +204,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/dyld.rs` | both-modified | cxxabi_throw_intercept, dyld_stub_binder | pending |
 | `src/dyld/dylib_list.rs` | both-modified | — | pending |
 | `src/dyld/swift_runtime.rs` | hyper-added | — | pending |
-| `src/env_flags.rs` | hyper-added | — | pending |
+| `src/env_flags.rs` | hyper-added | — | ported: ES2/ES3 batch |
 | `src/environment.rs` | both-modified | — | pending |
 | `src/environment/app_picker.rs` | both-modified | — | pending |
 | `src/environment/app_picker/access_prompt.rs` | hyper-added | — | pending |
@@ -439,13 +439,13 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/frameworks/mobile_core_services.rs` | hyper-added | — | pending |
 | `src/frameworks/mopub.rs` | hyper-added | — | pending |
 | `src/frameworks/openal.rs` | both-modified | alcASAGetListener, alcASAGetSource, alcMacOSXGetRenderingQuality, alcMacOSXRenderingQuality | pending |
-| `src/frameworks/opengles.rs` | both-modified | — | pending |
-| `src/frameworks/opengles/eagl.rs` | both-modified | EAGLGetVersion | pending |
-| `src/frameworks/opengles/gles2_guest.rs` | uf-added | — | pending |
-| `src/frameworks/opengles/gles_guest.rs` | both-modified | glAttachShader, glBeginQuery, glBeginQueryEXT, glBeginTransformFeedback, glBindAttribLocation, glBindBufferBase, glBindBufferRange, glBindFramebuffer, glBindRenderbuffer, glBindSampler, glBindTransformFeedback, glBindVertexArray, glBindVertexArrayOES, glBlendColor, glBlendEquation, glBlendEquationSeparate, glBlendFuncSeparate, glBlitFramebuffer, glCheckFramebufferStatus, glClearBufferfi, glClearBufferfv, glClearBufferiv, glClearBufferuiv, glClientWaitSync, glClientWaitSyncAPPLE, glCompileShader, glCompressedTexImage3D, glCompressedTexSubImage2D, glCompressedTexSubImage3D, glCopyBufferSubData, glCopyTexSubImage3D, glCreateProgram, glCreateShader, glDeleteFramebuffers, glDeleteProgram, glDeleteQueries, glDeleteQueriesEXT, glDeleteRenderbuffers, glDeleteSamplers, glDeleteShader, glDeleteSync, glDeleteSyncAPPLE, glDeleteTransformFeedbacks, glDeleteVertexArrays, glDeleteVertexArraysOES, glDetachShader, glDisableVertexAttribArray, glDiscardFramebufferEXT, glDrawArraysInstanced, glDrawBuffers, glDrawElementsInstanced, glDrawRangeElements, glDrawTexfOES, glDrawTexfvOES, glDrawTexiOES, glDrawTexivOES, glDrawTexsOES, glDrawTexsvOES, glDrawTexxOES, glDrawTexxvOES, glEnableVertexAttribArray, glEndQuery, glEndQueryEXT, glEndTransformFeedback, glFenceSync, glFenceSyncAPPLE, glFlushMappedBufferRange, glFramebufferRenderbuffer, glFramebufferTexture2D, glFramebufferTextureLayer, glGenFramebuffers, glGenQueries, glGenQueriesEXT, glGenRenderbuffers, glGenSamplers, glGenTransformFeedbacks, glGenVertexArrays, glGenVertexArraysOES, glGenerateMipmap, glGetActiveAttrib, glGetActiveUniform, glGetActiveUniformBlockName, glGetActiveUniformBlockiv, glGetActiveUniformsiv, glGetAttribLocation, glGetBufferParameteri64v, glGetBufferPointerv, glGetBufferPointervOES, glGetClipPlanef, glGetClipPlanex, glGetFragDataLocation, glGetFramebufferAttachmentParameteriv, glGetInteger64i_v, glGetInteger64v, glGetInteger64vAPPLE, glGetIntegeri_v, glGetInternalformativ, glGetLightfv, glGetLightxv, glGetMaterialfv, glGetMaterialxv, glGetObjectLabelEXT, glGetProgramBinary, glGetProgramInfoLog, glGetProgramiv, glGetQueryObjectuiv, glGetQueryObjectuivEXT, glGetQueryiv, glGetQueryivEXT, glGetRenderbufferParameteriv, glGetSamplerParameterfv, glGetSamplerParameteriv, glGetShaderInfoLog, glGetShaderPrecisionFormat, glGetShaderSource, glGetShaderiv, glGetStringi, glGetSynciv, glGetSyncivAPPLE, glGetTexEnvxv, glGetTexParameterfv, glGetTexParameteriv, glGetTexParameterxv, glGetTransformFeedbackVarying, glGetUniformBlockIndex, glGetUniformIndices, glGetUniformLocation, glGetUniformuiv, glGetVertexAttribIiv, glGetVertexAttribIuiv, glGetVertexAttribPointerv, glGetVertexAttribfv, glGetVertexAttribiv, glInvalidateFramebuffer, glInvalidateSubFramebuffer, glIsFramebuffer, glIsProgram, glIsQuery, glIsQueryEXT, glIsRenderbuffer, glIsSampler, glIsShader, glIsSync, glIsSyncAPPLE, glIsTransformFeedback, glIsVertexArray, glIsVertexArrayOES, glLabelObjectEXT, glLinkProgram, glMapBufferRange, glPauseTransformFeedback, glPointSizePointerOES, glPopGroupMarkerEXT, glProgramBinary, glProgramParameteri, glPushGroupMarkerEXT, glReadBuffer, glReleaseShaderCompiler, glRenderbufferStorage, glRenderbufferStorageMultisample, glRenderbufferStorageMultisampleAPPLE, glResolveMultisampleFramebufferAPPLE, glResumeTransformFeedback, glSamplerParameterf, glSamplerParameterfv, glSamplerParameteri, glSamplerParameteriv, glShaderBinary, glShaderSource, glStencilFuncSeparate, glStencilMaskSeparate, glStencilOpSeparate, glTexImage3D, glTexStorage2D, glTexStorage2DEXT, glTexStorage3D, glTexSubImage3D, glTransformFeedbackVaryings, glUniform1f, glUniform1fv, glUniform1i, glUniform1iv, glUniform1ui, glUniform1uiv, glUniform2f, glUniform2fv, glUniform2i, glUniform2iv, glUniform2ui, glUniform2uiv, glUniform3f, glUniform3fv, glUniform3i, glUniform3iv, glUniform3ui, glUniform3uiv, glUniform4f, glUniform4fv, glUniform4i, glUniform4iv, glUniform4ui, glUniform4uiv, glUniformBlockBinding, glUniformMatrix2fv, glUniformMatrix2x3fv, glUniformMatrix2x4fv, glUniformMatrix3fv, glUniformMatrix3x2fv, glUniformMatrix3x4fv, glUniformMatrix4fv, glUniformMatrix4x2fv, glUniformMatrix4x3fv, glUnmapBuffer, glUseProgram, glValidateProgram, glVertexAttrib1f, glVertexAttrib1fv, glVertexAttrib2f, glVertexAttrib2fv, glVertexAttrib3f, glVertexAttrib3fv, glVertexAttrib4f, glVertexAttrib4fv, glVertexAttribDivisor, glVertexAttribI4i, glVertexAttribI4iv, glVertexAttribI4ui, glVertexAttribI4uiv, glVertexAttribIPointer, glVertexAttribPointer, glWaitSync, glWaitSyncAPPLE | pending |
-| `src/frameworks/opengles/matrix_palette.rs` | uf-added | — | pending |
-| `src/frameworks/opengles/p2g_wide.rs` | uf-added | — | pending |
-| `src/frameworks/opengles/software_vao.rs` | hyper-added | — | pending |
+| `src/frameworks/opengles.rs` | both-modified | — | ported: ES2/ES3 batch |
+| `src/frameworks/opengles/eagl.rs` | both-modified | EAGLGetVersion | ported: ES2/ES3 batch |
+| `src/frameworks/opengles/gles2_guest.rs` | uf-added | — | replaced by Hyper ES2 backends (ES2/ES3 batch) |
+| `src/frameworks/opengles/gles_guest.rs` | both-modified | glAttachShader, glBeginQuery, glBeginQueryEXT, glBeginTransformFeedback, glBindAttribLocation, glBindBufferBase, glBindBufferRange, glBindFramebuffer, glBindRenderbuffer, glBindSampler, glBindTransformFeedback, glBindVertexArray, glBindVertexArrayOES, glBlendColor, glBlendEquation, glBlendEquationSeparate, glBlendFuncSeparate, glBlitFramebuffer, glCheckFramebufferStatus, glClearBufferfi, glClearBufferfv, glClearBufferiv, glClearBufferuiv, glClientWaitSync, glClientWaitSyncAPPLE, glCompileShader, glCompressedTexImage3D, glCompressedTexSubImage2D, glCompressedTexSubImage3D, glCopyBufferSubData, glCopyTexSubImage3D, glCreateProgram, glCreateShader, glDeleteFramebuffers, glDeleteProgram, glDeleteQueries, glDeleteQueriesEXT, glDeleteRenderbuffers, glDeleteSamplers, glDeleteShader, glDeleteSync, glDeleteSyncAPPLE, glDeleteTransformFeedbacks, glDeleteVertexArrays, glDeleteVertexArraysOES, glDetachShader, glDisableVertexAttribArray, glDiscardFramebufferEXT, glDrawArraysInstanced, glDrawBuffers, glDrawElementsInstanced, glDrawRangeElements, glDrawTexfOES, glDrawTexfvOES, glDrawTexiOES, glDrawTexivOES, glDrawTexsOES, glDrawTexsvOES, glDrawTexxOES, glDrawTexxvOES, glEnableVertexAttribArray, glEndQuery, glEndQueryEXT, glEndTransformFeedback, glFenceSync, glFenceSyncAPPLE, glFlushMappedBufferRange, glFramebufferRenderbuffer, glFramebufferTexture2D, glFramebufferTextureLayer, glGenFramebuffers, glGenQueries, glGenQueriesEXT, glGenRenderbuffers, glGenSamplers, glGenTransformFeedbacks, glGenVertexArrays, glGenVertexArraysOES, glGenerateMipmap, glGetActiveAttrib, glGetActiveUniform, glGetActiveUniformBlockName, glGetActiveUniformBlockiv, glGetActiveUniformsiv, glGetAttribLocation, glGetBufferParameteri64v, glGetBufferPointerv, glGetBufferPointervOES, glGetClipPlanef, glGetClipPlanex, glGetFragDataLocation, glGetFramebufferAttachmentParameteriv, glGetInteger64i_v, glGetInteger64v, glGetInteger64vAPPLE, glGetIntegeri_v, glGetInternalformativ, glGetLightfv, glGetLightxv, glGetMaterialfv, glGetMaterialxv, glGetObjectLabelEXT, glGetProgramBinary, glGetProgramInfoLog, glGetProgramiv, glGetQueryObjectuiv, glGetQueryObjectuivEXT, glGetQueryiv, glGetQueryivEXT, glGetRenderbufferParameteriv, glGetSamplerParameterfv, glGetSamplerParameteriv, glGetShaderInfoLog, glGetShaderPrecisionFormat, glGetShaderSource, glGetShaderiv, glGetStringi, glGetSynciv, glGetSyncivAPPLE, glGetTexEnvxv, glGetTexParameterfv, glGetTexParameteriv, glGetTexParameterxv, glGetTransformFeedbackVarying, glGetUniformBlockIndex, glGetUniformIndices, glGetUniformLocation, glGetUniformuiv, glGetVertexAttribIiv, glGetVertexAttribIuiv, glGetVertexAttribPointerv, glGetVertexAttribfv, glGetVertexAttribiv, glInvalidateFramebuffer, glInvalidateSubFramebuffer, glIsFramebuffer, glIsProgram, glIsQuery, glIsQueryEXT, glIsRenderbuffer, glIsSampler, glIsShader, glIsSync, glIsSyncAPPLE, glIsTransformFeedback, glIsVertexArray, glIsVertexArrayOES, glLabelObjectEXT, glLinkProgram, glMapBufferRange, glPauseTransformFeedback, glPointSizePointerOES, glPopGroupMarkerEXT, glProgramBinary, glProgramParameteri, glPushGroupMarkerEXT, glReadBuffer, glReleaseShaderCompiler, glRenderbufferStorage, glRenderbufferStorageMultisample, glRenderbufferStorageMultisampleAPPLE, glResolveMultisampleFramebufferAPPLE, glResumeTransformFeedback, glSamplerParameterf, glSamplerParameterfv, glSamplerParameteri, glSamplerParameteriv, glShaderBinary, glShaderSource, glStencilFuncSeparate, glStencilMaskSeparate, glStencilOpSeparate, glTexImage3D, glTexStorage2D, glTexStorage2DEXT, glTexStorage3D, glTexSubImage3D, glTransformFeedbackVaryings, glUniform1f, glUniform1fv, glUniform1i, glUniform1iv, glUniform1ui, glUniform1uiv, glUniform2f, glUniform2fv, glUniform2i, glUniform2iv, glUniform2ui, glUniform2uiv, glUniform3f, glUniform3fv, glUniform3i, glUniform3iv, glUniform3ui, glUniform3uiv, glUniform4f, glUniform4fv, glUniform4i, glUniform4iv, glUniform4ui, glUniform4uiv, glUniformBlockBinding, glUniformMatrix2fv, glUniformMatrix2x3fv, glUniformMatrix2x4fv, glUniformMatrix3fv, glUniformMatrix3x2fv, glUniformMatrix3x4fv, glUniformMatrix4fv, glUniformMatrix4x2fv, glUniformMatrix4x3fv, glUnmapBuffer, glUseProgram, glValidateProgram, glVertexAttrib1f, glVertexAttrib1fv, glVertexAttrib2f, glVertexAttrib2fv, glVertexAttrib3f, glVertexAttrib3fv, glVertexAttrib4f, glVertexAttrib4fv, glVertexAttribDivisor, glVertexAttribI4i, glVertexAttribI4iv, glVertexAttribI4ui, glVertexAttribI4uiv, glVertexAttribIPointer, glVertexAttribPointer, glWaitSync, glWaitSyncAPPLE | ported: ES2/ES3 batch |
+| `src/frameworks/opengles/matrix_palette.rs` | uf-added | — | kept, hooked into Hyper ES2 (ES2/ES3 batch) |
+| `src/frameworks/opengles/p2g_wide.rs` | uf-added | — | kept, hooked into Hyper ES2 (ES2/ES3 batch) |
+| `src/frameworks/opengles/software_vao.rs` | hyper-added | — | ported: ES2/ES3 batch |
 | `src/frameworks/pass_kit.rs` | hyper-added | class:PKContact, class:PKPayment, class:PKPaymentSummaryItem, class:PKPaymentToken | pending |
 | `src/frameworks/photos.rs` | hyper-added | — | pending |
 | `src/frameworks/quick_look.rs` | hyper-added | — | pending |
@@ -534,24 +534,24 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/fs.rs` | both-modified | — | pending |
 | `src/fs/bundle.rs` | both-modified | — | pending |
 | `src/gdb.rs` | both-modified | — | pending |
-| `src/gles.rs` | both-modified | — | pending |
+| `src/gles.rs` | both-modified | — | ported: ES2/ES3 batch |
 | `src/gles/gl_bindings/Cargo.toml` | hyper-modified | — | pending |
-| `src/gles/gl_bindings/build.rs` | both-modified | — | pending |
-| `src/gles/gl_bindings/lib.rs` | both-modified | — | pending |
-| `src/gles/gles1_native.rs` | both-modified | — | pending |
-| `src/gles/gles1_on_gl2.rs` | both-modified | — | pending |
-| `src/gles/gles1_on_gles2.rs` | hyper-added | — | pending |
-| `src/gles/gles2_glsl.rs` | hyper-added | — | pending |
-| `src/gles/gles2_native.rs` | hyper-added | — | pending |
-| `src/gles/gles2_on_gl3.rs` | hyper-added | — | pending |
-| `src/gles/gles3_native.rs` | hyper-added | — | pending |
-| `src/gles/gles3_on_gl3.rs` | hyper-added | — | pending |
-| `src/gles/gles_generic.rs` | both-modified | — | pending |
-| `src/gles/present.rs` | both-modified | — | pending |
-| `src/gles/programmable.rs` | uf-added | — | pending |
-| `src/gles/util.rs` | hyper-modified | — | pending |
+| `src/gles/gl_bindings/build.rs` | both-modified | — | ported: ES2/ES3 batch |
+| `src/gles/gl_bindings/lib.rs` | both-modified | — | ported: ES2/ES3 batch |
+| `src/gles/gles1_native.rs` | both-modified | — | ported: ES2/ES3 batch |
+| `src/gles/gles1_on_gl2.rs` | both-modified | — | ported: ES2/ES3 batch |
+| `src/gles/gles1_on_gles2.rs` | hyper-added | — | ported: ES2/ES3 batch |
+| `src/gles/gles2_glsl.rs` | hyper-added | — | ported: ES2/ES3 batch |
+| `src/gles/gles2_native.rs` | hyper-added | — | ported: ES2/ES3 batch |
+| `src/gles/gles2_on_gl3.rs` | hyper-added | — | ported: ES2/ES3 batch |
+| `src/gles/gles3_native.rs` | hyper-added | — | ported: ES2/ES3 batch |
+| `src/gles/gles3_on_gl3.rs` | hyper-added | — | ported: ES2/ES3 batch |
+| `src/gles/gles_generic.rs` | both-modified | — | ported: ES2/ES3 batch |
+| `src/gles/present.rs` | both-modified | — | ported: ES2/ES3 batch |
+| `src/gles/programmable.rs` | uf-added | — | replaced by Hyper ES2 backends (ES2/ES3 batch) |
+| `src/gles/util.rs` | hyper-modified | — | ported: ES2/ES3 batch |
 | `src/guest_clock.rs` | hyper-added | — | pending |
-| `src/image.rs` | both-modified | — | pending |
+| `src/image.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
 | `src/image/pvrt_decompress_wrapper/Cargo.toml` | hyper-modified | — | pending |
 | `src/image/stb_image_wrapper/Cargo.toml` | hyper-modified | — | pending |
 | `src/image/stb_image_wrapper/build.rs` | hyper-modified | — | pending |
@@ -560,7 +560,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/lan/cli.rs` | uf-added | — | pending |
 | `src/lan/discovery.rs` | uf-added | — | pending |
 | `src/lan/mod.rs` | uf-added | — | pending |
-| `src/lib.rs` | both-modified | — | pending |
+| `src/lib.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
 | `src/libc.rs` | both-modified | — | pending |
 | `src/libc/aio.rs` | hyper-added | aio_cancel, aio_error, aio_fsync, aio_read, aio_return, aio_suspend, aio_write | pending |
 | `src/libc/arpa/inet.rs` | hyper-modified | htonl, htons, inet_aton, inet_lnaof, inet_makeaddr, inet_netof, inet_network, inet_ntoa, ntohl, ntohs | pending |
@@ -641,10 +641,10 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/libc/uuid.rs` | hyper-added | uuid_clear, uuid_compare, uuid_copy, uuid_generate, uuid_generate_random, uuid_generate_time, uuid_is_null, uuid_parse, uuid_unparse, uuid_unparse_lower, uuid_unparse_upper | pending |
 | `src/libc/wchar.rs` | both-modified | getwc, getwchar, iswalnum, iswalpha, iswcntrl, iswdigit, iswlower, iswprint, iswpunct, iswspace, iswupper, mbsrtowcs, mbsrtowcs_l, mbstowcs, mbtowc, putwc, putwchar, towlower, towupper, ungetwc, wcscasecmp, wcslcat, wcsncasecmp, wcstod, wcstof, wcstok, wcstol, wcstombs, wcstoul, wcswidth, wctomb, wcwidth | pending |
 | `src/licenses.rs` | both-modified | — | pending |
-| `src/log.rs` | both-modified | — | pending |
+| `src/log.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
 | `src/mach_o.rs` | both-modified | — | pending |
 | `src/matrix.rs` | hyper-modified | — | pending |
-| `src/mem.rs` | both-modified | — | pending |
+| `src/mem.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
 | `src/mem/alloc_probe_tests.rs` | hyper-added | — | pending |
 | `src/mem/allocator.rs` | both-modified | — | pending |
 | `src/mem/host.rs` | both-modified | — | pending |
@@ -659,7 +659,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/objc/synchronization.rs` | hyper-modified | — | pending |
 | `src/objc/type_encoding.rs` | hyper-added | — | pending |
 | `src/objc/weak.rs` | hyper-added | objc_copyWeak, objc_destroyWeak, objc_initWeak, objc_loadWeak, objc_loadWeakRetained, objc_moveWeak, objc_storeWeak, objc_storeWeakOrNil | pending |
-| `src/options.rs` | both-modified | — | pending |
+| `src/options.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
 | `src/paths.rs` | both-modified | — | pending |
 | `src/perf_hints.rs` | hyper-added | — | pending |
 | `src/performance.rs` | uf-added | — | pending |
@@ -679,7 +679,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/version/Cargo.toml` | hyper-modified | — | pending |
 | `src/version/build.rs` | both-modified | — | pending |
 | `src/version/lib.rs` | both-modified | — | pending |
-| `src/window.rs` | both-modified | — | pending |
+| `src/window.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
 | `src/window/geometry.rs` | hyper-added | — | pending |
 | `src/window/native_aspect_ratio.rs` | hyper-added | — | pending |
 | `telegram_bot/.env.example` | hyper-added | — | pending |

@@ -343,8 +343,12 @@ pub enum GLVersion {
     GLES11,
     /// OpenGL ES 2.0
     GLES20,
+    /// OpenGL ES 3.0
+    GLES30,
     /// OpenGL 2.1 compatibility profile
     GL21Compat,
+    /// OpenGL 3.3 Core profile
+    GL33Core,
 }
 
 pub struct GLContext(sdl2::video::GLContext);
@@ -886,7 +890,8 @@ impl Window {
         // (see src/frameworks/core_animation/composition.rs). OpenGL ES is used
         // because SDL2 won't let us use more than one graphics API in the same
         // window, and we also need OpenGL ES for the app's own rendering.
-        let mut gl_ins = create_gles1_ctx_no_parent_stack(&mut window, options);
+        let mut gl_ins = create_gles1_ctx_no_parent_stack(&mut window, options)
+            .unwrap_or_else(|err| panic!("{}", err));
         {
             let gl_ctx = gl_ins.make_current(&mut window);
             log!("Driver info: {}", unsafe { gl_ctx.driver_description() });
@@ -1950,9 +1955,17 @@ impl Window {
                 attr.set_context_version(2, 0);
                 attr.set_context_profile(sdl2::video::GLProfile::GLES);
             }
+            GLVersion::GLES30 => {
+                attr.set_context_version(3, 0);
+                attr.set_context_profile(sdl2::video::GLProfile::GLES);
+            }
             GLVersion::GL21Compat => {
                 attr.set_context_version(2, 1);
                 attr.set_context_profile(sdl2::video::GLProfile::Compatibility);
+            }
+            GLVersion::GL33Core => {
+                attr.set_context_version(3, 3);
+                attr.set_context_profile(sdl2::video::GLProfile::Core);
             }
         }
 

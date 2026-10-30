@@ -466,6 +466,32 @@ Other options:
         and nothing else. Should be enabled only for apps which really
         need this behaviour.
 
+    --trace-gl-errors
+        Check for an OpenGL ES error after every call the app makes and log
+        where it happened. For debugging only: the app no longer sees errors.
+
+    --verbose-gles
+        Log every OpenGL ES call the app makes. For debugging only.
+
+    --prefer-gles2-context
+        Create an OpenGL ES 2.0 context when the app asks for OpenGL ES 1.1.
+        Only for apps that ask for 1.1 but use the 2.0 shader functions.
+
+    --force-gles1-context
+        Create an OpenGL ES 1.1 context when the app asks for OpenGL ES 2.0 or
+        3.0. Only for engines that fall back to 1.1 rendering.
+
+    --fix-texture-min-filter
+    --no-fix-texture-min-filter
+        Whether to use linear minification for textures without mipmaps when
+        the app never set a filter, so they aren't drawn black or white. On by
+        default on Android.
+
+    --reverse-attrib-locations
+        If an OpenGL ES 2.0 app binds no attribute locations itself, number a
+        program's attributes 0 to N-1 in the reverse of the host driver's
+        order. Needed by Noblemen: 1896.
+
     --zero-stack-after-guest-to-host-call=<bytes>
         After a guest-to-host call returns, zero out the given number of
         bytes immediately below the current stack pointer (i.e. the unused

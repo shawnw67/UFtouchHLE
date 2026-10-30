@@ -9,12 +9,95 @@ use super::gles11_raw as gles11; // constants only
 use super::gles11_raw::types::{GLenum, GLfixed, GLfloat, GLint, GLsizei};
 use super::GLES;
 
+#[cfg(test)]
+mod pvrtc_payload_size_tests {
+    use super::pvrtc_payload_size;
+    use crate::gles::gles11_raw as gles11;
+
+    #[test]
+    fn computes_full_size_for_pvrtc_formats() {
+        assert_eq!(
+            pvrtc_payload_size(gles11::COMPRESSED_RGBA_PVRTC_4BPPV1_IMG, 2048, 2048),
+            Some(2_097_152)
+        );
+        assert_eq!(
+            pvrtc_payload_size(gles11::COMPRESSED_RGBA_PVRTC_2BPPV1_IMG, 2048, 2048),
+            Some(1_048_576)
+        );
+    }
+
+    #[test]
+    fn enforces_pvrtc_minimum_block_dimensions() {
+        assert_eq!(
+            pvrtc_payload_size(gles11::COMPRESSED_RGBA_PVRTC_4BPPV1_IMG, 1, 1),
+            Some(32)
+        );
+        assert_eq!(
+            pvrtc_payload_size(gles11::COMPRESSED_RGBA_PVRTC_2BPPV1_IMG, 1, 1),
+            Some(32)
+        );
+    }
+
+    #[test]
+    fn rejects_non_pvrtc_formats_and_negative_dimensions() {
+        assert_eq!(pvrtc_payload_size(gles11::RGBA, 32, 32), None);
+        assert_eq!(
+            pvrtc_payload_size(gles11::COMPRESSED_RGBA_PVRTC_4BPPV1_IMG, -1, 32),
+            None
+        );
+    }
+}
+
+/// Return `(is_2bit, is_opaque)` for a PVRTC v1 internal format.
+pub fn pvrtc_format_properties(internalformat: GLenum) -> Option<(bool, bool)> {
+    match internalformat {
+        gles11::COMPRESSED_RGB_PVRTC_2BPPV1_IMG => Some((true, true)),
+        gles11::COMPRESSED_RGBA_PVRTC_2BPPV1_IMG => Some((true, false)),
+        gles11::COMPRESSED_RGB_PVRTC_4BPPV1_IMG => Some((false, true)),
+        gles11::COMPRESSED_RGBA_PVRTC_4BPPV1_IMG => Some((false, false)),
+        _ => None,
+    }
+}
+
+/// Compute the compressed byte size for a PVRTC v1 level without overflowing.
+pub fn pvrtc_payload_size(
+    internalformat: GLenum,
+    width: GLsizei,
+    height: GLsizei,
+) -> Option<usize> {
+    let (is_2bit, _) = pvrtc_format_properties(internalformat)?;
+    let width = usize::try_from(width).ok()?;
+    let height = usize::try_from(height).ok()?;
+    width
+        .max(if is_2bit { 16 } else { 8 })
+        .checked_mul(height.max(8))?
+        .checked_mul(if is_2bit { 2 } else { 4 })?
+        .checked_add(7)
+        .map(|bits| bits / 8)
+}
+
 /// Convert a fixed-point scalar to a floating-point scalar.
 ///
 /// Beware: Rust's type checker won't complain if you mix up [GLfixed] with
 /// [GLint], but they have very different meanings.
 pub fn fixed_to_float(fixed: GLfixed) -> GLfloat {
     ((fixed as f64) / ((1 << 16) as f64)) as f32
+}
+
+/// Convert a floating-point scalar to a fixed-point (16.16) scalar, saturating
+/// on overflow. Used to implement `glGetFixedv` on top of a backend that only
+/// exposes floating-point state.
+pub fn float_to_fixed(float: GLfloat) -> GLfixed {
+    let scaled = (float as f64) * ((1 << 16) as f64);
+    if scaled >= GLfixed::MAX as f64 {
+        GLfixed::MAX
+    } else if scaled <= GLfixed::MIN as f64 {
+        GLfixed::MIN
+    } else if scaled.is_nan() {
+        0
+    } else {
+        scaled.round() as GLfixed
+    }
 }
 
 /// Convert a fixed-point 4-by-4 matrix to floating-point.
@@ -35,10 +118,18 @@ pub enum ParamType {
     Float,
     /// `GLint`
     Int,
+    /// Normalized floating-point color components (RGBA in [0, 1]).
+    ///
+    /// Per the GLES 1.1 spec (Table 6.1, type "C"), color state is clamped
+    /// to [0, 1] on set; when queried with an integer getter the components
+    /// are scaled to the full integer range (see [ParamTable::get_type_info]
+    /// users), unlike plain `Float` state which is rounded to nearest.
+    Color,
     /// Placeholder type for things like colors which are floating-point
     /// but don't have the usual conversion behavior to/from integers etc.
     /// [ParamTable] will accept it for floating-point inputs only.
     /// TODO: Remove this and add proper types for colors etc.
+    #[allow(dead_code)]
     FloatSpecial,
     /// Hack to achieve `#[non_exhaustive]`-like behavior within this crate,
     /// since more types might be added in future
@@ -53,12 +144,19 @@ pub enum ParamType {
 pub struct ParamTable(pub &'static [(GLenum, ParamType, u8)]);
 
 impl ParamTable {
-    /// Look up the component type and count for a parameter. Panics if the name
-    /// is not recognized.
+    /// Look up the component type and count for a parameter. Returns a safe
+    /// default (`ParamType::Float`, 1) for unknown names rather than panicking
+    /// the host, so misbehaving guest code only loses correctness for the
+    /// specific call rather than tearing the whole emulator down.
     pub fn get_type_info(&self, pname: GLenum) -> (ParamType, u8) {
         match self.0.iter().find(|&&(pname2, _, _)| pname == pname2) {
             Some(&(_, type_, count)) => (type_, count),
-            None => panic!("Unhandled parameter name: {pname:#x}"),
+            None => {
+                log!(
+                    "Warning: ParamTable::get_type_info: unhandled parameter name {pname:#x}; defaulting to (Float, 1)."
+                );
+                (ParamType::Float, 1)
+            }
         }
     }
 
@@ -71,13 +169,14 @@ impl ParamTable {
         self.0.iter().any(|(pname2, _, _)| pname == *pname2)
     }
 
-    /// Assert that a parameter name is recognized and that the parameter has a
-    /// particular component count.
+    /// Check that a parameter name is recognized and that the parameter has a
+    /// particular component count. Logs a warning instead of panicking the
+    /// host on mismatch, so the worst case is just a malformed GL call.
     pub fn assert_component_count(&self, pname: GLenum, provided_count: u8) {
         let (_type, actual_count) = self.get_type_info(pname);
         if actual_count != provided_count {
-            panic!(
-                "Parameter {pname:#x} has component count {actual_count}, {provided_count} given."
+            log!(
+                "Warning: ParamTable::assert_component_count: parameter {pname:#x} has component count {actual_count}, {provided_count} given; continuing anyway."
             );
         }
     }
@@ -101,7 +200,9 @@ impl ParamTable {
         // On the other hand, fixed-to-float/float-to-fixed conversion is always
         // the same even for the weird float-ish values.
         match type_ {
-            ParamType::Float | ParamType::FloatSpecial => setf(fixed_to_float(param)),
+            ParamType::Float | ParamType::Color | ParamType::FloatSpecial => {
+                setf(fixed_to_float(param))
+            }
             _ => seti(param),
         }
     }
@@ -126,7 +227,7 @@ impl ParamTable {
         match type_ {
             // Fixed-to-float/float-to-fixed conversion is always the same even
             // for the weird float-ish values.
-            ParamType::Float | ParamType::FloatSpecial => {
+            ParamType::Float | ParamType::Color | ParamType::FloatSpecial => {
                 let mut params_float = [0.0; 16]; // probably the max?
                 let params_float = &mut params_float[..usize::from(count)];
                 for (i, param_float) in params_float.iter_mut().enumerate() {
@@ -140,10 +241,25 @@ impl ParamTable {
 }
 
 /// Helper for implementing `glCompressedTexImage2D`: if `internalformat` is
-/// one of the `IMG_texture_compression_pvrtc` formats, decode it and call
-/// `glTexImage2D`. Returns `true` if this is done.
+/// one of the `IMG_texture_compression_pvrtc` formats, decode it via the
+/// software PVRTC decoder and call `glTexImage2D` to upload the resulting
+/// RGBA8 texture. Returns:
+/// * `true` if the format was a PVRTC variant and the upload was attempted
+///   (regardless of whether the upload itself succeeded — that's between the
+///   driver and the caller).
+/// * `false` if `internalformat` is not a PVRTC variant; the caller is then
+///   responsible for handling the format some other way (passthrough,
+///   paletted-texture decode, ...).
 ///
-/// Note that this panics rather than create GL errors for invalid use (TODO?)
+/// Previously this helper used `assert!` for `border == 0` and for the
+/// payload-size check inside `decode_pvrtc`. Real-world iPhone OS games
+/// occasionally pass in slightly truncated payloads (broken builds, in-app
+/// procedural textures with off-by-one mip sizes, third-party loaders that
+/// trim trailing zeros), and a panic in the present pipeline brings down the
+/// whole host process. Treat malformed input as a soft failure: log once and
+/// return `true` *without* uploading anything, so the caller doesn't
+/// re-attempt (the data is unusable either way) and the rest of the frame
+/// can still draw.
 #[allow(clippy::too_many_arguments)]
 pub fn try_decode_pvrtc(
     gles: &mut dyn GLES,
@@ -155,33 +271,174 @@ pub fn try_decode_pvrtc(
     border: GLint,
     pvrtc_data: &[u8],
 ) -> bool {
-    let is_2bit = match internalformat {
-        gles11::COMPRESSED_RGB_PVRTC_4BPPV1_IMG | gles11::COMPRESSED_RGBA_PVRTC_4BPPV1_IMG => false,
-        gles11::COMPRESSED_RGB_PVRTC_2BPPV1_IMG | gles11::COMPRESSED_RGBA_PVRTC_2BPPV1_IMG => true,
-        _ => return false,
+    let Some((is_2bit, is_opaque)) = pvrtc_format_properties(internalformat) else {
+        return false;
     };
 
-    assert!(border == 0);
-    let pixels = crate::image::decode_pvrtc(
-        pvrtc_data,
-        is_2bit,
-        width.try_into().unwrap(),
-        height.try_into().unwrap(),
-    );
+    if border != 0 {
+        log!(
+            "Warning: try_decode_pvrtc: invalid non-zero border ({border}) for PVRTC \
+             upload {width}x{height} (level {level}, format {internalformat:#x}); \
+             skipping upload."
+        );
+        return true;
+    }
+
+    let Ok(width_u) = u32::try_from(width) else {
+        log!(
+            "Warning: try_decode_pvrtc: invalid width {width} for PVRTC upload \
+             (level {level}, format {internalformat:#x}); skipping upload."
+        );
+        return true;
+    };
+    let Ok(height_u) = u32::try_from(height) else {
+        log!(
+            "Warning: try_decode_pvrtc: invalid height {height} for PVRTC upload \
+             (level {level}, format {internalformat:#x}); skipping upload."
+        );
+        return true;
+    };
+
+    // The IMG_texture_compression_pvrtc spec specifies a fixed payload size
+    // for any given (is_2bit, width, height) tuple. Validate it here so that
+    // a short / oversized input from the guest doesn't panic the host
+    // PVRTC decoder. (`decode_pvrtc` itself still asserts internally as
+    // a defence-in-depth measure, but we shouldn't rely on that — see the
+    // function-level doc comment.)
+    let Some(expected_size) = pvrtc_payload_size(internalformat, width, height) else {
+        log!(
+            "Warning: try_decode_pvrtc: payload size overflows for {width}x{height} \
+             (level {level}, format {internalformat:#x}); skipping upload."
+        );
+        return true;
+    };
+    if pvrtc_data.len() != expected_size {
+        log!(
+            "Warning: try_decode_pvrtc: PVRTC payload size mismatch for \
+             {width}x{height} (level {level}, format {internalformat:#x}, \
+             is_2bit={is_2bit}): got {} bytes, expected {expected_size}; \
+             skipping upload.",
+            pvrtc_data.len(),
+        );
+        return true;
+    }
+
+    let upload_format = gles11::RGBA;
+
+    let pixels =
+        crate::image::decode_pvrtc_with_alpha(pvrtc_data, is_2bit, width_u, height_u, is_opaque);
     unsafe {
         gles.TexImage2D(
             target,
             level,
-            gles11::RGBA as _,
+            upload_format as _,
             width,
             height,
             border,
-            gles11::RGBA,
+            upload_format,
             gles11::UNSIGNED_BYTE,
             pixels.as_ptr() as *const _,
         )
     };
     true
+}
+
+/// Convert an uncompressed guest texture to RGBA8888 so GLES backends do not
+/// depend on optional BGRA or packed-pixel upload support.
+#[allow(clippy::too_many_arguments, dead_code)]
+pub unsafe fn decode_texture_to_rgba8(
+    width: GLsizei,
+    height: GLsizei,
+    format: GLenum,
+    type_: GLenum,
+    pixels: *const std::ffi::c_void,
+    unpack_alignment: GLint,
+) -> Option<Vec<u8>> {
+    if pixels.is_null() || width < 0 || height < 0 {
+        return None;
+    }
+    let width = width as usize;
+    let height = height as usize;
+    let bytes_per_pixel = match type_ {
+        gles11::UNSIGNED_BYTE => match format {
+            gles11::ALPHA | gles11::LUMINANCE => 1,
+            gles11::LUMINANCE_ALPHA => 2,
+            gles11::RGB => 3,
+            gles11::RGBA | gles11::BGRA_EXT => 4,
+            _ => return None,
+        },
+        gles11::UNSIGNED_SHORT_5_6_5
+        | gles11::UNSIGNED_SHORT_4_4_4_4
+        | gles11::UNSIGNED_SHORT_5_5_5_1 => 2,
+        _ => return None,
+    };
+    let alignment = unpack_alignment.max(1) as usize;
+    let row_bytes = width.checked_mul(bytes_per_pixel)?;
+    let row_stride = row_bytes.checked_add(alignment - 1)? / alignment * alignment;
+    let output_len = width.checked_mul(height)?.checked_mul(4)?;
+    let mut output = vec![0u8; output_len];
+    for y in 0..height {
+        let row = (pixels as *const u8).add(y * row_stride);
+        for x in 0..width {
+            let src = row.add(x * bytes_per_pixel);
+            let dst = output.as_mut_ptr().add((y * width + x) * 4);
+            let (r, g, b, a) = match type_ {
+                gles11::UNSIGNED_BYTE => match format {
+                    gles11::ALPHA => (255, 255, 255, src.read()),
+                    gles11::LUMINANCE => {
+                        let l = src.read();
+                        (l, l, l, 255)
+                    }
+                    gles11::LUMINANCE_ALPHA => {
+                        let l = src.read();
+                        (l, l, l, src.add(1).read())
+                    }
+                    gles11::RGB => (src.read(), src.add(1).read(), src.add(2).read(), 255),
+                    gles11::RGBA => (
+                        src.read(),
+                        src.add(1).read(),
+                        src.add(2).read(),
+                        src.add(3).read(),
+                    ),
+                    gles11::BGRA_EXT => (
+                        src.add(2).read(),
+                        src.add(1).read(),
+                        src.read(),
+                        src.add(3).read(),
+                    ),
+                    _ => return None,
+                },
+                gles11::UNSIGNED_SHORT_5_6_5
+                | gles11::UNSIGNED_SHORT_4_4_4_4
+                | gles11::UNSIGNED_SHORT_5_5_5_1 => {
+                    let value = (src as *const u16).read_unaligned();
+                    match type_ {
+                        gles11::UNSIGNED_SHORT_5_6_5 => (
+                            ((((value >> 11) & 0x1f) as u32 * 255 / 31) as u8),
+                            ((((value >> 5) & 0x3f) as u32 * 255 / 63) as u8),
+                            (((value & 0x1f) as u32 * 255 / 31) as u8),
+                            255,
+                        ),
+                        gles11::UNSIGNED_SHORT_4_4_4_4 => (
+                            ((((value >> 12) & 0xf) as u8) * 17),
+                            ((((value >> 8) & 0xf) as u8) * 17),
+                            ((((value >> 4) & 0xf) as u8) * 17),
+                            (((value & 0xf) as u8) * 17),
+                        ),
+                        _ => (
+                            ((((value >> 11) & 0x1f) as u32 * 255 / 31) as u8),
+                            ((((value >> 6) & 0x1f) as u32 * 255 / 31) as u8),
+                            ((((value >> 1) & 0x1f) as u32 * 255 / 31) as u8),
+                            if value & 1 == 0 { 0 } else { 255 },
+                        ),
+                    }
+                }
+                _ => return None,
+            };
+            std::slice::from_raw_parts_mut(dst, 4).copy_from_slice(&[r, g, b, a]);
+        }
+    }
+    Some(output)
 }
 
 pub struct PalettedTextureFormat {
@@ -195,6 +452,91 @@ pub struct PalettedTextureFormat {
     pub palette_entry_type: GLenum,
 }
 impl PalettedTextureFormat {
+    pub fn decode_rgba8(
+        internalformat: GLenum,
+        width: GLsizei,
+        height: GLsizei,
+        payload: &[u8],
+    ) -> Option<Vec<u8>> {
+        let info = Self::get_info(internalformat)?;
+        let width = usize::try_from(width).ok()?;
+        let height = usize::try_from(height).ok()?;
+        let entry_size = match info.palette_entry_type {
+            gles11::UNSIGNED_BYTE => {
+                if info.palette_entry_format == gles11::RGB {
+                    3
+                } else {
+                    4
+                }
+            }
+            gles11::UNSIGNED_SHORT_5_6_5
+            | gles11::UNSIGNED_SHORT_4_4_4_4
+            | gles11::UNSIGNED_SHORT_5_5_5_1 => 2,
+            _ => return None,
+        };
+        let palette_count: usize = if info.index_is_nibble { 16 } else { 256 };
+        let palette_size = palette_count.checked_mul(entry_size)?;
+        let pixel_count = width.checked_mul(height)?;
+        let index_size = if info.index_is_nibble {
+            pixel_count.checked_add(1)? / 2
+        } else {
+            pixel_count
+        };
+        let total_size = palette_size.checked_add(index_size)?;
+        if payload.len() < total_size {
+            return None;
+        }
+        let (palette, indices) = payload.split_at(palette_size);
+        let mut output = Vec::with_capacity(pixel_count.checked_mul(4)?);
+        for pixel in 0..pixel_count {
+            let index = if info.index_is_nibble {
+                let byte = indices[pixel / 2];
+                if pixel % 2 == 0 {
+                    byte >> 4
+                } else {
+                    byte & 0xf
+                }
+            } else {
+                indices[pixel]
+            } as usize;
+            let entry = &palette[index * entry_size..][..entry_size];
+            let (r, g, b, a) = match info.palette_entry_type {
+                gles11::UNSIGNED_BYTE if entry_size == 3 => (entry[0], entry[1], entry[2], 255),
+                gles11::UNSIGNED_BYTE => (entry[0], entry[1], entry[2], entry[3]),
+                gles11::UNSIGNED_SHORT_5_6_5 => {
+                    let value = u16::from_ne_bytes([entry[0], entry[1]]);
+                    (
+                        (((value >> 11) & 31) as u32 * 255 / 31) as u8,
+                        (((value >> 5) & 63) as u32 * 255 / 63) as u8,
+                        ((value & 31) as u32 * 255 / 31) as u8,
+                        255,
+                    )
+                }
+                gles11::UNSIGNED_SHORT_4_4_4_4 => {
+                    let value = u16::from_ne_bytes([entry[0], entry[1]]);
+                    (
+                        (((value >> 12) & 15) as u8) * 17,
+                        (((value >> 8) & 15) as u8) * 17,
+                        (((value >> 4) & 15) as u8) * 17,
+                        ((value & 15) as u8) * 17,
+                    )
+                }
+                gles11::UNSIGNED_SHORT_5_5_5_1 => {
+                    let value = u16::from_ne_bytes([entry[0], entry[1]]);
+                    (
+                        (((value >> 11) & 31) as u32 * 255 / 31) as u8,
+                        (((value >> 6) & 31) as u32 * 255 / 31) as u8,
+                        (((value >> 1) & 31) as u32 * 255 / 31) as u8,
+                        if value & 1 == 0 { 0 } else { 255 },
+                    )
+                }
+                _ => return None,
+            };
+            output.extend_from_slice(&[r, g, b, a]);
+        }
+        Some(output)
+    }
+
     /// If the provided format is from `OES_compressed_paletted_texture`,
     /// return [Some] with information about it, or [None] otherwise.
     pub fn get_info(internalformat: GLenum) -> Option<Self> {

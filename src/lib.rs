@@ -36,6 +36,7 @@ mod cpu;
 mod debug;
 mod device_profiles;
 mod dyld;
+mod env_flags;
 mod environment;
 mod fast_hash;
 mod font;

@@ -38,7 +38,9 @@ pub fn get_log_file() -> &'static File {
 /// from.
 macro_rules! log {
     ($($arg:tt)+) => {
-        echo!("{}: {}", module_path!(), format_args!($($arg)+));
+        {
+            echo!("{}: {}", module_path!(), format_args!($($arg)+));
+        }
     }
 }
 
@@ -71,6 +73,19 @@ macro_rules! log_once {
             log!("{} [this log will only be shown once]", $msg);
         });
     }};
+}
+
+/// Like [log], but only writes to the log file, not to the terminal (or on
+/// Android, logcat). To be used for per-call traces that can emit thousands of
+/// lines per second.
+#[allow(unused_macros)]
+macro_rules! log_file_only {
+    ($($arg:tt)+) => {
+        {
+            let line = format!("{}: {}\n", module_path!(), format_args!($($arg)+));
+            let _ = std::io::Write::write_all(&mut $crate::log::get_log_file(), line.as_bytes());
+        }
+    };
 }
 
 /// Print a message (with implicit newline). This should be used for all

@@ -167,6 +167,25 @@ pub struct Options {
     pub dumping_options: DumpingOptions,
     pub dumping_file: PathBuf,
     pub ignore_gl_errors: bool,
+    /// Check for an OpenGL ES error after every guest call and log where it
+    /// came from. Diagnostic only: it hides errors from the app.
+    pub trace_gl_errors: bool,
+    /// Log every OpenGL ES call made by the guest. Diagnostic only.
+    pub verbose_gles: bool,
+    /// Create an OpenGL ES 2.0 context when an app asks for ES 1.1, for apps
+    /// that ask for ES 1.1 but use the ES 2.0 shader entry points.
+    pub prefer_gles2_context: bool,
+    /// Create an OpenGL ES 1.1 context when an app asks for ES 2.0 or 3.0,
+    /// for engines that have an ES 1.1 fallback.
+    pub force_gles1_context: bool,
+    /// After uploading level 0 of a texture, use `GL_LINEAR` minification if
+    /// the app never set a filter, so textures without mipmaps aren't
+    /// incomplete. On by default on Android.
+    pub fix_texture_min_filter: bool,
+    /// Give a linked ES 2.0 program's attributes the locations 0 to N-1 in the
+    /// reverse of the order the host driver chose, if the app binds none
+    /// itself.
+    pub reverse_attrib_locations: bool,
     pub zero_stack_after_guest_to_host_call: Option<u32>,
 }
 
@@ -230,6 +249,12 @@ impl Default for Options {
             dumping_options: Default::default(),
             dumping_file: crate::paths::user_data_base_path().join("DUMP.txt"),
             ignore_gl_errors: false,
+            trace_gl_errors: false,
+            verbose_gles: false,
+            prefer_gles2_context: false,
+            force_gles1_context: false,
+            fix_texture_min_filter: cfg!(target_os = "android"),
+            reverse_attrib_locations: false,
             zero_stack_after_guest_to_host_call: None,
         }
     }
@@ -605,6 +630,24 @@ impl Options {
             self.dumping_file = crate::paths::user_data_base_path().join(path);
         } else if arg == "--ignore-gl-errors" {
             self.ignore_gl_errors = true;
+        } else if arg == "--trace-gl-errors" {
+            self.trace_gl_errors = true;
+        } else if arg == "--verbose-gles" {
+            self.verbose_gles = true;
+        } else if arg == "--prefer-gles2-context" {
+            self.prefer_gles2_context = true;
+        } else if arg == "--force-gles1-context" {
+            self.force_gles1_context = true;
+        } else if arg == "--fix-texture-min-filter" {
+            self.fix_texture_min_filter = true;
+            // The ES 1.1 backend reads this, as it has no access to the
+            // options.
+            std::env::set_var("TOUCHHLE_FIX_TEXTURE_MIN_FILTER", "1");
+        } else if arg == "--no-fix-texture-min-filter" {
+            self.fix_texture_min_filter = false;
+            std::env::set_var("TOUCHHLE_FIX_TEXTURE_MIN_FILTER", "0");
+        } else if arg == "--reverse-attrib-locations" {
+            self.reverse_attrib_locations = true;
         } else if let Some(value) = arg.strip_prefix("--zero-stack-after-guest-to-host-call=") {
             self.zero_stack_after_guest_to_host_call = Some(value.parse().map_err(|_| {
                 "Invalid value for --zero-stack-after-guest-to-host-call=".to_string()
