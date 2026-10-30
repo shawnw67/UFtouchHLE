@@ -193,12 +193,12 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/audio/symphonia_formats.rs` | both-modified | — | pending |
 | `src/bin.rs` | both-modified | — | pending |
 | `src/bundle.rs` | both-modified | — | pending |
-| `src/cpu.rs` | both-modified | — | pending |
+| `src/cpu.rs` | both-modified | — | partial: libc batch (FPSCR access) |
 | `src/cpu/asimd_fallback.rs` | hyper-added | — | pending |
 | `src/cpu/dynarmic_wrapper/Cargo.toml` | hyper-modified | — | pending |
 | `src/cpu/dynarmic_wrapper/build.rs` | both-modified | — | pending |
-| `src/cpu/dynarmic_wrapper/lib.cpp` | both-modified | — | pending |
-| `src/cpu/dynarmic_wrapper/lib.rs` | hyper-modified | — | pending |
+| `src/cpu/dynarmic_wrapper/lib.cpp` | both-modified | — | partial: libc batch (FPSCR access) |
+| `src/cpu/dynarmic_wrapper/lib.rs` | hyper-modified | — | partial: libc batch (FPSCR access) |
 | `src/crash_handler.rs` | hyper-added | — | pending |
 | `src/device_profiles.rs` | uf-added | — | pending |
 | `src/dyld.rs` | both-modified | cxxabi_throw_intercept, dyld_stub_binder | pending |
@@ -575,7 +575,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/libc/dispatch.rs` | both-added | class:_touchHLE_DispatchAfter, dispatch_after_f, dispatch_apply, dispatch_apply_f, dispatch_async_f, dispatch_barrier_async, dispatch_barrier_async_f, dispatch_barrier_sync, dispatch_barrier_sync_f, dispatch_debug, dispatch_get_context, dispatch_get_current_queue, dispatch_get_main_queue, dispatch_get_specific, dispatch_group_async_f, dispatch_group_enter, dispatch_group_leave, dispatch_group_notify, dispatch_group_notify_f, dispatch_main, dispatch_once_f, dispatch_queue_attr_make_with_qos_class, dispatch_queue_create, dispatch_queue_get_label, dispatch_queue_get_specific, dispatch_queue_release, dispatch_queue_retain, dispatch_queue_set_specific, dispatch_set_context, dispatch_set_finalizer_f, dispatch_set_target_queue, dispatch_source_get_data, dispatch_source_get_handle, dispatch_source_get_mask, dispatch_source_merge_data, dispatch_source_set_cancel_handler_f, dispatch_source_set_event_handler_f, dispatch_source_testcancel, dispatch_sync_f, dispatch_walltime | pending |
 | `src/libc/dispatch_source.rs` | hyper-added | — | pending |
 | `src/libc/dlfcn.rs` | hyper-modified | dladdr, dlerror | pending |
-| `src/libc/errno.rs` | both-modified | — | pending |
+| `src/libc/errno.rs` | both-modified | — | partial: libc batch (EDOM) |
 | `src/libc/execinfo.rs` | hyper-added | backtrace, backtrace_symbols, backtrace_symbols_fd | pending |
 | `src/libc/fnmatch.rs` | both-added | — | pending |
 | `src/libc/generic_char.rs` | both-modified | — | pending |
@@ -599,7 +599,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/libc/mach/vm_map.rs` | both-modified | vm_protect, vm_read_overwrite, vm_region_recurse, vm_remap | pending |
 | `src/libc/mach_o.rs` | both-modified | NXGetAllArchInfos, NXGetArchInfoFromCpuType, NXGetArchInfoFromName, NXGetLocalArchInfo, _dyld_get_image_header, _dyld_get_image_name, _dyld_get_image_vmaddr_slide, _dyld_image_count, _dyld_register_func_for_add_image, _dyld_register_func_for_remove_image, host_info | pending |
 | `src/libc/malloc.rs` | both-added | malloc_zone_from_ptr, malloc_zone_memalign | pending |
-| `src/libc/math.rs` | both-modified | _ZN9SingletonI12TimerManagerE11getInstanceEv, _ZNSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEPKcm, _ZNSt6vectorIN8InputMgr7KeyDataESaIS1_EE14_M_fill_insertEN9__gnu_cxx17__normal_iteratorIPS1_S3_EEmRKS1_, _ZNSt6vectorIN8InputMgr7KeyDataESaIS1_EE7reserveEm, _ZNSt6vectorIN8InputMgr9TouchDataESaIS1_EE7reserveEm, __divdi3, __divsi3, __fixdfdi, __fixsfdi, __fixunsdfdi, __fixunssfdi, __floatdidf, __floatdisf, __floatundidf, __floatundisf, __fpclassifyd, __isfinited, __isfinitef, __isinfd, __isinff, __isnand, __isnanf, __isnormald, __isnormalf, __moddi3, __modsi3, __signbitd, __signbitf, __sincos_stret, __sincosf_stret, __udivdi3, __udivsi3, __umoddi3, __umodsi3, acoshl, acosl, asinhl, asinl, atan2l, atanhl, atanl, cbrt, cbrtf, cbrtl, ceill, coshl, cosl, drem, dremf, exp2l, expl, expm1l, fabsl, fdim, fdimf, fegetenv, fesetenv, floorl, fma, fmaf, fmal, fmaxl, fminl, fmodl, frexpl, hypotf, hypotl, ilogb, ilogbf, ldexpl, llrint, llrintf, llroundl, log10l, log1pl, log2l, logb, logbf, logbl, logl, lroundl, modfl, nanf, nearbyint, nearbyintf, nearbyintl, powl, remainder, remainderf, remainderl, remquo, remquof, rintf, rintl, roundl, scalbln, scalblnf, scalbn, scalbnf, sincos, sincosf, sinhl, sinl, sqrtl, tanhl, tanl, truncl | pending |
+| `src/libc/math.rs` | both-modified | _ZN9SingletonI12TimerManagerE11getInstanceEv, _ZNSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEPKcm, _ZNSt6vectorIN8InputMgr7KeyDataESaIS1_EE14_M_fill_insertEN9__gnu_cxx17__normal_iteratorIPS1_S3_EEmRKS1_, _ZNSt6vectorIN8InputMgr7KeyDataESaIS1_EE7reserveEm, _ZNSt6vectorIN8InputMgr9TouchDataESaIS1_EE7reserveEm, __divdi3, __divsi3, __fixdfdi, __fixsfdi, __fixunsdfdi, __fixunssfdi, __floatdidf, __floatdisf, __floatundidf, __floatundisf, __fpclassifyd, __isfinited, __isfinitef, __isinfd, __isinff, __isnand, __isnanf, __isnormald, __isnormalf, __moddi3, __modsi3, __signbitd, __signbitf, __sincos_stret, __sincosf_stret, __udivdi3, __udivsi3, __umoddi3, __umodsi3, acoshl, acosl, asinhl, asinl, atan2l, atanhl, atanl, cbrt, cbrtf, cbrtl, ceill, coshl, cosl, drem, dremf, exp2l, expl, expm1l, fabsl, fdim, fdimf, fegetenv, fesetenv, floorl, fma, fmaf, fmal, fmaxl, fminl, fmodl, frexpl, hypotf, hypotl, ilogb, ilogbf, ldexpl, llrint, llrintf, llroundl, log10l, log1pl, log2l, logb, logbf, logbl, logl, lroundl, modfl, nanf, nearbyint, nearbyintf, nearbyintl, powl, remainder, remainderf, remainderl, remquo, remquof, rintf, rintl, roundl, scalbln, scalblnf, scalbn, scalbnf, sincos, sincosf, sinhl, sinl, sqrtl, tanhl, tanl, truncl | ported: libc batch (bogus C++ symbol exports left out) |
 | `src/libc/mmap.rs` | both-modified | madvise, mlock, mmap, mprotect, msync, munlock, munmap, shm_open, shm_unlink | pending |
 | `src/libc/net/if_.rs` | both-modified | — | pending |
 | `src/libc/netdb.rs` | both-modified | __h_errno_location, freehostent, gai_strerror, gethostbyaddr, gethostbyname2, getipnodebyname, getnameinfo, getservbyname, getservbyport | pending |
@@ -623,7 +623,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/libc/ssp.rs` | hyper-added | __stack_chk_fail | pending |
 | `src/libc/stdio.rs` | both-modified | freopen, setvbuf | pending |
 | `src/libc/stdio/printf.rs` | both-modified | __vsnprintf_chk, asprintf, snprintf_l, sprintf_l, vsnprintf_l, vsprintf_l, vwprintf, wprintf | pending |
-| `src/libc/stdlib.rs` | both-modified | NSZoneFree, NSZoneMalloc, NSZoneRealloc, _Exit, _NSGetExecutablePath, __assert, __assert_fail, _exit, abort, arc4random_addrandom, arc4random_stir, arc4random_uniform, dirname, drand48, ecvt, erand48, fgetxattr, flistxattr, fremovexattr, fsetxattr, gcvt, getloadavg, getxattr, inflateReset2, jrand48, kevent, kqueue, lcong48, ldiv, listxattr, lrand48, mbtowc_l, mkdtemp, mkstemp, mktemp, mrand48, nrand48, putenv, quick_exit, reallocf, removexattr, seed48, setxattr, srand48, strtod_l, strtof_l, strtold, strtold_l, strtoll, strtoll_l, strtoull_l | pending |
+| `src/libc/stdlib.rs` | both-modified | NSZoneFree, NSZoneMalloc, NSZoneRealloc, _Exit, _NSGetExecutablePath, __assert, __assert_fail, _exit, abort, arc4random_addrandom, arc4random_stir, arc4random_uniform, dirname, drand48, ecvt, erand48, fgetxattr, flistxattr, fremovexattr, fsetxattr, gcvt, getloadavg, getxattr, inflateReset2, jrand48, kevent, kqueue, lcong48, ldiv, listxattr, lrand48, mbtowc_l, mkdtemp, mkstemp, mktemp, mrand48, nrand48, putenv, quick_exit, reallocf, removexattr, seed48, setxattr, srand48, strtod_l, strtof_l, strtold, strtold_l, strtoll, strtoll_l, strtoull_l | ported: libc batch (UF allocators kept; abort/_exit without Hyper's termination machinery) |
 | `src/libc/stdlib/qsort.rs` | hyper-modified | — | pending |
 | `src/libc/string.rs` | both-modified | __strncat_chk, bcopy, explicit_bzero, index, memmem, memrchr, stpcpy, stpncpy, strcasestr, strchrnul, strerror_r, strfry, strlcat, strndup, strnlen, strtok_r, strverscmp | pending |
 | `src/libc/sys.rs` | both-modified | — | pending |

@@ -58,6 +58,8 @@ extern "C" {
     pub fn touchHLE_DynarmicWrapper_regs_mut(cpu: *mut touchHLE_DynarmicWrapper) -> *mut u32;
     pub fn touchHLE_DynarmicWrapper_cpsr(cpu: *const touchHLE_DynarmicWrapper) -> u32;
     pub fn touchHLE_DynarmicWrapper_set_cpsr(cpu: *mut touchHLE_DynarmicWrapper, cpsr: u32);
+    pub fn touchHLE_DynarmicWrapper_fpscr(cpu: *const touchHLE_DynarmicWrapper) -> u32;
+    pub fn touchHLE_DynarmicWrapper_set_fpscr(cpu: *mut touchHLE_DynarmicWrapper, fpscr: u32);
     pub fn touchHLE_DynarmicWrapper_swap_context(
         cpu: *mut touchHLE_DynarmicWrapper,
         context: *mut touchHLE_DynarmicContext,

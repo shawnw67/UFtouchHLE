@@ -58,6 +58,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         stdio::CONSTANTS,
         mach::init::CONSTANTS,
         stdlib::CONSTANTS,
+        math::CONSTANTS,
     ],
     function_exports: &[
         arpa::inet::FUNCTIONS,
@@ -131,7 +132,6 @@ pub struct State {
     crypto: crypto::State,
     dirent: dirent::State,
     keymgr: keymgr::State,
-    math: math::State,
     posix_io: posix_io::State,
     pub pthread: pthread::State,
     pub semaphore: semaphore::State,

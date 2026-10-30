@@ -267,6 +267,8 @@ public:
 
   std::uint32_t cpsr() const { return cpu->Cpsr(); }
   void set_cpsr(std::uint32_t cpsr) { cpu->SetCpsr(cpsr); }
+  std::uint32_t fpscr() const { return cpu->Fpscr(); }
+  void set_fpscr(std::uint32_t fpscr) { cpu->SetFpscr(fpscr); }
 
   void invalidate_cache_range(VAddr start, std::uint32_t size) {
     cpu->InvalidateCacheRange(start, size);
@@ -336,6 +338,13 @@ std::uint32_t touchHLE_DynarmicWrapper_cpsr(const DynarmicWrapper *cpu) {
 void touchHLE_DynarmicWrapper_set_cpsr(DynarmicWrapper *cpu,
                                        std::uint32_t cpsr) {
   cpu->set_cpsr(cpsr);
+}
+std::uint32_t touchHLE_DynarmicWrapper_fpscr(const DynarmicWrapper *cpu) {
+  return cpu->fpscr();
+}
+void touchHLE_DynarmicWrapper_set_fpscr(DynarmicWrapper *cpu,
+                                        std::uint32_t fpscr) {
+  cpu->set_fpscr(fpscr);
 }
 
 void touchHLE_DynarmicWrapper_swap_context(DynarmicWrapper *cpu,
