@@ -35,9 +35,6 @@ fn sleep(env: &mut Environment, seconds: u32) -> u32 {
 }
 
 fn usleep(env: &mut Environment, useconds: useconds_t) -> i32 {
-    // TODO: handle errno properly
-    set_errno(env, 0);
-
     env.sleep(Duration::from_micros(useconds.into()));
     0 // success
 }

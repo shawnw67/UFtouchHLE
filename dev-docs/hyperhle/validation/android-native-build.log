@@ -1,0 +1,92 @@
+    Building arm64-v8a (aarch64-linux-android)
+   Compiling cfg-if v1.0.0
+   Compiling lazy_static v1.4.0
+   Compiling bytemuck v1.25.2
+   Compiling num-traits v0.2.19
+   Compiling bitflags v2.11.0
+   Compiling smallvec v1.15.1
+   Compiling typenum v1.19.0
+   Compiling libc v0.2.180
+   Compiling regex-lite v0.1.9
+   Compiling subtle v2.6.1
+   Compiling log v0.4.17
+   Compiling itoa v1.0.4
+   Compiling powerfmt v0.2.0
+   Compiling serde_core v1.0.228
+   Compiling time-core v0.1.6
+   Compiling adler v1.0.2
+   Compiling num-conv v0.1.0
+   Compiling memchr v2.5.0
+   Compiling deranged v0.5.5
+   Compiling miniz_oxide v0.6.2
+   Compiling crc32fast v1.3.2
+   Compiling equivalent v1.0.2
+   Compiling byteorder v1.4.3
+   Compiling cpufeatures v0.2.17
+   Compiling generic-array v0.14.7
+   Compiling num-complex v0.4.6
+   Compiling getrandom v0.2.17
+   Compiling bitflags v1.3.2
+   Compiling hashbrown v0.16.1
+   Compiling ttf-parser v0.15.2
+   Compiling extended v0.1.0
+   Compiling uuid v1.2.2
+   Compiling flate2 v1.0.25
+   Compiling touchHLE_version v0.3.0 (/Users/wesley/Documents/touchHLE/target/hyperhle-integration/src/version)
+   Compiling symphonia-core v0.6.0
+   Compiling sdl2-sys v0.37.0 (https://github.com/touchHLE/rust-sdl2?tag=touchHLE-3#b67f98fe)
+   Compiling quick-xml v0.38.4
+   Compiling indexmap v2.12.1
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling inout v0.1.4
+warning: touchHLE_version@0.3.0: Cargo.toml version (v0.3.0) is not a prefix of `git describe` version (v0.3.24)!
+   Compiling touchHLE_dynarmic_wrapper v0.3.0 (/Users/wesley/Documents/touchHLE/target/hyperhle-integration/src/cpu/dynarmic_wrapper)
+   Compiling thiserror v1.0.37
+   Compiling time v0.3.44
+   Compiling cipher v0.4.4
+   Compiling openh264-sys2 v0.9.8
+   Compiling wide v1.7.1
+   Compiling scopeguard v1.2.0
+   Compiling base64 v0.22.1
+   Compiling ab_glyph_rasterizer v0.1.8
+   Compiling ryu v1.0.12
+   Compiling windows-link v0.2.0
+   Compiling owned_ttf_parser v0.15.2
+   Compiling windows-sys v0.61.0
+   Compiling corosensei v0.3.2
+   Compiling aes v0.8.4
+   Compiling rusttype v0.9.3
+   Compiling touchHLE_gl_bindings v0.3.0 (/Users/wesley/Documents/touchHLE/target/hyperhle-integration/src/gles/gl_bindings)
+   Compiling serde v1.0.228
+   Compiling md-5 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling symphonia-metadata v0.6.0
+   Compiling symphonia-codec-adpcm v0.6.0
+   Compiling symphonia-bundle-mp3 v0.6.0
+   Compiling symphonia-codec-pcm v0.6.0
+   Compiling plist v1.8.0
+   Compiling serde_json v1.0.91
+   Compiling mach_object v0.1.17
+   Compiling hmac v0.12.1
+   Compiling symphonia-common v0.6.0
+   Compiling symphonia-format-isomp4 v0.6.0
+   Compiling symphonia-format-caf v0.6.0
+   Compiling symphonia-codec-aac v0.6.0
+   Compiling symphonia-codec-alac v0.6.0
+   Compiling symphonia-format-riff v0.6.0
+   Compiling sha1 v0.10.6
+   Compiling touchHLE_openal_soft_wrapper v0.3.0 (/Users/wesley/Documents/touchHLE/target/hyperhle-integration/src/audio/openal_soft_wrapper)
+   Compiling symphonia v0.6.0
+   Compiling touchHLE_pvrt_decompress_wrapper v0.3.0 (/Users/wesley/Documents/touchHLE/target/hyperhle-integration/src/image/pvrt_decompress_wrapper)
+   Compiling touchHLE_stb_image_wrapper v0.3.0 (/Users/wesley/Documents/touchHLE/target/hyperhle-integration/src/image/stb_image_wrapper)
+   Compiling sdl2 v0.37.0 (https://github.com/touchHLE/rust-sdl2?tag=touchHLE-3#b67f98fe)
+   Compiling zip v0.6.4
+   Compiling encoding_rs v0.8.35
+   Compiling nibarchive v0.1.0
+   Compiling hound v3.5.0
+   Compiling jni-sys v0.3.0
+   Compiling openh264 v0.9.8
+   Compiling touchHLE v0.3.0 (/Users/wesley/Documents/touchHLE/target/hyperhle-integration)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.07s

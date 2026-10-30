@@ -54,6 +54,7 @@ pub struct State {
     avfoundation: avfoundation::State,
     audio_toolbox: audio_toolbox::State,
     core_animation: core_animation::State,
+    core_foundation: core_foundation::State,
     core_graphics: core_graphics::State,
     foundation: foundation::State,
     game_controller: game_controller::State,

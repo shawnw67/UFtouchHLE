@@ -13,7 +13,7 @@ use std::io::Cursor;
 use symphonia::core::audio::AudioSpec;
 use symphonia::core::codecs::audio::well_known::{
     CODEC_ID_AAC, CODEC_ID_ADPCM_IMA_QT, CODEC_ID_ADPCM_IMA_WAV, CODEC_ID_ALAC, CODEC_ID_MP3,
-    CODEC_ID_PCM_S16LE,
+    CODEC_ID_PCM_S16BE, CODEC_ID_PCM_S16LE,
 };
 use symphonia::core::io::MediaSourceStream;
 
@@ -53,6 +53,7 @@ pub fn decode_symphonia_to_pcm(file: Cursor<Vec<u8>>) -> Result<SymphoniaDecoded
                         || audio_codec_params.codec == CODEC_ID_ALAC
                         || audio_codec_params.codec == CODEC_ID_MP3
                         || audio_codec_params.codec == CODEC_ID_PCM_S16LE
+                        || audio_codec_params.codec == CODEC_ID_PCM_S16BE
                 } else {
                     false
                 }

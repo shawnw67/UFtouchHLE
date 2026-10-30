@@ -90,22 +90,23 @@ fn CFURLCreateWithBytes(
 
     // TODO: interpret percent escape sequences using encoding as well
     let encoding = CFStringConvertEncodingToNSStringEncoding(env, encoding);
-    let length: NSUInteger = length.try_into().unwrap();
-
-    if length == 0 {
+    if length <= 0 || url_bytes.is_null() {
         return Ptr::null();
     }
+    let length: NSUInteger = length.try_into().unwrap();
 
     let string: id = msg_class![env; NSString alloc];
     let string: id = msg![env; string initWithBytes:url_bytes
                                              length:length
                                            encoding:encoding];
 
-    assert!(!to_rust_string(env, string).contains("://")); // TODO
+    if string.is_null() {
+        return nil;
+    }
 
-    // Assume file URL case here
+    // The bytes describe a URL, not necessarily a filesystem path.
     let url: id = msg_class![env; NSURL alloc];
-    let res = msg![env; url initFileURLWithPath:string];
+    let res = msg![env; url initWithString:string];
     release(env, string);
     res
 }
@@ -139,6 +140,91 @@ pub fn CFURLCopyPathExtension(env: &mut Environment, url: CFURLRef) -> CFStringR
     let path = msg![env; url path];
     let ext = msg![env; path pathExtension];
     msg![env; ext copy]
+}
+
+fn CFURLCopyScheme(env: &mut Environment, url: CFURLRef) -> CFStringRef {
+    let scheme: CFStringRef = msg![env; url scheme];
+    msg![env; scheme copy]
+}
+
+fn CFURLCopyHostName(env: &mut Environment, url: CFURLRef) -> CFStringRef {
+    let host: CFStringRef = msg![env; url host];
+    msg![env; host copy]
+}
+
+fn CFURLCopyPath(env: &mut Environment, url: CFURLRef) -> CFStringRef {
+    match crate::frameworks::foundation::ns_url::cf_escaped_path(env, url) {
+        Some(path) => from_rust_string(env, path),
+        None => nil,
+    }
+}
+
+fn CFURLCanBeDecomposed(env: &mut Environment, url: CFURLRef) -> bool {
+    crate::frameworks::foundation::ns_url::cf_escaped_path(env, url).is_some()
+}
+
+fn CFURLCopyStrictPath(
+    env: &mut Environment,
+    url: CFURLRef,
+    is_absolute: MutPtr<u8>,
+) -> CFStringRef {
+    let path = crate::frameworks::foundation::ns_url::cf_escaped_path(env, url);
+    let absolute = path.as_deref().is_some_and(|path| path.starts_with('/'));
+    if !is_absolute.is_null() {
+        env.mem.write(is_absolute, u8::from(absolute));
+    }
+    match path {
+        Some(path) if !path.is_empty() => {
+            let strict = if absolute { &path[1..] } else { &path };
+            from_rust_string(env, strict.to_owned())
+        }
+        _ => nil,
+    }
+}
+
+fn CFURLCopyQueryString(
+    env: &mut Environment,
+    url: CFURLRef,
+    leave_escaped: CFStringRef,
+) -> CFStringRef {
+    let query: CFStringRef = msg![env; url query];
+    if query.is_null() {
+        return nil;
+    }
+    CFURLCreateStringByReplacingPercentEscapesUsingEncoding(
+        env,
+        kCFAllocatorDefault,
+        query,
+        leave_escaped,
+        kCFStringEncodingUTF8,
+    )
+}
+
+fn CFURLCopyFragment(
+    env: &mut Environment,
+    url: CFURLRef,
+    leave_escaped: CFStringRef,
+) -> CFStringRef {
+    let fragment: CFStringRef = msg![env; url fragment];
+    if fragment.is_null() {
+        return nil;
+    }
+    CFURLCreateStringByReplacingPercentEscapesUsingEncoding(
+        env,
+        kCFAllocatorDefault,
+        fragment,
+        leave_escaped,
+        kCFStringEncodingUTF8,
+    )
+}
+
+fn CFURLGetPortNumber(env: &mut Environment, url: CFURLRef) -> i32 {
+    let port: id = msg![env; url port];
+    if port.is_null() {
+        -1
+    } else {
+        msg![env; port intValue]
+    }
 }
 
 fn CFURLCopyFileSystemPath(
@@ -176,6 +262,15 @@ fn CFURLCreateCopyDeletingLastPathComponent(
 
 fn CFURLHasDirectoryPath(env: &mut Environment, url: CFURLRef) -> bool {
     assert!(!url.is_null());
+
+    if let Some(directory) = crate::frameworks::foundation::ns_url::cf_file_directory_flag(env, url)
+    {
+        return directory;
+    }
+    if let Some(path) = crate::frameworks::foundation::ns_url::cf_escaped_path(env, url) {
+        let last = path.rsplit('/').next().unwrap_or("");
+        return path.ends_with('/') || last == "." || last == "..";
+    }
 
     let path = msg![env; url path];
     if msg![env; path isEqual:(get_static_str(env, "//"))] {
@@ -237,7 +332,7 @@ fn is_legal_url_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || "-_.~!*'();:@&=+$,/?%#".contains(c)
 }
 
-fn add_percent_escapes(string: &str, leave_unescaped: &str, to_escape: &str) -> String {
+pub(crate) fn add_percent_escapes(string: &str, leave_unescaped: &str, to_escape: &str) -> String {
     let mut escaped = String::with_capacity(string.len());
     for c in string.chars() {
         let escape = if is_legal_url_char(c) {
@@ -270,14 +365,22 @@ fn replace_percent_escapes(string: &str, leave_escaped: &str) -> Option<String> 
             i += 1;
             continue;
         }
-        let hex = std::str::from_utf8(bytes.get(i + 1..i + 3)?).ok()?;
-        let byte = u8::from_str_radix(hex, 16).ok()?;
-        if byte.is_ascii() && leave_escaped.contains(byte as char) {
-            decoded.extend_from_slice(&bytes[i..i + 3]);
-        } else {
-            decoded.push(byte);
+        let group_start = i;
+        let mut group = Vec::new();
+        while i < bytes.len() && bytes[i] == b'%' {
+            let hex = std::str::from_utf8(bytes.get(i + 1..i + 3)?).ok()?;
+            group.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
         }
-        i += 3;
+        let group_str = std::str::from_utf8(&group).ok()?;
+        for (start, character) in group_str.char_indices() {
+            let end = start + character.len_utf8();
+            if leave_escaped.contains(character) {
+                decoded.extend_from_slice(&bytes[group_start + start * 3..group_start + end * 3]);
+            } else {
+                decoded.extend_from_slice(&group[start..end]);
+            }
+        }
     }
     String::from_utf8(decoded).ok()
 }
@@ -328,6 +431,21 @@ fn CFURLCreateStringByReplacingPercentEscapesUsingEncoding(
     }
 }
 
+fn CFURLCreateStringByReplacingPercentEscapes(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    original_string: CFStringRef,
+    characters_to_leave_escaped: CFStringRef,
+) -> CFStringRef {
+    CFURLCreateStringByReplacingPercentEscapesUsingEncoding(
+        env,
+        allocator,
+        original_string,
+        characters_to_leave_escaped,
+        kCFStringEncodingUTF8,
+    )
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFURLGetFileSystemRepresentation(_, _, _, _)),
     export_c_func!(CFURLCreateFromFileSystemRepresentation(_, _, _, _)),
@@ -335,12 +453,21 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFURLCreateWithFileSystemPath(_, _, _, _)),
     export_c_func!(CFURLCreateWithString(_, _, _)),
     export_c_func!(CFURLCopyPathExtension(_)),
+    export_c_func!(CFURLCopyScheme(_)),
+    export_c_func!(CFURLCopyHostName(_)),
+    export_c_func!(CFURLCopyPath(_)),
+    export_c_func!(CFURLCanBeDecomposed(_)),
+    export_c_func!(CFURLCopyStrictPath(_, _)),
+    export_c_func!(CFURLCopyQueryString(_, _)),
+    export_c_func!(CFURLCopyFragment(_, _)),
+    export_c_func!(CFURLGetPortNumber(_)),
     export_c_func!(CFURLCopyFileSystemPath(_, _)),
     export_c_func!(CFURLCreateCopyAppendingPathComponent(_, _, _, _)),
     export_c_func!(CFURLCreateCopyDeletingLastPathComponent(_, _)),
     export_c_func!(CFURLHasDirectoryPath(_)),
     export_c_func!(CFURLCreateDataAndPropertiesFromResource(_, _, _, _, _, _)),
     export_c_func!(CFURLCreateStringByAddingPercentEscapes(_, _, _, _, _)),
+    export_c_func!(CFURLCreateStringByReplacingPercentEscapes(_, _, _)),
     export_c_func!(CFURLCreateStringByReplacingPercentEscapesUsingEncoding(
         _,
         _,
@@ -369,5 +496,10 @@ mod tests {
             Some("a b%2Fc")
         );
         assert_eq!(replace_percent_escapes("100%", ""), None);
+        assert_eq!(
+            replace_percent_escapes("%c3%a9%2F%E4%B8%AD", "é/").as_deref(),
+            Some("%c3%a9%2F中")
+        );
+        assert_eq!(replace_percent_escapes("%C3%FF", "é"), None);
     }
 }

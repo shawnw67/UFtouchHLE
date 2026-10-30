@@ -11,7 +11,7 @@ use crate::dyld::{
 };
 use crate::fs::{resolve_path, GuestPath};
 use crate::libc::clocale::{setlocale, LC_CTYPE};
-use crate::libc::errno::{set_errno, EINVAL};
+use crate::libc::errno::{set_errno, EINVAL, ENOMEM};
 use crate::libc::string::strlen;
 use crate::libc::wchar::wchar_t;
 use crate::mem::{ConstPtr, ConstVoidPtr, GuestUSize, MutPtr, MutVoidPtr, Ptr, SafeRead};
@@ -34,39 +34,47 @@ pub struct State {
 // (touchHLE's allocator will round up allocations to at least 16 bytes.)
 
 fn malloc(env: &mut Environment, size: GuestUSize) -> MutVoidPtr {
-    // TODO: handle errno properly
-    set_errno(env, 0);
+    let allocation = env.mem.try_alloc(size);
+    allocation_result(env, allocation)
+}
 
-    env.mem.alloc(size)
+pub(super) fn allocation_result(
+    env: &mut Environment,
+    allocation: Option<MutVoidPtr>,
+) -> MutVoidPtr {
+    allocation.unwrap_or_else(|| {
+        set_errno(env, ENOMEM);
+        Ptr::null()
+    })
 }
 
 fn malloc_size(env: &mut Environment, ptr: ConstVoidPtr) -> GuestUSize {
-    env.mem.malloc_size(ptr)
+    crate::libc::malloc::allocation_size(env, ptr)
 }
 
 fn calloc(env: &mut Environment, count: GuestUSize, size: GuestUSize) -> MutVoidPtr {
-    // TODO: handle errno properly
-    set_errno(env, 0);
-
-    let total = size.checked_mul(count).unwrap();
-    env.mem.calloc(total)
+    let allocation = size
+        .checked_mul(count)
+        .and_then(|total| env.mem.try_calloc(total));
+    allocation_result(env, allocation)
 }
 
 fn valloc(env: &mut Environment, size: GuestUSize) -> MutVoidPtr {
-    // TODO: handle errno properly
-    set_errno(env, 0);
-
-    env.mem.valloc(size)
+    let allocation = env.mem.try_valloc(size);
+    allocation_result(env, allocation)
 }
 
 fn realloc(env: &mut Environment, ptr: MutVoidPtr, size: GuestUSize) -> MutVoidPtr {
-    // TODO: handle errno properly
-    set_errno(env, 0);
+    let allocation = crate::libc::malloc::reallocate(env, ptr, size);
+    allocation_result(env, allocation)
+}
 
-    if ptr.is_null() {
-        return malloc(env, size);
+fn reallocf(env: &mut Environment, ptr: MutVoidPtr, size: GuestUSize) -> MutVoidPtr {
+    let allocation = realloc(env, ptr, size);
+    if allocation.is_null() && !ptr.is_null() {
+        crate::libc::malloc::free_allocation(env, ptr);
     }
-    env.mem.realloc(ptr, size)
+    allocation
 }
 
 fn free(env: &mut Environment, ptr: MutVoidPtr) {
@@ -80,14 +88,11 @@ fn free(env: &mut Environment, ptr: MutVoidPtr) {
         return;
     }
 
-    // TODO: handle errno properly
-    set_errno(env, 0);
-
     if ptr.is_null() {
         // "If ptr is a NULL pointer, no operation is performed."
         return;
     }
-    env.mem.free(ptr);
+    crate::libc::malloc::free_allocation(env, ptr);
 }
 
 fn atexit(
@@ -666,12 +671,9 @@ fn posix_memalign(
     if !alignment.is_power_of_two() || alignment < 4 {
         return EINVAL;
     }
-    // touchHLE's allocator always aligns to 16 bytes.
-    let ptr = env.mem.alloc(size);
-    assert!(
-        ptr.to_bits().is_multiple_of(alignment),
-        "TODO: posix_memalign() with alignment {alignment}"
-    );
+    let Some(ptr) = env.mem.try_memalign_in_heap(None, alignment, size) else {
+        return ENOMEM;
+    };
     env.mem.write(memptr, ptr);
     0
 }
@@ -728,6 +730,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(calloc(_, _)),
     export_c_func!(valloc(_)),
     export_c_func!(realloc(_, _)),
+    export_c_func!(reallocf(_, _)),
     export_c_func!(free(_)),
     export_c_func!(atexit(_)),
     export_c_func!(atoi(_)),

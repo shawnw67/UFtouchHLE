@@ -40,6 +40,10 @@ gl_generator = "0.14.0"
 [dependencies]
 hound = "3.5.0"
 mach_object = "0.1.17"
+# Already present in Cargo.lock; use its bounded binary substring search.
+memchr = "2.5.0"
+# Reuse the locked OS entropy provider for strfry's rejection sampler.
+getrandom = "0.2.17"
 plist = "1.8.0"
 serde_json = "1.0.91"
 zip = { version = "0.6.4", default-features = false, features = ["deflate"] }
@@ -54,9 +58,12 @@ owned_ttf_parser = "0.15.2"
 # (The above statements should not understood as legal claims/advice.)
 symphonia = { version = "0.6.0", default-features = false, features = [
     # formats
-    "caf", "isomp4", "wav",
+    "aiff", "caf", "isomp4", "wav",
     # codecs
-    "aac", "adpcm", "alac", "mp3", "pcm"
+    "aac", "adpcm", "alac", "mp3", "pcm",
+    # Register metadata readers so tagged MP3s are not probed as raw frames.
+    # See HyperHLE-Reborn ff8eb827; no additional dependency is needed.
+    "ape", "id3v1", "id3v2"
 ] }
 quick-xml = "0.38.4"
 digest = "0.10.7"

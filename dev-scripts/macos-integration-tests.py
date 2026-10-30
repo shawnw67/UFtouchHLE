@@ -204,7 +204,29 @@ def main():
     for line in failures:
         print(line)
     print(summary[-1] if summary else output[-3000:])
-    sys.exit(result.returncode)
+    if result.returncode != 0:
+        sys.exit(result.returncode)
+    # Fortified overflows must fail through the actual ARM guest export.
+    # Require the precise diagnostic, not merely an arbitrary crash.
+    for mode in ("--fortify-overflow", "--fortify-unterminated", "--fortify-zero"):
+        rejected = subprocess.run(
+            [TOUCHHLE, APP, "--headless", "--args", mode],
+            capture_output=True, text=True, timeout=30,
+        )
+        failure = rejected.stdout + rejected.stderr
+        if (rejected.returncode == 0 or "__strncat_chk: buffer overflow" not in failure
+                or "FORTIFY_RETURNED_UNEXPECTEDLY" in failure):
+            sys.exit("Fortified guest failure check failed: " + mode + "\n" + failure[-3000:])
+    print("PASS 3 fortified ARM guest rejection cases")
+    exhausted = subprocess.run(
+        [TOUCHHLE, APP, "--headless", "--args", "--allocation-exhaustion"],
+        capture_output=True, text=True, timeout=30,
+    )
+    exhaustion_output = exhausted.stdout + exhausted.stderr
+    if (exhausted.returncode != 0 or
+            "PASS allocation exhaustion and reallocf release" not in exhaustion_output):
+        sys.exit("Guest allocation exhaustion check failed:\n" + exhaustion_output[-3000:])
+    print("PASS ARM guest address-space exhaustion and reallocf release")
 
 
 if __name__ == "__main__":

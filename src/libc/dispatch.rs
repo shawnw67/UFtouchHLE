@@ -383,7 +383,8 @@ fn semaphore_for(env: &Environment, object: MutVoidPtr) -> MutPtr<sem_t> {
 }
 fn dispatch_semaphore_signal(env: &mut Environment, semaphore: MutVoidPtr) -> i32 {
     let sem = semaphore_for(env, semaphore);
-    env.sem_increment(sem);
+    env.sem_increment(sem)
+        .expect("dispatch semaphore signal overflow or invalid object");
     0
 }
 fn dispatch_semaphore_wait(

@@ -302,8 +302,9 @@ impl Mem {
         }
     }
 
-    pub fn create_heap(&mut self, size: GuestUSize) -> HeapAllocator {
-        HeapAllocator::new(&mut self.vm_allocator, size)
+    pub fn try_create_heap(&mut self, size: GuestUSize) -> Option<HeapAllocator> {
+        size.checked_add(PAGE_SIZE - 1)?;
+        HeapAllocator::try_new(&mut self.vm_allocator, size)
     }
 
     pub fn destroy_heap(&mut self, heap: HeapAllocator) {
@@ -539,19 +540,39 @@ impl Mem {
         self.alloc_in_heap(None, size)
     }
 
+    /// Allocate guest storage, returning None if its size cannot be rounded
+    /// or the allocator cannot find room. Used by fallible libc interfaces.
+    pub fn try_alloc(&mut self, size: GuestUSize) -> Option<MutVoidPtr> {
+        self.try_alloc_in_heap(None, size)
+    }
+
     /// Allocate `size` bytes in `heap`.
     pub fn alloc_in_heap(
         &mut self,
         heap: Option<&mut HeapAllocator>,
         size: GuestUSize,
     ) -> MutVoidPtr {
+        self.try_alloc_in_heap(heap, size).unwrap_or_else(|| {
+            panic!("Could not find large enough chunk to allocate {size:#x} bytes")
+        })
+    }
+
+    pub(crate) fn try_alloc_in_heap(
+        &mut self,
+        heap: Option<&mut HeapAllocator>,
+        size: GuestUSize,
+    ) -> Option<MutVoidPtr> {
+        // The heap and VM both round sizes. Prevent guest-size wrap before
+        // calling either allocator; even the rounded size must fit in u32.
+        size.checked_add(PAGE_SIZE - 1)?;
+        if heap.is_none() && self.heap_allocator.is_none() {
+            self.heap_allocator = Some(HeapAllocator::try_new(
+                &mut self.vm_allocator,
+                HeapAllocator::HEAP_CHUNK_SIZE,
+            )?);
+        }
         let (vm, heap) = self.allocators_mut(heap);
-        let alloc = match heap.alloc(vm, size) {
-            None => {
-                panic!("Could not find large enough chunk to allocate {size:#x} bytes")
-            }
-            Some(alloc) => alloc,
-        };
+        let alloc = heap.alloc(vm, size)?;
         let ptr = Ptr::from_bits(alloc.base);
 
         if !self.zero_memory_on_free && alloc.size.get() <= HeapAllocator::HEAP_ALLOCATION_THRESHOLD
@@ -559,7 +580,7 @@ impl Mem {
             self.bytes_at_mut(ptr.cast(), size).fill(0);
         }
         log_dbg!("Allocated {:?} ({:#x} bytes)", ptr, size);
-        ptr
+        Some(ptr)
     }
 
     /// Allocate `size` bytes using the virtual memory allocator.
@@ -582,19 +603,37 @@ impl Mem {
 
     /// Allocate `size` bytes initialized to 0.
     pub fn calloc(&mut self, size: GuestUSize) -> MutVoidPtr {
-        let ptr = self.alloc(size);
-        self.bytes_at_mut(ptr.cast(), size).fill(0);
-        ptr
+        self.try_calloc(size).unwrap_or_else(|| {
+            panic!("Could not find large enough chunk to calloc {size:#x} bytes")
+        })
     }
 
-    pub fn valloc(&mut self, size: GuestUSize) -> MutVoidPtr {
-        let (vm, heap) = self.allocators_mut(None);
-        let alloc = match heap.valloc(vm, size) {
-            None => {
-                panic!("Could not find large enough chunk to vallocate {size:#x} bytes")
-            }
-            Some(alloc) => alloc,
-        };
+    /// Fallible variant of [Self::calloc].
+    pub fn try_calloc(&mut self, size: GuestUSize) -> Option<MutVoidPtr> {
+        let ptr = self.try_alloc(size)?;
+        self.bytes_at_mut(ptr.cast(), size).fill(0);
+        Some(ptr)
+    }
+
+    /// Fallible page-aligned allocation, including a minimum page for size 0.
+    pub fn try_valloc(&mut self, size: GuestUSize) -> Option<MutVoidPtr> {
+        self.try_valloc_in_heap(None, size)
+    }
+
+    pub(crate) fn try_valloc_in_heap(
+        &mut self,
+        heap: Option<&mut HeapAllocator>,
+        size: GuestUSize,
+    ) -> Option<MutVoidPtr> {
+        let size = size.max(1).checked_add(PAGE_SIZE - 1)? & !(PAGE_SIZE - 1);
+        if heap.is_none() && self.heap_allocator.is_none() {
+            self.heap_allocator = Some(HeapAllocator::try_new(
+                &mut self.vm_allocator,
+                HeapAllocator::HEAP_CHUNK_SIZE,
+            )?);
+        }
+        let (vm, heap) = self.allocators_mut(heap);
+        let alloc = heap.valloc(vm, size)?;
         assert!(alloc.base.is_multiple_of(PAGE_SIZE));
         let alloc_size = alloc.size.get();
         assert!(alloc_size.is_multiple_of(PAGE_SIZE));
@@ -606,7 +645,40 @@ impl Mem {
             size,
             alloc_size
         );
-        ptr
+        Some(ptr)
+    }
+
+    pub(crate) fn try_memalign_in_heap(
+        &mut self,
+        heap: Option<&mut HeapAllocator>,
+        alignment: GuestUSize,
+        size: GuestUSize,
+    ) -> Option<MutVoidPtr> {
+        if !alignment.is_power_of_two() || alignment < 4 {
+            return None;
+        }
+        if alignment <= allocator::MIN_CHUNK_SIZE {
+            return self.try_alloc_in_heap(heap, size);
+        }
+        size.max(1).checked_add(PAGE_SIZE - 1)?;
+        if heap.is_none() && self.heap_allocator.is_none() {
+            self.heap_allocator = Some(HeapAllocator::try_new(
+                &mut self.vm_allocator,
+                HeapAllocator::HEAP_CHUNK_SIZE,
+            )?);
+        }
+        let (vm, heap) = self.allocators_mut(heap);
+        let alloc = heap.memalign(vm, alignment, size)?;
+        let ptr = Ptr::from_bits(alloc.base);
+        if !self.zero_memory_on_free && alloc.size.get() <= HeapAllocator::HEAP_ALLOCATION_THRESHOLD
+        {
+            self.bytes_at_mut(ptr.cast(), size).fill(0);
+        }
+        Some(ptr)
+    }
+
+    pub(crate) fn default_allocation_size(&self, ptr: ConstVoidPtr) -> Option<GuestUSize> {
+        self.heap_allocator.as_ref()?.allocated_size(ptr.to_bits())
     }
 
     /// Get size of allocation at `ptr` in the default heap.
@@ -629,26 +701,41 @@ impl Mem {
         self.realloc_in_heap(None, old_ptr, size)
     }
 
+    /// Fallible resize; on failure the old allocation and contents survive.
+    pub fn try_realloc(&mut self, old_ptr: MutVoidPtr, size: GuestUSize) -> Option<MutVoidPtr> {
+        self.try_realloc_in_heap(None, old_ptr, size)
+    }
+
     /// Resize allocation at `old_ptr` to `size` bytes in `heap`.
     pub fn realloc_in_heap(
+        &mut self,
+        heap: Option<&mut HeapAllocator>,
+        old_ptr: MutVoidPtr,
+        size: GuestUSize,
+    ) -> MutVoidPtr {
+        self.try_realloc_in_heap(heap, old_ptr, size)
+            .unwrap_or_else(|| panic!("Could not reallocate {old_ptr:?} to {size:#x} bytes"))
+    }
+
+    pub(crate) fn try_realloc_in_heap(
         &mut self,
         mut heap: Option<&mut HeapAllocator>,
         old_ptr: MutVoidPtr,
         size: GuestUSize,
-    ) -> MutVoidPtr {
+    ) -> Option<MutVoidPtr> {
         if old_ptr.is_null() {
-            return self.alloc_in_heap(heap, size);
+            return self.try_alloc_in_heap(heap, size);
         }
         // TODO: for a moment we always assume that we do not have enough size
         //       to realloc inplace
         let old_size = self.malloc_size_in_heap(heap.as_deref_mut(), old_ptr.cast_const());
         if old_size >= size {
-            return old_ptr;
+            return Some(old_ptr);
         }
-        let new_ptr = self.alloc_in_heap(heap.as_deref_mut(), size);
+        let new_ptr = self.try_alloc_in_heap(heap.as_deref_mut(), size)?;
         self.memmove(new_ptr, old_ptr.cast_const(), old_size);
         self.free_in_heap(heap, old_ptr);
-        new_ptr
+        Some(new_ptr)
     }
 
     /// Free allocations made with non vm prefixed `alloc` methods on
@@ -660,9 +747,10 @@ impl Mem {
     /// Free an allocation made with one of the `alloc` methods in `heap`.
     pub fn free_in_heap(&mut self, heap: Option<&mut HeapAllocator>, ptr: MutVoidPtr) {
         let (vm, heap) = self.allocators_mut(heap);
+        let is_vm_allocation = heap.is_vm_allocation(ptr.to_bits());
         let size = heap.free(vm, ptr.to_bits());
 
-        if size > HeapAllocator::HEAP_ALLOCATION_THRESHOLD {
+        if is_vm_allocation {
             // VM allocations are always 0 initialized.
             // TODO: Can this be done with vm_advise/equivalents
             self.bytes_at_mut(ptr.cast(), size).fill(0);
@@ -753,5 +841,124 @@ impl Mem {
         });
 
         (vm, heap)
+    }
+}
+
+#[cfg(test)]
+mod allocation_tests {
+    use super::*;
+
+    #[test]
+    fn fallible_heap_initialization_can_fail_and_recover() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(PAGE_SIZE);
+        mem.vm_allocator = VMAllocator::new(PAGE_SIZE, PAGE_SIZE);
+        assert!(mem.try_alloc(16).is_none());
+        assert!(mem.heap_allocator.is_none());
+        mem.vm_allocator = VMAllocator::new(PAGE_SIZE, HeapAllocator::HEAP_CHUNK_SIZE);
+        assert!(mem.try_alloc(16).is_some());
+    }
+
+    #[test]
+    fn fallible_heap_growth_preserves_existing_allocations() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(PAGE_SIZE);
+        mem.vm_allocator = VMAllocator::new(PAGE_SIZE, HeapAllocator::HEAP_CHUNK_SIZE);
+        let mut allocations = Vec::new();
+        while let Some(ptr) = mem.try_alloc(PAGE_SIZE) {
+            mem.write(ptr.cast::<u32>(), 0x12345678);
+            allocations.push(ptr);
+        }
+        assert!(!allocations.is_empty());
+        for &ptr in &allocations {
+            assert_eq!(mem.read(ptr.cast::<u32>()), 0x12345678);
+        }
+        mem.free(allocations.pop().unwrap());
+        assert!(mem.try_alloc(PAGE_SIZE).is_some());
+    }
+
+    #[test]
+    fn failed_resize_keeps_the_old_allocation_and_contents() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(PAGE_SIZE);
+        mem.vm_allocator = VMAllocator::new(PAGE_SIZE, HeapAllocator::HEAP_CHUNK_SIZE);
+        let old = mem.try_alloc(16).unwrap();
+        mem.bytes_at_mut(old.cast(), 16).fill(0x5a);
+        // No rounding overflow: this fails because the VM has no more room.
+        assert!(mem
+            .try_realloc(old, HeapAllocator::HEAP_CHUNK_SIZE)
+            .is_none());
+        assert_eq!(mem.malloc_size(old.cast_const()), 16);
+        assert_eq!(mem.bytes_at(old.cast_const().cast(), 16), &[0x5a; 16]);
+        assert_eq!(mem.try_realloc(old, 8), Some(old));
+        mem.free(old);
+        assert!(mem.try_alloc(16).is_some());
+    }
+
+    #[test]
+    fn aligned_pointers_support_resize_and_free_without_hidden_headers() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(PAGE_SIZE);
+        assert!(mem.try_memalign_in_heap(None, 3, 16).is_none());
+        assert!(mem.try_memalign_in_heap(None, 65536, u32::MAX).is_none());
+        let ptr = mem.try_memalign_in_heap(None, 65536, 17).unwrap();
+        assert!(ptr.to_bits().is_multiple_of(65536));
+        assert_eq!(mem.default_allocation_size(ptr.cast_const()), Some(32));
+        mem.bytes_at_mut(ptr.cast(), 17).fill(0x5a);
+        let grown = mem.try_realloc(ptr, PAGE_SIZE * 2).unwrap();
+        assert_eq!(mem.bytes_at(grown.cast_const().cast(), 17), &[0x5a; 17]);
+        assert_eq!(mem.default_allocation_size(ptr.cast_const()), None);
+        mem.free(grown);
+    }
+
+    #[test]
+    fn aligned_allocations_preserve_heap_and_vm_zeroing_policies() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(PAGE_SIZE);
+        mem.zero_memory_on_free = false;
+        let page = mem.try_valloc(16).unwrap();
+        let aligned = mem
+            .try_memalign_in_heap(None, HeapAllocator::HEAP_CHUNK_SIZE * 2, 16)
+            .unwrap();
+        for ptr in [page, aligned] {
+            assert_eq!(mem.malloc_size(ptr.cast_const()), PAGE_SIZE);
+            mem.bytes_at_mut(ptr.cast(), PAGE_SIZE).fill(0x5a);
+            mem.free(ptr);
+            assert!(mem
+                .bytes_at(ptr.cast_const().cast(), PAGE_SIZE)
+                .iter()
+                .all(|&byte| byte == 0));
+        }
+        let small = mem.try_memalign_in_heap(None, 64, 17).unwrap();
+        mem.bytes_at_mut(small.cast(), 17).fill(0x5a);
+        mem.free(small);
+        let reused = mem.try_memalign_in_heap(None, 64, 17).unwrap();
+        assert!(mem
+            .bytes_at(reused.cast_const().cast(), 17)
+            .iter()
+            .all(|&byte| byte == 0));
+        mem.free(reused);
+    }
+
+    #[test]
+    fn fallible_page_allocation_checks_rounding_and_clears_reused_pages() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(PAGE_SIZE);
+        mem.zero_memory_on_free = false;
+        assert!(mem.try_valloc(u32::MAX).is_none());
+        let ptr = mem.try_valloc(PAGE_SIZE + 1).unwrap();
+        assert!(ptr.to_bits().is_multiple_of(PAGE_SIZE));
+        assert_eq!(mem.malloc_size(ptr.cast_const()), PAGE_SIZE * 2);
+        mem.bytes_at_mut(ptr.cast(), PAGE_SIZE * 2).fill(0x5a);
+        mem.free(ptr);
+        let new = mem.try_valloc(PAGE_SIZE + 1).unwrap();
+        assert!(mem
+            .bytes_at(new.cast_const().cast(), PAGE_SIZE * 2)
+            .iter()
+            .all(|&byte| byte == 0));
+        mem.free(new);
+        let zero = mem.try_valloc(0).unwrap();
+        assert!(zero.to_bits().is_multiple_of(PAGE_SIZE));
+        assert_eq!(mem.malloc_size(zero.cast_const()), PAGE_SIZE);
     }
 }

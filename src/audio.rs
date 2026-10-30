@@ -316,6 +316,42 @@ pub mod sound_trace;
 mod metadata_tests {
     use super::*;
 
+    #[test]
+    fn large_id3_tag_does_not_hide_mp3_audio() {
+        // Synthetic MPEG-1 Layer III silent frames, no game asset involved.
+        let mut frames = Vec::new();
+        for _ in 0..4 {
+            frames.extend_from_slice(&[0xff, 0xfb, 0x90, 0x64]);
+            frames.extend_from_slice(&[0; 413]);
+        }
+        let reference = decode_audio_track_to_pcm(frames.clone()).unwrap();
+        let size = 1_048_600u32;
+        let mut tagged = b"ID3\x04\0\0".to_vec();
+        for shift in [21, 14, 7, 0] {
+            tagged.push(((size >> shift) & 0x7f) as u8);
+        }
+        tagged.resize(10 + size as usize, 0);
+        tagged.extend_from_slice(&frames);
+        let decoded = decode_audio_track_to_pcm(tagged).unwrap();
+        assert!(!decoded.0.is_empty());
+        assert_eq!(decoded, reference);
+    }
+
+    #[test]
+    fn aiff_big_endian_samples_decode_to_little_endian_pcm() {
+        let mut file = b"FORM\0\0\0\x32AIFFCOMM\0\0\0\x12".to_vec();
+        file.extend_from_slice(b"\0\x01\0\0\0\x02\0\x10");
+        // IEEE 80-bit extended value for 44100 Hz.
+        file.extend_from_slice(&[0x40, 0x0e, 0xac, 0x44, 0, 0, 0, 0, 0, 0]);
+        file.extend_from_slice(b"SSND\0\0\0\x0c\0\0\0\0\0\0\0\0\x12\x34\xfe\xdc");
+        let mut audio = AudioFile::read_from_vec(file).unwrap();
+        assert_eq!(audio.audio_description().sample_rate, 44100.0);
+        assert_eq!(audio.audio_description().channels_per_frame, 1);
+        let mut output = [0; 4];
+        assert_eq!(audio.read_bytes(0, &mut output), Ok(4));
+        assert_eq!(output, [0x34, 0x12, 0xdc, 0xfe]);
+    }
+
     fn chunk(file: &mut Vec<u8>, id: &[u8; 4], payload: &[u8]) {
         file.extend_from_slice(id);
         file.extend_from_slice(&(payload.len() as i64).to_be_bytes());

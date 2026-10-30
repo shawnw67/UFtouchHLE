@@ -33,6 +33,11 @@ pub mod cf_url;
 pub mod cf_uuid;
 pub mod time;
 
+#[derive(Default)]
+pub struct State {
+    cf_uuid: cf_uuid::State,
+}
+
 pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     path: "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
     aliases: &[],
@@ -43,6 +48,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     constant_exports: &[
         CONSTANTS,
         cf_allocator::CONSTANTS,
+        cf_array::CONSTANTS,
         cf_bundle::CONSTANTS,
         cf_dictionary::CONSTANTS,
         cf_locale::CONSTANTS,

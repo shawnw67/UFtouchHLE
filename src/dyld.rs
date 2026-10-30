@@ -21,6 +21,107 @@
 
 mod dylib_list;
 
+#[cfg(test)]
+mod symbol_visibility_tests {
+    use super::*;
+    use crate::mach_o::{DyldIndirectSymbolInfo, Section};
+
+    fn image(name: &str, address: u32, external: bool) -> MachO {
+        MachO {
+            name: name.into(),
+            dynamic_libraries: Vec::new(),
+            sections: Vec::new(),
+            exported_symbols: [("_visibility_probe".into(), address)].into(),
+            external_symbols: if external {
+                [("_visibility_probe".into(), address)].into()
+            } else {
+                HashMap::new()
+            },
+            external_relocations: Vec::new(),
+            entry_point_pc: None,
+            last_segment_end: 0,
+        }
+    }
+
+    #[test]
+    fn private_names_cannot_capture_nonlazy_or_external_relocations() {
+        let mut memory = Mem::new();
+        let relocated = memory.alloc_and_write(7u32);
+        let nonlazy = memory.alloc_and_write(0u32);
+        let mut requester = image("requester", 0x3031, false);
+        requester.exported_symbols.clear();
+        requester
+            .external_relocations
+            .push((relocated.to_bits(), "_visibility_probe".into()));
+        requester.sections.push(Section {
+            name: "__nl_symbol_ptr".into(),
+            addr: nonlazy.to_bits(),
+            size: 4,
+            type_: SectionType::NonLazySymbolPointers,
+            dyld_indirect_symbol_info: Some(DyldIndirectSymbolInfo {
+                entry_size: 4,
+                indirect_undef_symbols: vec![Some("_visibility_probe".into())],
+            }),
+        });
+        let images = [
+            image("private", 0x1011, false),
+            image("public", 0x2021, true),
+            requester,
+        ];
+        Dyld::new().do_non_lazy_linking(&images[2], &images, &mut memory, &mut ObjC::new());
+        assert_eq!(memory.read(relocated), 0x2028);
+        assert_eq!(memory.read(nonlazy), 0x2021);
+    }
+
+    #[test]
+    fn lazy_stub_uses_external_symbol_and_preserves_thumb_bit() {
+        let mut memory = Mem::new();
+        let target = memory.alloc_and_write(0u32);
+        let stub: MutPtr<u32> = memory.alloc(12).cast();
+        memory.write(stub + 2, target.to_bits());
+        let mut requester = image("requester", 0, false);
+        requester.exported_symbols.clear();
+        requester.sections.push(Section {
+            name: "__symbol_stub".into(),
+            addr: stub.to_bits(),
+            size: 12,
+            type_: SectionType::SymbolStubs,
+            dyld_indirect_symbol_info: Some(DyldIndirectSymbolInfo {
+                entry_size: 12,
+                indirect_undef_symbols: vec![Some("_visibility_probe".into())],
+            }),
+        });
+        let images = [
+            image("private", 0x1011, false),
+            image("public", 0x2021, true),
+            requester,
+        ];
+        let mut cpu = Cpu::new(None);
+        assert!(Dyld::new()
+            .do_lazy_link(&images, &mut memory, &mut cpu, stub.to_bits())
+            .is_none());
+        assert_eq!(memory.read(target), 0x2021);
+        assert_eq!(memory.read(stub), Dyld::SYMBOL_STUB_INSTRUCTIONS[0]);
+    }
+
+    #[test]
+    fn self_local_names_remain_visible_only_to_their_owner() {
+        let mut memory = Mem::new();
+        let slot = memory.alloc_and_write(0u32);
+        let mut requester = image("requester", 0x3031, false);
+        requester
+            .external_relocations
+            .push((slot.to_bits(), "_visibility_probe".into()));
+        let images = [image("other-private", 0x1011, false), requester];
+        assert_eq!(
+            images[0].symbol_for_linking(&images[1], "_visibility_probe"),
+            None
+        );
+        Dyld::new().do_non_lazy_linking(&images[1], &images, &mut memory, &mut ObjC::new());
+        assert_eq!(memory.read(slot), 0x3031);
+    }
+}
+
 use crate::abi::{CallFromGuest, GuestFunction};
 use crate::cpu::Cpu;
 use crate::frameworks::foundation::ns_string;
@@ -346,7 +447,7 @@ impl Dyld {
                 continue;
             }
             for dylib in bins.iter() {
-                if dylib.exported_symbols.contains_key(symbol) {
+                if dylib.symbol_for_linking(&bins[0], symbol).is_some() {
                     writeln!(
                         file,
                         "        {{ \"symbol\": \"{}\", \"linked_to\": \"dylib\", \"dylib\": \"{}\"}}{}",
@@ -489,9 +590,9 @@ impl Dyld {
             } else if name == "___CFConstantStringClassReference" {
                 // See ns_string::register_constant_strings
                 nil.cast().cast_const()
-            } else if let Some(&external_addr) = bins
+            } else if let Some(external_addr) = bins
                 .iter()
-                .flat_map(|other_bin| other_bin.exported_symbols.get(name))
+                .filter_map(|other_bin| other_bin.symbol_for_linking(bin, name))
                 .next()
             {
                 // Often used for C++ RTTI
@@ -565,7 +666,7 @@ impl Dyld {
             let ptr_ptr: MutPtr<ConstVoidPtr> = Ptr::from_bits(ptrs.addr + i * entry_size);
 
             for other_bin in bins {
-                if let Some(&addr) = other_bin.exported_symbols.get(symbol) {
+                if let Some(addr) = other_bin.symbol_for_linking(bin, symbol) {
                     mem.write(ptr_ptr, Ptr::from_bits(addr));
                     continue 'ptr_loop;
                 }
@@ -728,7 +829,7 @@ impl Dyld {
             (stub_function_ptr, la_symbol_ptr)
         }
 
-        let (stubs, pic_offset) = bins
+        let (stubs, pic_offset, requesting_bin) = bins
             .iter()
             .find_map(|bin| {
                 let stubs = bin.get_section(SectionType::SymbolStubs)?;
@@ -738,7 +839,7 @@ impl Dyld {
                 let pic_offset = bin
                     .get_section(SectionType::LazySymbolPointers)
                     .map_or(0, |lazy_ptrs| lazy_ptrs.addr - stubs.addr);
-                Some((stubs, pic_offset))
+                Some((stubs, pic_offset, bin))
             })
             .unwrap();
 
@@ -805,7 +906,7 @@ impl Dyld {
         }
 
         for dylib in bins.iter() {
-            if let Some(&addr) = dylib.exported_symbols.get(symbol) {
+            if let Some(addr) = dylib.symbol_for_linking(requesting_bin, symbol) {
                 let (stub_function_ptr, la_symbol_ptr) =
                     link_by_restoring_stub(mem, cpu, addr, svc_pc, info.entry_size, pic_offset);
                 log_dbg!(

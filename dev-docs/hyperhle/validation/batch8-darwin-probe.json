@@ -1,0 +1,234 @@
+{
+  "source": "https://raw.githubusercontent.com/apple-oss-distributions/Libc/0d7a000256faa8e750c97ebd703e5d01a5c26fb6/string/FreeBSD/strerror.c",
+  "source_sha256": "90b2598f38daa3438218857138f8bc4c57fc35af57b4a685ae804b3ca14edb64",
+  "host": "macOS-27.2-arm64-arm-64bit",
+  "scope": "Historical Apple function compiled on modern macOS; not a physical iPhone test",
+  "historical": [
+    {
+      "error": 0,
+      "capacity": 0,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "5a5a"
+    },
+    {
+      "error": 0,
+      "capacity": 1,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "005a5a"
+    },
+    {
+      "error": 0,
+      "capacity": 4,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b005a5a"
+    },
+    {
+      "error": 0,
+      "capacity": 128,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b6e6f776e206572726f723a2030005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00"
+    },
+    {
+      "error": 22,
+      "capacity": 0,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "5a5a"
+    },
+    {
+      "error": 22,
+      "capacity": 1,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "005a5a"
+    },
+    {
+      "error": 22,
+      "capacity": 4,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "496e76005a5a"
+    },
+    {
+      "error": 22,
+      "capacity": 128,
+      "result": 0,
+      "errno": 33,
+      "buffer_with_canaries_hex": "496e76616c696420617267756d656e74005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00"
+    },
+    {
+      "error": -1,
+      "capacity": 0,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "5a5a"
+    },
+    {
+      "error": -1,
+      "capacity": 1,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "005a5a"
+    },
+    {
+      "error": -1,
+      "capacity": 4,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b005a5a"
+    },
+    {
+      "error": -1,
+      "capacity": 128,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b6e6f776e206572726f723a202d31005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00"
+    },
+    {
+      "error": 9999,
+      "capacity": 0,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "5a5a"
+    },
+    {
+      "error": 9999,
+      "capacity": 1,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "005a5a"
+    },
+    {
+      "error": 9999,
+      "capacity": 4,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b005a5a"
+    },
+    {
+      "error": 9999,
+      "capacity": 128,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b6e6f776e206572726f723a2039393939005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00"
+    }
+  ],
+  "modern_host": [
+    {
+      "error": 0,
+      "capacity": 0,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "5a5a"
+    },
+    {
+      "error": 0,
+      "capacity": 1,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "005a5a"
+    },
+    {
+      "error": 0,
+      "capacity": 4,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e64005a5a"
+    },
+    {
+      "error": 0,
+      "capacity": 128,
+      "result": 0,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e646566696e6564206572726f723a2030005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00"
+    },
+    {
+      "error": 22,
+      "capacity": 0,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "5a5a"
+    },
+    {
+      "error": 22,
+      "capacity": 1,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "005a5a"
+    },
+    {
+      "error": 22,
+      "capacity": 4,
+      "result": 34,
+      "errno": 33,
+      "buffer_with_canaries_hex": "496e76005a5a"
+    },
+    {
+      "error": 22,
+      "capacity": 128,
+      "result": 0,
+      "errno": 33,
+      "buffer_with_canaries_hex": "496e76616c696420617267756d656e74005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00"
+    },
+    {
+      "error": -1,
+      "capacity": 0,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "5a5a"
+    },
+    {
+      "error": -1,
+      "capacity": 1,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "005a5a"
+    },
+    {
+      "error": -1,
+      "capacity": 4,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b005a5a"
+    },
+    {
+      "error": -1,
+      "capacity": 128,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b6e6f776e206572726f723a202d31005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00"
+    },
+    {
+      "error": 9999,
+      "capacity": 0,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "5a5a"
+    },
+    {
+      "error": 9999,
+      "capacity": 1,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "005a5a"
+    },
+    {
+      "error": 9999,
+      "capacity": 4,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b005a5a"
+    },
+    {
+      "error": 9999,
+      "capacity": 128,
+      "result": 22,
+      "errno": 33,
+      "buffer_with_canaries_hex": "556e6b6e6f776e206572726f723a2039393939005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a00"
+    }
+  ]
+}

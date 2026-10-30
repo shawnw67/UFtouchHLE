@@ -42,10 +42,11 @@ pub struct MachO {
     pub dynamic_libraries: Vec<String>,
     /// Metadata related to sections.
     pub sections: Vec<Section>,
-    /// Defined symbols in the binary (both external and local). This is a
-    /// hashmap so the dynamic linker can look things up quickly. Thumb function
-    /// symbols always have the Thumb bit set.
+    /// All defined symbols, including image-local names. Thumb functions
+    /// retain their Thumb bit. Do not use this map for cross-image lookup.
     pub exported_symbols: HashMap<String, u32>,
+    /// Only symbols marked N_EXT, for resolution from dependent images.
+    pub external_symbols: HashMap<String, u32>,
     /// List of addresses and names of external relocations for the dynamic
     /// linker to resolve.
     pub external_relocations: Vec<(u32, String)>,
@@ -240,6 +241,325 @@ fn cpu_subtype_to_str(ty: cpu_subtype_t) -> &'static str {
     }
 }
 
+// Same ARM32 preference as HyperHLE-Reborn ff8eb827. Capability bits
+// are requirements, not flags that may be discarded to force a match.
+fn arm_subtype_priority(subtype: cpu_subtype_t) -> Option<u8> {
+    match subtype {
+        mach_object::CPU_SUBTYPE_ARM_V7 => Some(4),
+        mach_object::CPU_SUBTYPE_ARM_V7S => Some(3),
+        mach_object::CPU_SUBTYPE_ARM_V7F => Some(2),
+        mach_object::CPU_SUBTYPE_ARM_V6 => Some(1),
+        mach_object::CPU_SUBTYPE_ARM_ALL => Some(0),
+        _ => None,
+    }
+}
+
+fn validate_segment_ranges(commands: &[MachCommand], file_len: usize) -> Result<(), &'static str> {
+    for MachCommand(command, _) in commands {
+        if let LoadCommand::Segment {
+            fileoff,
+            filesize,
+            vmsize,
+            ..
+        } = command
+        {
+            validate_segment_file_range(
+                *fileoff as u64,
+                *filesize as u64,
+                *vmsize as u64,
+                file_len,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Inspect the FAT directory without recursively parsing unrelated slices.
+/// mach_object eagerly parses all slices, so one malformed or unsupported
+/// image would otherwise prevent a valid ARM32 fallback from being selected.
+fn select_fat_slice(bytes: &[u8]) -> Result<Option<&[u8]>, &'static str> {
+    let (big_endian, wide) = match bytes.get(..4) {
+        Some([0xca, 0xfe, 0xba, 0xbe]) => (true, false),
+        Some([0xbe, 0xba, 0xfe, 0xca]) => (false, false),
+        Some([0xca, 0xfe, 0xba, 0xbf]) => (true, true),
+        Some([0xbf, 0xba, 0xfe, 0xca]) => (false, true),
+        _ => return Ok(None),
+    };
+    let word = |data: &[u8]| {
+        let raw = data.try_into().unwrap();
+        if big_endian {
+            u32::from_be_bytes(raw)
+        } else {
+            u32::from_le_bytes(raw)
+        }
+    };
+    let count = word(bytes.get(4..8).ok_or("Truncated FAT header")?) as usize;
+    let entry_size = if wide { 32 } else { 20 };
+    if count > (bytes.len() - 8) / entry_size {
+        return Err("Truncated FAT architecture directory");
+    }
+    let directory_end = 8 + count * entry_size;
+    let mut best = None;
+    let mut priority = None;
+    for entry in bytes[8..directory_end].chunks_exact(entry_size) {
+        let cpu = word(&entry[..4]);
+        let subtype = word(&entry[4..8]) as cpu_subtype_t;
+        if cpu != mach_object::CPU_TYPE_ARM as u32 {
+            continue;
+        }
+        let Some(rank) = arm_subtype_priority(subtype) else {
+            continue;
+        };
+        let (offset, size) = if wide {
+            let long = |data: &[u8]| {
+                let raw = data.try_into().unwrap();
+                if big_endian {
+                    u64::from_be_bytes(raw)
+                } else {
+                    u64::from_le_bytes(raw)
+                }
+            };
+            (long(&entry[8..16]), long(&entry[16..24]))
+        } else {
+            (
+                u64::from(word(&entry[8..12])),
+                u64::from(word(&entry[12..16])),
+            )
+        };
+        let range = offset
+            .checked_add(size)
+            .and_then(|end| Some(usize::try_from(offset).ok()?..usize::try_from(end).ok()?));
+        let Some(range) = range.filter(|r| r.start >= directory_end) else {
+            continue;
+        };
+        let Some(slice) = bytes.get(range) else {
+            continue;
+        };
+        // Only a little-endian 32-bit thin Mach-O can be a candidate.
+        // In particular do not let the parser recurse into a nested FAT
+        // container before we get a chance to reject it.
+        if slice.get(..4) != Some(0xfeedfaceu32.to_le_bytes().as_slice()) {
+            continue;
+        }
+        let Ok(OFile::MachFile { header, commands }) = OFile::parse(&mut Cursor::new(slice)) else {
+            continue;
+        };
+        if header.cputype != mach_object::CPU_TYPE_ARM
+            || header.cpusubtype != subtype
+            || header.is_bigend()
+            || header.is_64bit()
+            || validate_segment_ranges(&commands, slice.len()).is_err()
+        {
+            continue;
+        }
+        if priority.is_none_or(|previous| rank > previous) {
+            best = Some(slice);
+            priority = Some(rank);
+        }
+    }
+    best.map(Some).ok_or("FAT binary has no usable ARM32 slice")
+}
+
+// Adapted from HyperHLE-Reborn ff8eb827, src/mach_o.rs.
+fn validate_segment_file_range(
+    offset: u64,
+    size: u64,
+    virtual_size: u64,
+    file_len: usize,
+) -> Result<(), &'static str> {
+    if size > virtual_size {
+        return Err("Mach-O segment file size exceeds virtual size");
+    }
+    if size == 0 {
+        return Ok(());
+    }
+    let end = offset
+        .checked_add(size)
+        .ok_or("Mach-O segment range overflows")?;
+    if end > file_len as u64 {
+        return Err("Mach-O segment extends past end of file");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod segment_tests {
+    use super::*;
+
+    fn thin(subtype: u32, file_size: u32) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for word in [0xfeedfaceu32, 12, subtype, 2, 1, 56, 0, 1, 56] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        let mut name = [0; 16];
+        name[..6].copy_from_slice(b"__TEXT");
+        bytes.extend_from_slice(&name);
+        for word in [0x4000u32, 0x2000, 0, file_size, 7, 5, 0, 0] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        bytes
+    }
+
+    fn fat(slices: &[(u32, Vec<u8>)], wide: bool, little: bool) -> Vec<u8> {
+        let word = |v: u32| {
+            if little {
+                v.to_le_bytes()
+            } else {
+                v.to_be_bytes()
+            }
+        };
+        let long = |v: u64| {
+            if little {
+                v.to_le_bytes()
+            } else {
+                v.to_be_bytes()
+            }
+        };
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&word(if wide { 0xcafebabf } else { 0xcafebabe }));
+        bytes.extend_from_slice(&word(slices.len() as u32));
+        let mut offset = 8 + slices.len() * if wide { 32 } else { 20 };
+        for (subtype, slice) in slices {
+            bytes.extend_from_slice(&word(12));
+            bytes.extend_from_slice(&word(*subtype));
+            if wide {
+                bytes.extend_from_slice(&long(offset as u64));
+                bytes.extend_from_slice(&long(slice.len() as u64));
+            } else {
+                bytes.extend_from_slice(&word(offset as u32));
+                bytes.extend_from_slice(&word(slice.len() as u32));
+            }
+            bytes.extend_from_slice(&word(0));
+            if wide {
+                bytes.extend_from_slice(&word(0));
+            }
+            offset += slice.len();
+        }
+        for (_, slice) in slices {
+            bytes.extend_from_slice(slice);
+        }
+        bytes
+    }
+
+    #[test]
+    fn fat_falls_back_past_bad_contents_and_truncated_ranges() {
+        for wide in [false, true] {
+            for little in [false, true] {
+                let good = thin(6, 84);
+                for bad in [thin(9, 128), vec![0; 84], thin(11, 84)] {
+                    let bytes = fat(&[(9, bad), (6, good.clone())], wide, little);
+                    assert_eq!(select_fat_slice(&bytes).unwrap(), Some(good.as_slice()));
+                }
+                let mut bytes = fat(&[(6, good.clone()), (9, thin(9, 84))], wide, little);
+                bytes.truncate(bytes.len() - 1);
+                let mut memory = Mem::new();
+                let loaded = MachO::load_from_bytes(&bytes, &mut memory, "fallback".into(), 0);
+                assert!(loaded.is_ok());
+                assert_eq!(
+                    memory.bytes_at(Ptr::<u8, false>::from_bits(0x4000), 84),
+                    &good
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fat_ranks_supported_slices_instead_of_file_order() {
+        for subtypes in [[0, 6, 10, 11, 9], [9, 11, 10, 6, 0]] {
+            let slices: Vec<_> = subtypes.into_iter().map(|s| (s, thin(s, 84))).collect();
+            let bytes = fat(&slices, false, false);
+            assert_eq!(
+                select_fat_slice(&bytes).unwrap(),
+                Some(thin(9, 84).as_slice())
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_subtypes_and_capabilities_are_rejected() {
+        for subtype in [5, 7, 8, 12, 13, 0x80000009, u32::MAX] {
+            let mut memory = Mem::new();
+            assert!(MachO::load_from_bytes(
+                &thin(subtype, 84),
+                &mut memory,
+                "unsupported".into(),
+                0
+            )
+            .is_err());
+        }
+        for subtype in [0, 6, 9, 10, 11] {
+            assert!(arm_subtype_priority(subtype as cpu_subtype_t).is_some());
+        }
+    }
+
+    #[test]
+    fn invalid_fat_directories_never_select_nested_or_overflowing_slices() {
+        for bytes in [
+            vec![0xca, 0xfe, 0xba, 0xbe],
+            vec![0xca, 0xfe, 0xba, 0xbe, 0xff, 0xff, 0xff, 0xff],
+            fat(
+                &[(9, vec![0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 0])],
+                false,
+                false,
+            ),
+        ] {
+            assert!(select_fat_slice(&bytes).is_err());
+        }
+        let mut bytes = fat(&[(9, thin(9, 84))], true, false);
+        bytes[16..24].copy_from_slice(&u64::MAX.to_be_bytes());
+        assert!(select_fat_slice(&bytes).is_err());
+        let mut bytes = fat(&[(9, thin(9, 84))], false, false);
+        bytes[16..20].copy_from_slice(&0u32.to_be_bytes());
+        assert!(select_fat_slice(&bytes).is_err());
+    }
+
+    #[test]
+    fn symbol_table_preserves_local_and_external_thumb_names() {
+        let mut bytes = thin(9, 141);
+        bytes[16..20].copy_from_slice(&2u32.to_le_bytes());
+        bytes[20..24].copy_from_slice(&80u32.to_le_bytes());
+        for word in [2u32, 24, 108, 2, 132, 9] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        for (strx, external, address) in [(1u32, false, 0x4040u32), (5u32, true, 0x4050u32)] {
+            bytes.extend_from_slice(&strx.to_le_bytes());
+            bytes.extend_from_slice(&[0x0e | u8::from(external), 0, 8, 0]);
+            bytes.extend_from_slice(&address.to_le_bytes());
+        }
+        bytes.extend_from_slice(b"\0foo\0bar\0");
+        let mut memory = Mem::new();
+        let image = MachO::load_from_bytes(&bytes, &mut memory, "symbols".into(), 0).unwrap();
+        assert_eq!(image.external_symbols.get("bar"), Some(&0x4051));
+        assert_eq!(image.external_symbols.get("foo"), None);
+        assert_eq!(image.exported_symbols.get("foo"), Some(&0x4041));
+        assert_eq!(image.symbol_for_linking(&image, "foo"), Some(0x4041));
+    }
+    #[test]
+    fn segment_bounds_and_virtual_tail() {
+        assert!(validate_segment_file_range(0x100, 0x100, 0x1000, 0x200).is_ok());
+        assert!(validate_segment_file_range(0x100, 0x100, 0x1000, 0x1ff).is_err());
+        assert!(validate_segment_file_range(u64::MAX, 1, 1, usize::MAX).is_err());
+        assert!(validate_segment_file_range(0, 2, 1, 2).is_err());
+        assert!(validate_segment_file_range(u64::MAX, 0, 0x1000, 0).is_ok());
+    }
+    #[test]
+    fn loader_rejects_truncated_segment_before_mapping() {
+        let mut bytes = Vec::new();
+        for word in [0xfeedfaceu32, 12, 6, 2, 1, 56, 0, 1, 56] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        let mut name = [0; 16];
+        name[..6].copy_from_slice(b"__TEXT");
+        bytes.extend_from_slice(&name);
+        for word in [0x1000u32, 0x2000, 0, 128, 7, 5, 0, 0] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        let mut memory = Mem::new();
+        let result = MachO::load_from_bytes(&bytes, &mut memory, "truncated-test".into(), 0);
+        assert!(matches!(result, Err(e) if e.contains("extends past end")));
+    }
+}
+
 impl MachO {
     /// Load the all the sections from a Mach-O binary (provided as `bytes`)
     /// into the guest memory (`into_mem`), and return a struct containing
@@ -252,43 +572,26 @@ impl MachO {
     ) -> Result<MachO, &'static str> {
         log_dbg!("Reading {:?}", name);
 
+        if let Some(slice) = select_fat_slice(bytes)? {
+            return Self::load_from_bytes(slice, into_mem, name, slide_to_address);
+        }
+
         let mut cursor = Cursor::new(bytes);
 
         let file = OFile::parse(&mut cursor).map_err(|_| "Could not parse Mach-O file")?;
 
         let (header, commands) = match file {
             OFile::MachFile { header, commands } => (header, commands),
-            OFile::FatFile { files, .. } => {
-                let mut best_subslice = None;
-                let mut best_type = None;
-                for (arch, _) in files {
-                    if arch.cputype != mach_object::CPU_TYPE_ARM {
-                        continue;
-                    }
-                    if arch.cpusubtype == mach_object::CPU_SUBTYPE_ARM_V7
-                        || (arch.cpusubtype == mach_object::CPU_SUBTYPE_ARM_V6
-                            && best_type != Some(mach_object::CPU_SUBTYPE_ARM_V7))
-                        || best_type.is_none()
-                    {
-                        best_subslice = Some(
-                            &bytes[arch.offset as usize..arch.offset as usize + arch.size as usize],
-                        );
-                        best_type = Some(arch.cpusubtype);
-                    }
-                }
-                return if let Some(subslice) = best_subslice {
-                    MachO::load_from_bytes(subslice, into_mem, name, slide_to_address)
-                } else {
-                    Err("No supported architecture in the fat binary")
-                };
-            }
-            OFile::ArFile { .. } | OFile::SymDef { .. } => {
+            OFile::FatFile { .. } | OFile::ArFile { .. } | OFile::SymDef { .. } => {
                 return Err("Unexpected Mach-O file kind: not an executable");
             }
         };
 
         if header.cputype != mach_object::CPU_TYPE_ARM {
             return Err("Executable is not for an ARM CPU!");
+        }
+        if arm_subtype_priority(header.cpusubtype).is_none() {
+            return Err("Unsupported ARM CPU subtype or required capabilities");
         }
         log!(
             "Loading {} slice for {:?}",
@@ -304,8 +607,8 @@ impl MachO {
         if is_64bit {
             return Err("Executable is not 32-bit!");
         }
-        // TODO: Check cpusubtype (should be some flavour of ARMv6/ARMv7)
-
+        // Validate all segments before writing any of them to guest memory.
+        validate_segment_ranges(&commands, bytes.len())?;
         let split_segs = (header.flags & mach_object::MH_SPLIT_SEGS) != 0;
 
         // Info used while parsing file
@@ -320,6 +623,7 @@ impl MachO {
         // Info used for the result
         let mut dynamic_libraries = Vec::new();
         let mut exported_symbols = HashMap::new();
+        let mut external_symbols = HashMap::new();
         let mut indirect_undef_symbols: Vec<Option<String>> = Vec::new();
         let mut external_relocations: Vec<(u32, String)> = Vec::new();
         let mut entry_point_pc: Option<u32> = None;
@@ -424,6 +728,7 @@ impl MachO {
                             }
                             if let Symbol::Defined {
                                 name: Some(name),
+                                external,
                                 entry,
                                 desc,
                                 ..
@@ -436,6 +741,9 @@ impl MachO {
                                     entry
                                 };
                                 exported_symbols.insert(name.to_string(), slide + entry);
+                                if external {
+                                    external_symbols.insert(name.to_string(), slide + entry);
+                                }
                             };
                         }
                     }
@@ -685,10 +993,21 @@ impl MachO {
             dynamic_libraries,
             sections,
             exported_symbols,
+            external_symbols,
             external_relocations,
             entry_point_pc,
             last_segment_end,
         })
+    }
+
+    /// Preserve self-local linkage without leaking private names from a
+    /// different image. Global lookup order remains the caller's choice.
+    pub fn symbol_for_linking(&self, requester: &MachO, name: &str) -> Option<u32> {
+        if std::ptr::eq(self, requester) {
+            self.exported_symbols.get(name).copied()
+        } else {
+            self.external_symbols.get(name).copied()
+        }
     }
 
     /// Load the all the sections from a Mach-O binary (from `path`) into the

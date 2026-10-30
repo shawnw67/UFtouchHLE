@@ -25,6 +25,13 @@ enum NSURLHostObject {
     /// and NSString, which happen often, can be simple and efficient.
     FileURL {
         ns_string: id,
+        port: Option<i32>,
+        host: Option<String>,
+        query: Option<String>,
+        fragment: Option<String>,
+        raw_path: Option<String>,
+        decomposable: bool,
+        is_directory: bool,
         // Relative file URL save the working directory at the time of creation
         // At the moment, used in the description selector.
         working_directory: GuestPathBuf,
@@ -41,7 +48,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @implementation NSURL: NSObject
 
 + (id)allocWithZone:(NSZonePtr)_zone {
-    let host_object = NSURLHostObject::FileURL { ns_string: nil, working_directory: env.fs.working_directory().into() };
+    let host_object = NSURLHostObject::FileURL { ns_string: nil, port: None, host: None, query: None, fragment: None, raw_path: None, decomposable: true, is_directory: false, working_directory: env.fs.working_directory().into() };
     env.objc.alloc_object(this, Box::new(host_object), &mut env.mem)
 }
 
@@ -83,13 +90,13 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (id)initFileURLWithPath:(id)path // NSString*
-              isDirectory:(bool)_is_dir {
+              isDirectory:(bool)is_dir {
     // FIXME: this does not resolve relative paths to be absolute!
     // TODO: this does not strip the file:/// prefix!
     assert!(!to_rust_string(env, path).starts_with("file:"));
     let path = msg![env; path stringByExpandingTildeInPath];
     let path: id = msg![env; path copy];
-    *env.objc.borrow_mut(this) = NSURLHostObject::FileURL { ns_string: path, working_directory: env.fs.working_directory().into() };
+    *env.objc.borrow_mut(this) = NSURLHostObject::FileURL { ns_string: path, port: None, host: None, query: None, fragment: None, raw_path: None, decomposable: true, is_directory: is_dir, working_directory: env.fs.working_directory().into() };
     this
 }
 
@@ -102,9 +109,23 @@ pub const CLASSES: ClassExports = objc_classes! {
     let parts = split_url(&url_str);
     if parts.scheme.is_some_and(|scheme| scheme.eq_ignore_ascii_case("file")) {
         let path = percent_decode(parts.path);
+        let port = parts.port();
+        let host = parts.host().filter(|host| !host.is_empty()).map(percent_decode);
+        let query = parts.query.map(str::to_string);
+        let fragment = parts.fragment.map(str::to_string);
+        let raw_path = Some(parts.path.to_string());
+        let decomposable = parts.decomposable;
         let path = from_rust_string(env, path);
         let this: id = msg![env; this initFileURLWithPath:path];
         release(env, path);
+        if let NSURLHostObject::FileURL { port: saved_port, host: saved_host, query: saved_query, fragment: saved_fragment, raw_path: saved_path, decomposable: saved_decomposable, .. } = env.objc.borrow_mut(this) {
+            *saved_port = port;
+            *saved_host = host;
+            *saved_query = query;
+            *saved_fragment = fragment;
+            *saved_path = raw_path;
+            *saved_decomposable = decomposable;
+        }
         return this;
     }
     let url: id = msg![env; url copy];
@@ -134,7 +155,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (id)description {
     match env.objc.borrow(this) {
-        NSURLHostObject::FileURL { ns_string, working_directory } => {
+        NSURLHostObject::FileURL { ns_string, working_directory, .. } => {
             let working_directory = working_directory.as_str().to_string();
             let mut description = to_rust_string(env, *ns_string).to_string().clone();
             if !description.starts_with('/') {
@@ -175,18 +196,31 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (id)host {
-    let &NSURLHostObject::OtherURL { ns_string } = env.objc.borrow(this) else {
-        return nil;
+    let ns_string = match env.objc.borrow(this) {
+        NSURLHostObject::FileURL { host, .. } => return url_component(env, host.clone()),
+        NSURLHostObject::OtherURL { ns_string } => *ns_string,
     };
     let url = to_rust_string(env, ns_string);
-    let host = split_url(&url).host().map(percent_decode);
+    let host = split_url(&url).host().filter(|host| !host.is_empty()).map(percent_decode);
     url_component(env, host)
+}
+
+- (id)port {
+    let port = match *env.objc.borrow(this) {
+        NSURLHostObject::FileURL { port, .. } => port,
+        NSURLHostObject::OtherURL { ns_string } => split_url(&to_rust_string(env, ns_string)).port(),
+    };
+    match port {
+        Some(port) => msg_class![env; NSNumber numberWithInt:port],
+        None => nil,
+    }
 }
 
 // Unlike path, the query and fragment aren't unescaped.
 - (id)query {
-    let &NSURLHostObject::OtherURL { ns_string } = env.objc.borrow(this) else {
-        return nil;
+    let ns_string = match env.objc.borrow(this) {
+        NSURLHostObject::FileURL { query, .. } => return url_component(env, query.clone()),
+        NSURLHostObject::OtherURL { ns_string } => *ns_string,
     };
     let url = to_rust_string(env, ns_string);
     let query = split_url(&url).query.map(str::to_string);
@@ -194,8 +228,9 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (id)fragment {
-    let &NSURLHostObject::OtherURL { ns_string } = env.objc.borrow(this) else {
-        return nil;
+    let ns_string = match env.objc.borrow(this) {
+        NSURLHostObject::FileURL { fragment, .. } => return url_component(env, fragment.clone()),
+        NSURLHostObject::OtherURL { ns_string } => *ns_string,
     };
     let url = to_rust_string(env, ns_string);
     let fragment = split_url(&url).fragment.map(str::to_string);
@@ -274,6 +309,68 @@ pub fn to_rust_path(env: &mut Environment, url: id) -> Cow<'static, GuestPath> {
     }
 }
 
+/// The explicit directory flag for URLs created from filesystem paths.
+pub fn cf_file_directory_flag(env: &mut Environment, url: id) -> Option<bool> {
+    let object = env
+        .objc
+        .get_host_object(url)?
+        .as_any()
+        .downcast_ref::<NSURLHostObject>()?;
+    match object {
+        NSURLHostObject::FileURL {
+            ns_string,
+            raw_path: None,
+            is_directory,
+            ..
+        } => {
+            let string = *ns_string;
+            let is_directory = *is_directory;
+            Some(is_directory || to_rust_string(env, string) == "/")
+        }
+        _ => None,
+    }
+}
+
+/// CFURLCopyPath uses the original escaped path rather than NSURL's path.
+pub fn cf_escaped_path(env: &mut Environment, url: id) -> Option<String> {
+    let object = env
+        .objc
+        .get_host_object(url)?
+        .as_any()
+        .downcast_ref::<NSURLHostObject>()?;
+    match object {
+        NSURLHostObject::FileURL {
+            raw_path,
+            decomposable,
+            ns_string,
+            is_directory,
+            ..
+        } => {
+            if !decomposable {
+                return None;
+            }
+            if let Some(path) = raw_path {
+                return Some(path.clone());
+            }
+            let string = *ns_string;
+            let is_directory = *is_directory;
+            let path = to_rust_string(env, string);
+            let mut path =
+                crate::frameworks::core_foundation::cf_url::add_percent_escapes(&path, "", "%?#;");
+            if is_directory && !path.ends_with('/') {
+                path.push('/');
+            }
+            Some(path)
+        }
+        NSURLHostObject::OtherURL { ns_string } => {
+            let string = *ns_string;
+            let url = to_rust_string(env, string);
+            let parts = split_url(&url);
+            parts.decomposable.then(|| parts.path.to_string())
+        }
+    }
+}
+
 /// The parts of a URL string, as split by RFC 3986's regular expression
 /// (appendix B). The parts aren't unescaped.
 struct UrlParts<'a> {
@@ -282,8 +379,37 @@ struct UrlParts<'a> {
     path: &'a str,
     query: Option<&'a str>,
     fragment: Option<&'a str>,
+    decomposable: bool,
 }
 impl<'a> UrlParts<'a> {
+    fn port(&self) -> Option<i32> {
+        let authority = self.authority?.rsplit('@').next()?;
+        let port = if authority.starts_with('[') {
+            authority.split_once(']')?.1.strip_prefix(':')?
+        } else {
+            authority.split_once(':')?.1
+        };
+        let (negative, digits) = match port.as_bytes().first()? {
+            b'-' => (true, &port[1..]),
+            b'+' => (false, &port[1..]),
+            _ => (false, port),
+        };
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        let magnitude = digits.bytes().fold(0u64, |value, digit| {
+            value
+                .saturating_mul(10)
+                .saturating_add(u64::from(digit - b'0'))
+                .min(2147483648)
+        });
+        Some(if negative {
+            (-(magnitude as i64)).max(i64::from(i32::MIN)) as i32
+        } else {
+            magnitude.min(i32::MAX as u64) as i32
+        })
+    }
+
     /// The host in the authority, without user info or port.
     fn host(&self) -> Option<&'a str> {
         let authority = self.authority?;
@@ -313,6 +439,7 @@ fn split_url(url: &str) -> UrlParts<'_> {
         Some((scheme, rest)) if !scheme.is_empty() && !scheme.contains('/') => (Some(scheme), rest),
         _ => (None, rest),
     };
+    let decomposable = scheme.is_none() || rest.starts_with('/');
     let (authority, path) = match rest.strip_prefix("//") {
         Some(rest) => {
             let end = rest.find('/').unwrap_or(rest.len());
@@ -326,6 +453,7 @@ fn split_url(url: &str) -> UrlParts<'_> {
         path,
         query,
         fragment,
+        decomposable,
     }
 }
 
@@ -396,5 +524,19 @@ mod tests {
         assert_eq!(parts.path, "/just/a/path");
 
         assert_eq!(split_url("http://[::1]:80/").host(), Some("::1"));
+        assert_eq!(split_url("http://user:pw@[::1]:8080/").port(), Some(8080));
+        assert_eq!(split_url("http://example.com:65536/").port(), Some(65536));
+        assert_eq!(split_url("http://example.com:+12/").port(), Some(12));
+        assert_eq!(split_url("http://example.com:-12/").port(), Some(-12));
+        assert_eq!(
+            split_url("http://example.com:999999999999/").port(),
+            Some(i32::MAX)
+        );
+        assert_eq!(
+            split_url("http://example.com:-999999999999/").port(),
+            Some(i32::MIN)
+        );
+        assert_eq!(split_url("http://example.com:12abc/").port(), None);
+        assert_eq!(split_url("http://[::1]/").port(), None);
     }
 }

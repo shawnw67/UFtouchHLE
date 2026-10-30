@@ -1,0 +1,7 @@
+PASS authentication/block ownership, request properties, async error/cancel/timeout
+PASS real two-emulator TCP ordered echo, UDP echo, NSError, delegate and disconnect
+PASS noncomplementary actual peers never produce a successful match
+PASS addPlayers actual third peer, one-argument completion, host loss and object cleanup
+PASS Client requests admission and changes attributes; actual third peer completes addPlayers
+PASS GameKit room discovery selects actual session and performs TCP/UDP echo
+GAMEKIT ARM INTEGRATION PASS; no real P2G or physical-device verification

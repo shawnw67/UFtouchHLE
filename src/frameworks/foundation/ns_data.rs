@@ -208,7 +208,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     let bytes: ConstVoidPtr = msg![env; this bytes];
     let length: NSUInteger = msg![env; this length];
     let new = msg_class![env; NSMutableData alloc];
-    msg![env; new initWithBytes:(bytes.cast_mut()) length:length]
+    msg![env; new initWithBytes:bytes length:length]
 }
 
 - (ConstVoidPtr)bytes {
@@ -219,10 +219,30 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (bool)isEqualToData:(id)other {
-    // FIXME: Avoid allocation
-    let a = to_rust_slice(env, this).to_owned();
-    let b = to_rust_slice(env, other);
-    a == b
+    if other == nil { return false; }
+    let left_length: NSUInteger = msg![env; this length];
+    let right_length: NSUInteger = msg![env; other length];
+    if left_length != right_length { return false; }
+    if left_length == 0 { return true; }
+    let left: ConstVoidPtr = msg![env; this bytes];
+    let right: ConstVoidPtr = msg![env; other bytes];
+    env.mem.bytes_at(left.cast(), left_length) == env.mem.bytes_at(right.cast(), right_length)
+}
+
+- (bool)isEqual:(id)other {
+    if this == other { return true; }
+    let class = env.objc.get_known_class("NSData", &mut env.mem);
+    let is_data: bool = msg![env; other isKindOfClass:class];
+    is_data && msg![env; this isEqualToData:other]
+}
+
+- (NSUInteger)hash {
+    let length: NSUInteger = msg![env; this length];
+    let bytes: ConstVoidPtr = msg![env; this bytes];
+    if length == 0 { return 0x811c9dc5; }
+    env.mem.bytes_at(bytes.cast(), length).iter().fold(0x811c9dc5u32, |hash, byte| {
+        (hash ^ u32::from(*byte)).wrapping_mul(0x01000193)
+    })
 }
 
 - (())getBytes:(MutPtr<u8>)buffer length:(NSUInteger)length {
@@ -232,12 +252,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())getBytes:(MutPtr<u8>)buffer range:(NSRange)range {
+    let &NSDataHostObject { bytes, length, .. } = env.objc.borrow(this);
+    // TODO: throw NSRangeException if out-of-range instead of panic?
+    assert!(range.location <= length && range.length <= length - range.location);
     if range.length == 0 {
         return;
     }
-    let &NSDataHostObject { bytes, length, .. } = env.objc.borrow(this);
-    // TODO: throw NSRangeException if out-of-range instead of panic?
-    assert!(range.location < length && range.location + range.length <= length);
     env.mem.memmove(
         buffer.cast(),
         bytes.cast_const() + range.location,
@@ -296,8 +316,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (())increaseLengthBy:(NSUInteger)add_len {
     let &NSDataHostObject { bytes, length, .. } = env.objc.borrow(this);
-    let new_len = length + add_len;
+    let new_len = length.checked_add(add_len).expect("NSData length overflow");
     let new_bytes = env.mem.realloc(bytes, new_len);
+    if add_len != 0 {
+        env.mem.bytes_at_mut(new_bytes.cast(), new_len)[length as usize..].fill(0);
+    }
     let host = env.objc.borrow_mut::<NSDataHostObject>(this);
     host.length = new_len;
     host.bytes = new_bytes;
@@ -313,18 +336,30 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())appendBytes:(ConstPtr<u8>)append_bytes length:(NSUInteger)append_length {
+    if append_length == 0 {
+        return;
+    }
     let old_len = env.objc.borrow::<NSDataHostObject>(this).length;
     let old_bytes = env.objc.borrow::<NSDataHostObject>(this).bytes;
+    let source_start = u64::from(append_bytes.to_bits());
+    let source_end = source_start + u64::from(append_length);
+    let old_start = u64::from(old_bytes.to_bits());
+    let old_end = old_start + u64::from(old_len);
+    let overlap = source_start < old_end && old_start < source_end;
+    let saved = overlap.then(|| env.mem.bytes_at(append_bytes, append_length).to_vec());
     () = msg![env; this increaseLengthBy:append_length];
     let &NSDataHostObject { bytes, length, .. } = env.objc.borrow(this);
     log_dbg!("appendBytes old_len {}, append_length {}, length {}", old_len, append_length, length);
     log_dbg!("appendBytes old_bytes {:?}, append_bytes {:?}, bytes {:?}", old_bytes, append_bytes, bytes);
-    env.mem.memmove(bytes + old_len, append_bytes.cast(), append_length);
+    if let Some(saved) = saved {
+        env.mem.bytes_at_mut((bytes + old_len).cast(), append_length).copy_from_slice(&saved);
+    } else {
+        env.mem.memmove(bytes + old_len, append_bytes.cast(), append_length);
+    }
 }
 
 - (MutVoidPtr)mutableBytes {
     let host_obj = env.objc.borrow_mut::<NSDataHostObject>(this);
-    assert!(host_obj.length != 0);
     host_obj.bytes
 }
 

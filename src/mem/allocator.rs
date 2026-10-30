@@ -402,6 +402,47 @@ mod collections {
                 .flat_map(|chunks| chunks.iter())
                 .copied()
         }
+
+        pub fn allocate_aligned(
+            &mut self,
+            size: GuestUSize,
+            alignment: GuestUSize,
+        ) -> Option<Chunk> {
+            assert!(size >= self.min_chunk_size && alignment.is_power_of_two());
+            let (existing, base) = self
+                .iter()
+                .filter_map(|chunk| {
+                    let aligned = (u64::from(chunk.base) + u64::from(alignment) - 1)
+                        & !(u64::from(alignment) - 1);
+                    if aligned + u64::from(size)
+                        <= u64::from(chunk.base) + u64::from(chunk.size.get())
+                    {
+                        Some((chunk, u32::try_from(aligned).ok()?))
+                    } else {
+                        None
+                    }
+                })
+                .min_by_key(|(chunk, _)| (chunk.size.get(), chunk.base))?;
+            let bucket = self.bucket_for(existing.size.get());
+            let index = self.chunks_by_log2_size[bucket]
+                .iter()
+                .position(|chunk| chunk.base == existing.base)
+                .unwrap();
+            assert_eq!(
+                self.chunks_by_log2_size[bucket].swap_remove(index),
+                existing
+            );
+            assert_eq!(self.chunks.remove_with_base(existing.base), Some(existing));
+            let alloc = Chunk::new(base, size);
+            let (before, after) = existing.difference(alloc);
+            if let Some(before) = before {
+                self.insert(before);
+            }
+            if let Some(after) = after {
+                self.insert(after);
+            }
+            Some(alloc)
+        }
     }
 }
 use collections::{ChunkMap, SizeBucketedChunkMap};
@@ -427,23 +468,25 @@ impl HeapAllocator {
     pub const HEAP_ALLOCATION_THRESHOLD: GuestUSize = (15 * 1024) - 1;
 
     pub fn new(vm: &mut VMAllocator, size: GuestUSize) -> HeapAllocator {
+        Self::try_new(vm, size).expect("Failed to allocate heap space")
+    }
+
+    pub fn try_new(vm: &mut VMAllocator, size: GuestUSize) -> Option<HeapAllocator> {
         let mut unused_chunks = SizeBucketedChunkMap::new(MIN_CHUNK_SIZE);
         let mut backing_chunks = Vec::new();
 
         if size > 0 {
-            let base_chunk = vm
-                .allocate(None, size)
-                .expect("Failed to allocate heap space");
+            let base_chunk = vm.allocate(None, size).ok()?;
             backing_chunks.push(base_chunk);
             unused_chunks.insert(base_chunk);
         }
 
-        HeapAllocator {
+        Some(HeapAllocator {
             used_chunks: Default::default(),
             unused_chunks,
             external_chunks: Default::default(),
             backing_chunks,
-        }
+        })
     }
 
     pub fn alloc(&mut self, vm: &mut VMAllocator, size: GuestUSize) -> Option<Chunk> {
@@ -456,7 +499,7 @@ impl HeapAllocator {
             alloc
         } else {
             let alloc = self.unused_chunks.allocate(size).or_else(|| {
-                self.grow(vm);
+                self.grow(vm)?;
                 self.unused_chunks.allocate(size)
             })?;
             self.used_chunks.insert(alloc);
@@ -476,6 +519,48 @@ impl HeapAllocator {
         Some(alloc)
     }
 
+    /// Aligned allocations have real heap/VM records, not hidden headers.
+    pub fn memalign(
+        &mut self,
+        vm: &mut VMAllocator,
+        alignment: GuestUSize,
+        size: GuestUSize,
+    ) -> Option<Chunk> {
+        if alignment <= MIN_CHUNK_SIZE {
+            return self.alloc(vm, size);
+        }
+        let size = size
+            .max(MIN_CHUNK_SIZE)
+            .checked_next_multiple_of(MIN_CHUNK_SIZE)?;
+        if size <= Self::HEAP_ALLOCATION_THRESHOLD && alignment <= Self::HEAP_CHUNK_SIZE {
+            let alloc = self
+                .unused_chunks
+                .allocate_aligned(size, alignment)
+                .or_else(|| {
+                    self.grow(vm)?;
+                    self.unused_chunks.allocate_aligned(size, alignment)
+                });
+            if let Some(alloc) = alloc {
+                self.used_chunks.insert(alloc);
+                return Some(alloc);
+            }
+        }
+        let alloc = vm.allocate_aligned(alignment, size).ok()?;
+        self.external_chunks.insert(alloc);
+        Some(alloc)
+    }
+
+    pub fn allocated_size(&self, base: VAddr) -> Option<GuestUSize> {
+        self.external_chunks
+            .get_size_with_base(base)
+            .or_else(|| self.used_chunks.get_size_with_base(base))
+            .map(NonZeroU32::get)
+    }
+
+    pub fn is_vm_allocation(&self, base: VAddr) -> bool {
+        self.external_chunks.get_size_with_base(base).is_some()
+    }
+
     fn align(size: GuestUSize, align: GuestUSize) -> GuestUSize {
         if !size.is_multiple_of(align) {
             size + align - (size % align)
@@ -486,13 +571,8 @@ impl HeapAllocator {
 
     /// This is used for realloc
     pub fn find_allocated_size(&mut self, base: VAddr) -> GuestUSize {
-        if let Some(size) = self.external_chunks.get_size_with_base(base) {
-            return size.get();
-        }
-        let Some(size) = self.used_chunks.get_size_with_base(base) else {
-            panic!("Can't find {base:#x}, unknown allocation!");
-        };
-        size.get()
+        self.allocated_size(base)
+            .unwrap_or_else(|| panic!("Can't find {base:#x}, unknown allocation!"))
     }
 
     /// Returns the size of the freed chunk so it can be zeroed if desired
@@ -508,16 +588,14 @@ impl HeapAllocator {
             return 0;
         };
 
-        if let Some(adjacent) = self
-            .unused_chunks
-            .remove_with_base(freed.last_byte() + 1)
-            .or_else(|| self.unused_chunks.remove_with_end(freed.base))
-        {
-            let combined = adjacent.merge(freed);
-            self.unused_chunks.insert(combined);
-        } else {
-            self.unused_chunks.insert(freed);
+        let mut combined = freed;
+        if let Some(right) = self.unused_chunks.remove_with_base(freed.last_byte() + 1) {
+            combined = combined.merge(right);
         }
+        if let Some(left) = self.unused_chunks.remove_with_end(freed.base) {
+            combined = combined.merge(left);
+        }
+        self.unused_chunks.insert(combined);
 
         freed.size.get()
     }
@@ -528,14 +606,13 @@ impl HeapAllocator {
         self.external_chunks.into_iter().chain(self.backing_chunks)
     }
 
-    fn grow(&mut self, vm: &mut VMAllocator) {
+    fn grow(&mut self, vm: &mut VMAllocator) -> Option<()> {
         log!("Attempting to grow heap.");
-        let chunk = vm
-            .allocate(None, Self::HEAP_CHUNK_SIZE)
-            .expect("Failed to allocate memory for heap.");
+        let chunk = vm.allocate(None, Self::HEAP_CHUNK_SIZE).ok()?;
 
         self.backing_chunks.push(chunk);
         self.unused_chunks.insert(chunk);
+        Some(())
     }
 }
 
@@ -578,6 +655,35 @@ impl VMAllocator {
             }
             None => self.allocate_any(size),
         }
+    }
+
+    fn allocate_aligned(
+        &mut self,
+        alignment: GuestUSize,
+        size: GuestUSize,
+    ) -> Result<Chunk, VMAllocError> {
+        assert!(alignment.is_power_of_two());
+        let alignment = u64::from(alignment.max(PAGE_SIZE));
+        let size = size
+            .max(1)
+            .checked_next_multiple_of(PAGE_SIZE)
+            .ok_or(VMAllocError::NoSpace)?;
+        // u64 arithmetic also handles already aligned high guest addresses.
+        let address = self
+            .unused_chunks
+            .iter()
+            .filter_map(|chunk| {
+                let aligned = (u64::from(chunk.base) + alignment - 1) & !(alignment - 1);
+                let end = aligned + u64::from(size);
+                if end <= u64::from(chunk.base) + u64::from(chunk.size.get()) {
+                    u32::try_from(aligned).ok()
+                } else {
+                    None
+                }
+            })
+            .min()
+            .ok_or(VMAllocError::NoSpace)?;
+        self.allocate_at(address, size)
     }
 
     pub fn deallocate(&mut self, address: VAddr, size: GuestUSize) -> Chunk {
@@ -643,5 +749,96 @@ impl VMAllocator {
         self.used_chunks.insert(alloc);
 
         Ok(alloc)
+    }
+}
+
+#[cfg(test)]
+mod aligned_allocation_tests {
+    use super::*;
+
+    #[test]
+    fn alignment_padding_remains_available_and_merges_on_free() {
+        let mut vm = VMAllocator::new(PAGE_SIZE, PAGE_SIZE * 16);
+        let aligned = vm.allocate_aligned(PAGE_SIZE * 16, 1).unwrap();
+        assert_eq!(aligned.base, PAGE_SIZE * 16);
+        assert_eq!(aligned.size.get(), PAGE_SIZE);
+        let prefix = vm.allocate(Some(PAGE_SIZE), PAGE_SIZE * 15).unwrap();
+        vm.deallocate(aligned.base, aligned.size.get());
+        vm.deallocate(prefix.base, prefix.size.get());
+        assert!(vm.allocate(Some(PAGE_SIZE), PAGE_SIZE * 16).is_ok());
+    }
+
+    #[test]
+    fn high_alignment_and_rounding_failure_do_not_wrap_or_consume_space() {
+        let mut vm = VMAllocator::new(0x80000000, PAGE_SIZE * 2);
+        assert!(vm.allocate_aligned(0x80000000, u32::MAX).is_err());
+        let aligned = vm.allocate_aligned(0x80000000, 1).unwrap();
+        assert_eq!(aligned.base, 0x80000000);
+        assert_eq!(aligned.size.get(), PAGE_SIZE);
+        assert!(vm.allocate_aligned(0x80000000, 1).is_err());
+        assert!(vm.allocate(None, PAGE_SIZE).is_ok());
+    }
+
+    #[test]
+    fn freeing_between_two_free_chunks_restores_the_full_heap() {
+        let mut vm = VMAllocator::new(PAGE_SIZE, PAGE_SIZE);
+        let mut heap = HeapAllocator::new(&mut vm, PAGE_SIZE);
+        let a = heap.alloc(&mut vm, 16).unwrap();
+        let b = heap.alloc(&mut vm, 16).unwrap();
+        let c = heap.alloc(&mut vm, 16).unwrap();
+        assert_eq!(heap.free(&mut vm, a.base), 16);
+        assert_eq!(heap.free(&mut vm, c.base), 16);
+        assert_eq!(heap.free(&mut vm, b.base), 16);
+        let whole = heap.alloc(&mut vm, PAGE_SIZE).unwrap();
+        assert_eq!(whole.base, PAGE_SIZE);
+        assert_eq!(whole.size.get(), PAGE_SIZE);
+    }
+
+    #[test]
+    fn small_aligned_allocations_preserve_padding_without_using_a_page_each() {
+        let mut vm = VMAllocator::new(PAGE_SIZE, PAGE_SIZE);
+        let mut heap = HeapAllocator::new(&mut vm, PAGE_SIZE);
+        let first = heap.alloc(&mut vm, 16).unwrap();
+        let aligned = heap.memalign(&mut vm, 64, 17).unwrap();
+        assert!(aligned.base.is_multiple_of(64));
+        assert_eq!(aligned.size.get(), 32);
+        assert!(!heap.is_vm_allocation(aligned.base));
+        let padding = heap.alloc(&mut vm, 48).unwrap();
+        assert_eq!(padding.base, first.base + 16);
+        assert_eq!(heap.free(&mut vm, padding.base), 48);
+        assert_eq!(heap.free(&mut vm, aligned.base), 32);
+        assert_eq!(heap.free(&mut vm, first.base), 16);
+        assert_eq!(heap.alloc(&mut vm, PAGE_SIZE).unwrap().base, PAGE_SIZE);
+    }
+
+    #[test]
+    fn interleaved_aligned_allocations_never_overlap_and_release_all_padding() {
+        let mut vm = VMAllocator::new(PAGE_SIZE, PAGE_SIZE * 2);
+        let mut heap = HeapAllocator::new(&mut vm, PAGE_SIZE * 2);
+        let mut active: Vec<Chunk> = Vec::new();
+        let mut seed = 7u32;
+        for step in 0..500 {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            if step % 3 == 0 && !active.is_empty() {
+                let old = active.swap_remove(seed as usize % active.len());
+                assert_eq!(heap.free(&mut vm, old.base), old.size.get());
+                assert_eq!(heap.allocated_size(old.base), None);
+            } else {
+                let alignment = [32, 64, 256, 4096][(seed as usize >> 8) % 4];
+                let size = [1, 17, 129, 511][(seed as usize >> 16) % 4];
+                if let Some(alloc) = heap.memalign(&mut vm, alignment, size) {
+                    assert!(alloc.base.is_multiple_of(alignment));
+                    assert!(alloc.size.get() >= size);
+                    for other in &active {
+                        assert!(alloc.last_byte() < other.base || other.last_byte() < alloc.base);
+                    }
+                    active.push(alloc);
+                }
+            }
+        }
+        for old in active {
+            assert_eq!(heap.free(&mut vm, old.base), old.size.get());
+        }
+        assert_eq!(heap.alloc(&mut vm, PAGE_SIZE * 2).unwrap().base, PAGE_SIZE);
     }
 }

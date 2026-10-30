@@ -1,0 +1,4 @@
+same_handle=0
+first_close=0
+post_after_close=0 errno=0
+second_close=0 errno=0

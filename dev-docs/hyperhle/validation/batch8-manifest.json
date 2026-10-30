@@ -1,0 +1,22 @@
+{
+  "baseline": "d94c48f37bb5316aa2b87692b3aa6448f1fb20d6",
+  "branch": "codex/hyperhle-integration",
+  "state": "uncommitted integration changes",
+  "binary_sha256": "ba733956afddc2d1f0b0054b248c876712166384ed93319e405a36472569fe32",
+  "gamekit_binary_sha256": "ba733956afddc2d1f0b0054b248c876712166384ed93319e405a36472569fe32",
+  "source_sha256": {
+    "Cargo.toml": "6f92c5e868e6d800d2923f2d307e71056dc11b7b9b9dad47e6e9f682b302b213",
+    "Cargo.lock": "77311fcdcb35c5b1e2d267db320f3f17650c11e95c0538e910a3bc27ab63c332",
+    "src/libc/string.rs": "fafb09011389121c41c7402280ac04e0f073386370de5ac75b296f3da0b8d64b",
+    "src/libc/string/version.rs": "f0d00fd3f56f611a154820943ee9a9df56fc886876dd53327ea040d967e04f8c",
+    "src/libc/string/shuffle.rs": "8ec549db6aacb2221b2a2f25bdf037ccfc83ceff771c842944750528727c8a3d",
+    "src/libc/errno.rs": "e048454d72ad93d849688558567ce047c6dced2be3af82f3321ea16ab0e548c6",
+    "src/libc/unistd.rs": "dffe09fbbbba0578f34cbe437cc3994a2fcedc3a93f5973dcef71b9b8bb01f1f",
+    "tests/TestApp_source/cli_tests.m": "487f24bcf9684faa5da351ce15d165b513d4e20a29baceaa682cb14c67d10e36",
+    "tests/fixtures/strverscmp.tsv": "5a4e1963605b283b709cf551388f09bf4b4846df917c3223e8ad97ea4ecb3294",
+    "dev-scripts/strverscmp-oracle.py": "4ac4737f200cfe30f1e7f2126360f798c1073daced909fcf4c856acbe456622a",
+    "dev-scripts/darwin-strerror-probe.py": "70098e575ea2441c14e0b43ebf53876a44fc08e8bbf89ad894f3e51d7e1b107f"
+  },
+  "gnu_oracle_cases": 1467,
+  "scope": "Synthetic ARM and local native probes; Android native build only; no real games or physical devices"
+}
