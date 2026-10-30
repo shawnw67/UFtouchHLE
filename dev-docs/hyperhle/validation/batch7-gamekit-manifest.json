@@ -1,0 +1,24 @@
+{
+  "scope": "Synthetic ARM guest; loopback TCP/UDP, not real MHP2G",
+  "binary": "/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/target/gamekit-tests/touchHLE-tested",
+  "binary_sha256": "4f6790d22bfe08c619e98bbc60cd1972216a4481c670f8d673293e2168fdcb52",
+  "source_sha256": {
+    "src/frameworks/game_kit/gk_leaderboard.rs": "4880102434f5c1017b3a22dc8e0d29336ca4cca68e746c1823095bba76f737cd",
+    "src/frameworks/game_kit/gk_local_player.rs": "2dfdc6a71a877f1f6cea108dd09abe987bb4db147a4595f90968074b6339f107",
+    "src/frameworks/game_kit/gk_match.rs": "4b1efc03c52e8e860eb0fe0632abb5a06d8362465df64eb3f940f6a656645f6a",
+    "src/frameworks/game_kit/gk_matchmaker.rs": "71cca81a0e25798127c54978910d478d633b21d1511018d04714737711e470bf",
+    "src/frameworks/game_kit/gk_score.rs": "cda3505dec899fb410eb09c93c530aec13a9ac112678d554bbc377abeb4b543b",
+    "src/frameworks/game_kit/gk_session.rs": "83f8c82544888d4167cd3f14c9b08db597b3d0f4d5c53d7dbcfce5a821b9abe2",
+    "src/frameworks/game_kit/local_network.rs": "c3a99cfa054805818f80d43e6ba1767adb8551aae3685422476faba4ccd42d45",
+    "src/frameworks/game_kit/rooms.rs": "44a53a43f951b48d36155bf8a3afa9feb23b04af9b468e73344d61ba6c5d7430",
+    "src/frameworks/game_kit/route.rs": "3e743368966627671101b8340aa80d0471a6be158d726f426280268b57a86b74",
+    "src/transport/worker.rs": "f85eb9a8c037ecf5db4280184e45d1d15653472ead8936503832bb93f3f9adef",
+    "src/transport/mod.rs": "9b0e6a3d71a6d1f8badcf146434145261a6014b9f00369cc12246beb12c90ce9",
+    "src/libc/dispatch.rs": "49c00380afc705240786e101050f4ec89aea0dc0e9a3f985e596770a2f8adc1a",
+    "src/frameworks/foundation/ns_url_connection.rs": "569040792de487d9b277dd70aaef8ad26ab12c2ecc086dc8dd6f39e062c41cb8",
+    "src/frameworks/system_configuration/sc_network_reachability.rs": "c7d04066c3a0d096699989a95089b7fcc3129cb957881a4e3e91590b7b2cd74e",
+    "src/options.rs": "6b3d72c00de9eb7faf6f2f086060db36832744d62a775fc0b2521e9c28b85dfc",
+    "src/frameworks/core_animation/ca_layer.rs": "f67fd82aec74bdc2e1cbb214b7dccbaaf53726aa47a4caca6baee62c7e5caaf4",
+    "dev-scripts/gamekit-integration-tests.py": "50c86aafdb917ccfaad1c0cc6aba8741e63809a9d853ce347025a75b971cd6bd"
+  }
+}

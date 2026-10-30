@@ -130,7 +130,7 @@ macro_rules! impl_CallFromGuest {
                 let args: ($($P,)*) = {
                     ($(read_next_arg::<$P>(&mut reg_offset, regs, Ptr::from_bits(regs[Cpu::SP]), &env.mem),)*)
                 };
-                log_dbg!("CallFromGuest {:?}", args);
+                log_dbg!("CallFromGuest {:?}", &[$(&args.$p as &dyn std::fmt::Debug),*] as &[&dyn std::fmt::Debug]);
                 let retval = self(env, $(args.$p),*);
                 log_dbg!("CallFromGuest => {:?}", retval);
                 if let Some(retval_ptr) = retval_ptr {
@@ -155,9 +155,10 @@ macro_rules! impl_CallFromGuest {
                 };
                 let va_list = DotDotDot(VaList {
                     reg_offset,
+                    arg_regs: regs[..4].try_into().unwrap(),
                     stack_pointer: Ptr::from_bits(regs[Cpu::SP])
                 });
-                log_dbg!("CallFromGuest {:?}, ...{:?}", args, va_list);
+                log_dbg!("CallFromGuest {:?}, ...{:?}", &[$(&args.$p as &dyn std::fmt::Debug),*] as &[&dyn std::fmt::Debug], va_list);
                 let retval = self(env, $(args.$p,)* va_list);
                 log_dbg!("CallFromGuest => {:?}", retval);
                 if let Some(retval_ptr) = retval_ptr {
@@ -182,6 +183,8 @@ impl_CallFromGuest!(0 => P0, 1 => P1, 2 => P2, 3 => P3, 4 => P4, 5 => P5, 6 => P
 impl_CallFromGuest!(0 => P0, 1 => P1, 2 => P2, 3 => P3, 4 => P4, 5 => P5, 6 => P6, 7 => P7, 8 => P8);
 impl_CallFromGuest!(0 => P0, 1 => P1, 2 => P2, 3 => P3, 4 => P4, 5 => P5, 6 => P6, 7 => P7, 8 => P8, 9 => P9);
 impl_CallFromGuest!(0 => P0, 1 => P1, 2 => P2, 3 => P3, 4 => P4, 5 => P5, 6 => P6, 7 => P7, 8 => P8, 9 => P9, 10 => P10);
+// CFUUID's byte constructors take an allocator and sixteen separate bytes.
+impl_CallFromGuest!(0 => P0, 1 => P1, 2 => P2, 3 => P3, 4 => P4, 5 => P5, 6 => P6, 7 => P7, 8 => P8, 9 => P9, 10 => P10, 11 => P11, 12 => P12, 13 => P13, 14 => P14, 15 => P15, 16 => P16);
 
 /// This trait represents a guest or host function that can be called from host
 /// code, but using the guest ABI. See [CallFromGuest], which this is the
@@ -432,14 +435,78 @@ impl DotDotDot {
 #[derive(Copy, Clone, Debug)]
 pub struct VaList {
     reg_offset: usize,
+    // Preserve register arguments across guest callbacks, e.g. description
+    // calls made while NSString formats %@. Based on HyperHLE-Reborn's
+    // register save area fix (cc5ad4af).
+    arg_regs: [u32; 4],
     stack_pointer: ConstVoidPtr,
 }
 impl VaList {
     /// Get the next argument, like C's `va_arg()`. Be careful as the type may
     /// be inferred from the call-site if you don't specify it explicitly.
     pub fn next<T: GuestArg>(&mut self, env: &mut Environment) -> T {
+        self.next_from_mem(&env.mem)
+    }
+
+    fn next_from_mem<T: GuestArg>(&mut self, mem: &Mem) -> T {
         let sp_reg = self.stack_pointer.cast();
-        read_next_arg(&mut self.reg_offset, env.cpu.regs_mut(), sp_reg, &env.mem)
+        read_next_arg(&mut self.reg_offset, &self.arg_regs, sp_reg, mem)
+    }
+}
+
+#[cfg(test)]
+mod variadic_tests {
+    use super::*;
+
+    // Based on HyperHLE-Reborn cc5ad4af's NSLog regression: formatting
+    // the first object overwrites registers before later objects are read.
+    #[test]
+    fn register_save_area_survives_nested_calls() {
+        let mut mem = Mem::new();
+        let stack: MutPtr<u32> = mem.alloc(8).cast();
+        mem.write(stack, 0x44);
+        mem.write(stack + 1, 0x55);
+        let mut regs = [0x1000u32, 0x11, 0x22, 0x33];
+        let mut args = VaList {
+            reg_offset: 1,
+            arg_regs: regs,
+            stack_pointer: stack.cast_const().cast(),
+        };
+        regs[2] = 4;
+        let values: [u32; 5] = std::array::from_fn(|_| args.next_from_mem(&mem));
+        assert_eq!(values, [0x11, 0x22, 0x33, 0x44, 0x55]);
+        assert_ne!(values[1], regs[2]);
+    }
+
+    #[test]
+    fn wide_argument_crosses_saved_register_and_stack() {
+        let mut mem = Mem::new();
+        let stack: MutPtr<u32> = mem.alloc(4).cast();
+        mem.write(stack, 0xaabbccdd);
+        let mut args = VaList {
+            reg_offset: 3,
+            arg_regs: [0, 0, 0, 0x11223344],
+            stack_pointer: stack.cast_const().cast(),
+        };
+        assert_eq!(args.next_from_mem::<u64>(&mem), 0xaabbccdd_11223344);
+    }
+
+    #[test]
+    fn seventeen_byte_constructor_arguments_cross_into_the_stack_in_order() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(4096);
+        let stack: MutPtr<u32> = mem.alloc(13 * 4).cast();
+        for i in 0..13 {
+            mem.write(stack + i, (i + 3) * 17);
+        }
+        let regs = [0, 0, 17, 34];
+        let mut offset = 0;
+        let allocator: ConstVoidPtr = read_next_arg(&mut offset, &regs, stack.cast_const(), &mem);
+        assert!(allocator.is_null());
+        let values: [u8; 16] =
+            std::array::from_fn(|_| read_next_arg(&mut offset, &regs, stack.cast_const(), &mem));
+        assert_eq!(values, std::array::from_fn(|i| (i as u8) * 17));
+        assert_eq!(offset, 17);
     }
 }
 
@@ -522,6 +589,7 @@ impl GuestArg for VaList {
         // calling [read_next_arg]
         VaList {
             reg_offset: 4,
+            arg_regs: [0; 4],
             stack_pointer: <ConstVoidPtr as GuestArg>::from_regs(regs),
         }
     }

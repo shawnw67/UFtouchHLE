@@ -58,6 +58,15 @@ fn CFLocaleCreate(
     msg![env; new initWithLocaleIdentifier:locale_identifier]
 }
 
+fn CFLocaleCreateCopy(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    locale: CFLocaleRef,
+) -> CFLocaleRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
+    msg![env; locale copy]
+}
+
 fn CFLocaleCreateCanonicalLocaleIdentifierFromString(
     env: &mut Environment,
     allocator: CFAllocatorRef,
@@ -83,6 +92,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFLocaleCopyCurrent()),
     export_c_func!(CFLocaleCopyPreferredLanguages()),
     export_c_func!(CFLocaleCreate(_, _)),
+    export_c_func!(CFLocaleCreateCopy(_, _)),
     export_c_func!(CFLocaleCreateCanonicalLocaleIdentifierFromString(_, _)),
     export_c_func!(CFLocaleGetSystem()),
     export_c_func!(CFLocaleGetValue(_, _)),

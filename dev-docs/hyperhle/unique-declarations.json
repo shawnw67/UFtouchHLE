@@ -1,0 +1,6503 @@
+{
+  "hyper": {
+    "ABAddressBookAddRecord": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookCopyArrayOfAllPeople": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookCopyArrayOfAllPeopleInSource": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookCopyPeopleWithName": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookCreate": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookCreateWithOptions": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookGetAuthorizationStatus": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookGetPersonCount": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookGetPersonWithRecordID": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookHasUnsavedChanges": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookRemoveRecord": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookRequestAccessWithCompletion": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookRevert": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABAddressBookSave": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABGroupCreate": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueAddValueAndLabel": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueCopyLabelAtIndex": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueCopyValueAtIndex": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueCreateMutable": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueGetCount": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueGetFirstIndexOfValue": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueGetIdentifierAtIndex": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueGetIndexForIdentifier": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABMultiValueRemoveValueAndLabelAtIndex": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonComparePeopleByName": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonCopyImageData": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonCopyLocalizedPropertyName": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonCreate": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonCreateInSource": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonGetCompositeNameFormat": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonGetSortOrdering": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonGetTypeOfProperty": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonHasImageData": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonRemoveImageData": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABPersonSetImageData": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABRecordCopyCompositeName": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABRecordCopyValue": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABRecordGetRecordID": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABRecordGetRecordType": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABRecordRemoveValue": [
+      "src/frameworks/address_book.rs"
+    ],
+    "ABRecordSetValue": [
+      "src/frameworks/address_book.rs"
+    ],
+    "AUGraphAddNode": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphAddRenderNotify": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphClose": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphConnectNodeInput": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphCountNodes": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphDisconnectNodeInput": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphGetIndNode": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphInitialize": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphIsInitialized": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphIsOpen": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphIsRunning": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphNodeInfo": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphOpen": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphRemoveNode": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphRemoveRenderNotify": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphSetNodeInputCallback": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphStart": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphStop": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphUninitialize": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AUGraphUpdate": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "AudioConverterConvertBuffer": [
+      "src/frameworks/audio_toolbox/audio_converter.rs"
+    ],
+    "AudioConverterConvertComplexBuffer": [
+      "src/frameworks/audio_toolbox/audio_converter.rs"
+    ],
+    "AudioConverterDispose": [
+      "src/frameworks/audio_toolbox/audio_converter.rs"
+    ],
+    "AudioConverterFillComplexBuffer": [
+      "src/frameworks/audio_toolbox/audio_converter.rs"
+    ],
+    "AudioConverterGetProperty": [
+      "src/frameworks/audio_toolbox/audio_converter.rs"
+    ],
+    "AudioConverterNew": [
+      "src/frameworks/audio_toolbox/audio_converter.rs"
+    ],
+    "AudioConverterReset": [
+      "src/frameworks/audio_toolbox/audio_converter.rs"
+    ],
+    "AudioConverterSetProperty": [
+      "src/frameworks/audio_toolbox/audio_converter.rs"
+    ],
+    "AudioFileCountUserData": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileCreateWithURL": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileGetGlobalInfo": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileGetGlobalInfoSize": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileGetUserDataAtOffset": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileGetUserDataSize64": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileInitializeWithCallbacks": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileOptimize": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileRemoveUserData": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileSetProperty": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileSetUserData": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileStreamClose": [
+      "src/frameworks/audio_toolbox/audio_file_stream.rs"
+    ],
+    "AudioFileStreamGetProperty": [
+      "src/frameworks/audio_toolbox/audio_file_stream.rs"
+    ],
+    "AudioFileStreamGetPropertyInfo": [
+      "src/frameworks/audio_toolbox/audio_file_stream.rs"
+    ],
+    "AudioFileStreamParseBytes": [
+      "src/frameworks/audio_toolbox/audio_file_stream.rs"
+    ],
+    "AudioFileStreamSetProperty": [
+      "src/frameworks/audio_toolbox/audio_file_stream.rs"
+    ],
+    "AudioFileWriteBytes": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFileWritePackets": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFormatGetProperty": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioFormatGetPropertyInfo": [
+      "src/frameworks/audio_toolbox/audio_file.rs"
+    ],
+    "AudioQueueNewInput": [
+      "src/frameworks/audio_toolbox/audio_queue.rs"
+    ],
+    "AudioQueueOfflineRender": [
+      "src/frameworks/audio_toolbox/audio_queue.rs"
+    ],
+    "AudioQueueSetOfflineRenderFormat": [
+      "src/frameworks/audio_toolbox/audio_queue.rs"
+    ],
+    "AudioServicesAddSystemSoundCompletion": [
+      "src/frameworks/audio_toolbox/audio_services.rs"
+    ],
+    "AudioServicesPlayAlertSound": [
+      "src/frameworks/audio_toolbox/audio_services.rs"
+    ],
+    "AudioServicesRemoveSystemSoundCompletion": [
+      "src/frameworks/audio_toolbox/audio_services.rs"
+    ],
+    "AudioServicesSetProperty": [
+      "src/frameworks/audio_toolbox/audio_services.rs"
+    ],
+    "AudioSessionAddPropertyListenerWithUserData": [
+      "src/frameworks/audio_toolbox/audio_session.rs"
+    ],
+    "AudioSessionRemovePropertyListener": [
+      "src/frameworks/audio_toolbox/audio_session.rs"
+    ],
+    "AudioUnitAddPropertyListener": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitAddRenderNotify": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitGetParameter": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitGetPropertyInfo": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitProcess": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitProcessMultiple": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitRemovePropertyListener": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitRemovePropertyListenerWithUserData": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitRemoveRenderNotify": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitRender": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitReset": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitScheduleParameters": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "AudioUnitSetParameter": [
+      "src/frameworks/audio_toolbox/audio_unit.rs"
+    ],
+    "BZ2_bzBuffToBuffDecompress": [
+      "src/frameworks/libbz2.rs"
+    ],
+    "BZ2_bzDecompress": [
+      "src/frameworks/libbz2.rs"
+    ],
+    "BZ2_bzDecompressEnd": [
+      "src/frameworks/libbz2.rs"
+    ],
+    "BZ2_bzDecompressInit": [
+      "src/frameworks/libbz2.rs"
+    ],
+    "CATransform3DEqualToTransform": [
+      "src/frameworks/core_animation/ca_transform3d.rs"
+    ],
+    "CATransform3DInvert": [
+      "src/frameworks/core_animation/ca_transform3d.rs"
+    ],
+    "CATransform3DIsAffine": [
+      "src/frameworks/core_animation/ca_transform3d.rs"
+    ],
+    "CCCryptorCreate": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CCCryptorFinal": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CCCryptorGetOutputLength": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CCCryptorRelease": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CCCryptorReset": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CCCryptorUpdate": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CCKeyDerivationPBKDF": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA1_Final": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA1_Init": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA1_Update": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA224": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA224_Final": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA224_Init": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA224_Update": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA256": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA256_Final": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA256_Init": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA256_Update": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA384": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA384_Final": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA384_Init": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA384_Update": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA512": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA512_Final": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA512_Init": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CC_SHA512_Update": [
+      "src/frameworks/common_crypto.rs"
+    ],
+    "CFAbsoluteTimeAddGregorianUnits": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFAbsoluteTimeGetDayOfYear": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFAbsoluteTimeGetDifferenceAsGregorianUnits": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFAbsoluteTimeGetWeekOfYear": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFAllocatorAllocate": [
+      "src/frameworks/core_foundation/cf_allocator.rs"
+    ],
+    "CFAllocatorDeallocate": [
+      "src/frameworks/core_foundation/cf_allocator.rs"
+    ],
+    "CFAllocatorGetContext": [
+      "src/frameworks/core_foundation/cf_allocator.rs"
+    ],
+    "CFAllocatorGetDefault": [
+      "src/frameworks/core_foundation/cf_allocator.rs"
+    ],
+    "CFAllocatorGetPreferredSizeForSize": [
+      "src/frameworks/core_foundation/cf_allocator.rs"
+    ],
+    "CFAllocatorReallocate": [
+      "src/frameworks/core_foundation/cf_allocator.rs"
+    ],
+    "CFArrayAppendArray": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayApplyFunction": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayBSearchValues": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayContainsValue": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayCreate": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayCreateCopy": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayCreateDescription": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayCreateMutableCopy": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayExchangeValuesAtIndices": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayGetCountOfValue": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayGetFirstIndexOfValue": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayGetLastIndexOfValue": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayGetTypeID": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFArrayGetValues": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayInsertValueAtIndex": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayRelease": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayRemoveAllValues": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayReplaceValues": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArrayRetain": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArraySetValueAtIndex": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFArraySortValues": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFAttributedStringCreate": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringCreateCopy": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringCreateWithSubstring": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringGetAttribute": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringGetAttributeAndLongestEffectiveRange": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringGetAttributes": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringGetAttributesAndLongestEffectiveRange": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringGetLength": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringGetString": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFAttributedStringGetTypeID": [
+      "src/frameworks/core_foundation/cf_attributed_string.rs"
+    ],
+    "CFBinaryHeapAddValue": [
+      "src/frameworks/core_foundation/cf_binary_heap.rs"
+    ],
+    "CFBinaryHeapCreate": [
+      "src/frameworks/core_foundation/cf_binary_heap.rs"
+    ],
+    "CFBinaryHeapGetCount": [
+      "src/frameworks/core_foundation/cf_binary_heap.rs"
+    ],
+    "CFBinaryHeapGetMinimum": [
+      "src/frameworks/core_foundation/cf_binary_heap.rs"
+    ],
+    "CFBinaryHeapRemoveAllValues": [
+      "src/frameworks/core_foundation/cf_binary_heap.rs"
+    ],
+    "CFBinaryHeapRemoveMinimum": [
+      "src/frameworks/core_foundation/cf_binary_heap.rs"
+    ],
+    "CFBinaryHeapRemoveMinimumValue": [
+      "src/frameworks/core_foundation/cf_binary_heap.rs"
+    ],
+    "CFBooleanGetTypeID": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFBundleCopyAuxiliaryExecutableURL": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyBuiltInPlugInsURL": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyBundleDevelopmentRegion": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyBundleIdentifier": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyDisplayName": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyHelpBookName": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyInfoDictionaryForURL": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyInfoDictionaryInDirectory": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyLocalizedStringForLocalization": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyPrivateFrameworksURL": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyResourceURLInDirectory": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyResourceURLsOfType": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyResourceURLsOfTypeForLocalization": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopySharedFrameworksURL": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopySharedSupportURL": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCopyShortVersionString": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCreate": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleCreateBundlesFromDirectory": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleGetAllBundles": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleGetBundleWithIdentifier": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleGetDataPointerForName": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleGetDataPointersForNames": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleGetFunctionPointerForName": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleGetFunctionPointersForNames": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleGetIdentifier": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleGetLocalInfoDictionary": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleIsExecutableLoaded": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleLoadExecutable": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleLoadExecutableAndReturnError": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundlePreflightExecutable": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFBundleUnloadExecutable": [
+      "src/frameworks/core_foundation/cf_bundle.rs"
+    ],
+    "CFCopyDescription": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFCopyHomeDirectoryURL": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFDataAppendBytes": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataCreateCopy": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataCreateMutable": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataCreateMutableCopy": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataDeleteBytes": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataGetMutableBytePtr": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataGetTypeID": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFDataIncreaseLength": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataIsEqual": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataRelease": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataReplaceBytes": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataRetain": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDataSetLength": [
+      "src/frameworks/core_foundation/cf_data.rs"
+    ],
+    "CFDictionaryApplyFunction": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryContainsKey": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryContainsValue": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryCreate": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryCreateCopy": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryCreateMutableCopy": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryCreateWithCopy": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryGetTypeID": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFDictionaryGetValueIfPresent": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryRelease": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryReplaceValue": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFDictionaryRetain": [
+      "src/frameworks/core_foundation/cf_dictionary.rs"
+    ],
+    "CFErrorCopyDescription": [
+      "src/frameworks/core_foundation/cf_error.rs"
+    ],
+    "CFGetAllocator": [
+      "src/frameworks/core_foundation/cf_allocator.rs"
+    ],
+    "CFGetTypeID": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFGregorianDateGetAbsoluteTime": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFGregorianDateIsValid": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFHTTPMessageAppendBytes": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCopyAllHeaderFields": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCopyBody": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCopyHeaderFieldValue": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCopyRequestMethod": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCopyRequestURL": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCopySerializedMessage": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCopyVersion": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCreateCopy": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCreateEmpty": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageCreateResponse": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageGetResponseStatusCode": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageIsHeaderComplete": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageIsRequest": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageRelease": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHTTPMessageRetain": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "CFHostCancelInfoResolution": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostCreateCopy": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostGetAddressing": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostGetNames": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostGetReachability": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostGetTypeID": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostIsInfoResolved": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostRelease": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostRetain": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostScheduleWithRunLoop": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostSetClient": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostStartInfoResolution": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFHostUnscheduleFromRunLoop": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "CFLocaleCopyAvailableLocaleIdentifiers": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCopyDisplayNameForPropertyValue": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCopyISOCountryCodes": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCopyISOCurrencyCodes": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCopyISOLanguageCodes": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCreateCanonicalLanguageIdentifierFromString": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCreateComponentsFromLocaleIdentifier": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCreateCopy": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCreateLocaleIdentifierFromComponents": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleCreateLocaleIdentifierFromWindowsLocaleCode": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleGetIdentifier": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleGetWindowsLocaleCodeFromLocaleIdentifier": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleRelease": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFLocaleRetain": [
+      "src/frameworks/core_foundation/cf_locale.rs"
+    ],
+    "CFMakeCollectable": [
+      "src/frameworks/core_foundation/cf_array.rs"
+    ],
+    "CFNetServiceBrowserCreate": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceBrowserInvalidate": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceBrowserScheduleWithRunLoop": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceBrowserSearchForDomains": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceBrowserSearchForServices": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceBrowserStopSearch": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceBrowserUnscheduleFromRunLoop": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceCancel": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceCreate": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceCreateTXTDataWithDictionary": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceGetDomain": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceGetName": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceGetPortNumber": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceGetTXTRecords": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceGetType": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceMonitorCreate": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceMonitorInvalidate": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceMonitorStart": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceMonitorStop": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceRegister": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceRegisterWithOptions": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceRelease": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceResolveWithTimeout": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceRetain": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceScheduleWithRunLoop": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceSetClient": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceSetTXTData": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceSetTXTRecords": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetServiceUnscheduleFromRunLoop": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "CFNetworkCopyProxiesForURL": [
+      "src/frameworks/cf_network.rs"
+    ],
+    "CFNetworkCopySystemProxySettings": [
+      "src/frameworks/cf_network.rs"
+    ],
+    "CFNotificationCenterAddObserver": [
+      "src/frameworks/core_foundation/cf_notification_center.rs"
+    ],
+    "CFNotificationCenterGetLocalCenter": [
+      "src/frameworks/core_foundation/cf_notification_center.rs"
+    ],
+    "CFNotificationCenterPostNotification": [
+      "src/frameworks/core_foundation/cf_notification_center.rs"
+    ],
+    "CFNotificationCenterPostNotificationWithOptions": [
+      "src/frameworks/core_foundation/cf_notification_center.rs"
+    ],
+    "CFNotificationCenterRemoveEveryObserver": [
+      "src/frameworks/core_foundation/cf_notification_center.rs"
+    ],
+    "CFNotificationCenterRemoveObserver": [
+      "src/frameworks/core_foundation/cf_notification_center.rs"
+    ],
+    "CFNumberGetTypeID": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFPreferencesCopyKeyList": [
+      "src/frameworks/core_foundation/cf_preferences.rs"
+    ],
+    "CFPreferencesSetValue": [
+      "src/frameworks/core_foundation/cf_preferences.rs"
+    ],
+    "CFPreferencesSynchronize": [
+      "src/frameworks/core_foundation/cf_preferences.rs"
+    ],
+    "CFPropertyListCreateFromXMLData": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFReadStreamClose": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamCopyError": [
+      "src/frameworks/cf_network.rs"
+    ],
+    "CFReadStreamCopyProperty": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamCreateForStreamedHTTPRequest": [
+      "src/frameworks/cf_network.rs"
+    ],
+    "CFReadStreamCreateWithBytesNoCopy": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamCreateWithFile": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamGetBuffer": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamGetError": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamGetStatus": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamHasBytesAvailable": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamOpen": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamRead": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamRelease": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamRetain": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamScheduleWithRunLoop": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFReadStreamUnscheduleFromRunLoop": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFRunLoopAddCommonMode": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopAddObserver": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopAddSource": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopContainsObserver": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopContainsSource": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopContainsTimer": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopCopyAllModes": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopCopyCurrentMode": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopIsWaiting": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopObserverCreate": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopObserverDoesRepeat": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopObserverGetActivities": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopObserverGetOrder": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopObserverInvalidate": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopObserverIsValid": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopObserverRelease": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopObserverRetain": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopRelease": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopRemoveObserver": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopRemoveSource": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopRetain": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopRun": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopSourceCreate": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopSourceGetContext": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopSourceGetOrder": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopSourceInvalidate": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopSourceIsValid": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopSourceRelease": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopSourceRetain": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopSourceSignal": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopStop": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopTimerDoesRepeat": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopTimerGetInterval": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopTimerGetNextFireDate": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopTimerGetOrder": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopTimerIsValid": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopTimerRelease": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopTimerRetain": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFRunLoopWakeUp": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "CFSetAddValue": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetContainsValue": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetCreate": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetCreateCopy": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetCreateMutable": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetCreateMutableCopy": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetGetCount": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetGetCountOfValue": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetGetValue": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetGetValues": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetRemoveAllValues": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetRemoveValue": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetReplaceValue": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSetSetValue": [
+      "src/frameworks/core_foundation/cf_set.rs"
+    ],
+    "CFSocketConnectToAddress": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketCopyAddress": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketCopyPeerAddress": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketCreateConnectedToSocketSignature": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketCreateRunLoopSource": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketCreateWithNative": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketCreateWithSocketSignature": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketDisableCallBacks": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketEnableCallBacks": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketGetNative": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketGetSocketFlags": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketInvalidate": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketIsValid": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketRelease": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketRetain": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketSendData": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketSetAddress": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFSocketSetSocketFlags": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "CFStreamCreatePairWithPeerSocketSignature": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFStreamCreatePairWithSocket": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFStreamCreatePairWithSocketToHost": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFStringCapitalize": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringCompareWithOptionsAndLocale": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringConvertEncodingToIANACharSetName": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringCreateArrayBySeparatingStrings": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringCreateByCombiningStrings": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringCreateExternalRepresentation": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringCreateMutableWithExternalCharactersNoCopy": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringCreateWithBytesNoCopy": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringCreateWithCharacters": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringCreateWithCharactersNoCopy": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringFindAndReplace": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringFindCharacterFromSet": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringFindWithOptions": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringGetCharacterFromInlineBuffer": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringGetDoubleValue": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringGetFastestEncoding": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringGetMaximumSizeForEncoding": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringGetMostCompatibleMacStringEncoding": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringGetSmallestEncoding": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringGetSystemEncoding": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringGetTypeID": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFStringHasPrefix": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringInsert": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringIsEncodingAvailable": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringLowercase": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringPad": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringRelease": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringReplace": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringReplaceAll": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringRetain": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringTransform": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringTrim": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFStringTrimWhitespace": [
+      "src/frameworks/core_foundation/cf_string.rs"
+    ],
+    "CFTimeZoneCopyDefault": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFTimeZoneCreateWithTimeIntervalFromGMT": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFTimeZoneGetName": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFTimeZoneGetSecondsFromGMT": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFTimeZoneRelease": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFTimeZoneRetain": [
+      "src/frameworks/core_foundation/time.rs"
+    ],
+    "CFURLCanBeDecomposed": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyAbsoluteURL": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyFragment": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyHostName": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyLastPathComponent": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyNetLocation": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyParameterString": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyPassword": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyPath": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyQueryString": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyResourceSpecifier": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyScheme": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyStrictPath": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCopyUserName": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCreateAbsoluteURLWithBytes": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCreateCopyAppendingPathExtension": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCreateCopyDeletingPathExtension": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCreateFromFileSystemRepresentationRelativeToBase": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCreatePropertyFromResource": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCreateStringByReplacingPercentEscapes": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLCreateWithFileSystemPathRelativeToBase": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLGetBaseURL": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLGetByteRangeForComponent": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLGetBytes": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLGetPortNumber": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLGetString": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLGetTypeID": [
+      "src/frameworks/core_foundation/cf_type.rs"
+    ],
+    "CFURLRelease": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFURLRetain": [
+      "src/frameworks/core_foundation/cf_url.rs"
+    ],
+    "CFUUIDCreateFromString": [
+      "src/frameworks/core_foundation/cf_uuid.rs"
+    ],
+    "CFUUIDCreateFromUUIDBytes": [
+      "src/frameworks/core_foundation/cf_uuid.rs"
+    ],
+    "CFUUIDCreateWithBytes": [
+      "src/frameworks/core_foundation/cf_uuid.rs"
+    ],
+    "CFUUIDGetConstantUUIDWithBytes": [
+      "src/frameworks/core_foundation/cf_uuid.rs"
+    ],
+    "CFUUIDGetUUIDBytes": [
+      "src/frameworks/core_foundation/cf_uuid.rs"
+    ],
+    "CFUUIDRelease": [
+      "src/frameworks/core_foundation/cf_uuid.rs"
+    ],
+    "CFUUIDRetain": [
+      "src/frameworks/core_foundation/cf_uuid.rs"
+    ],
+    "CFWriteStreamCanAcceptBytes": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamClose": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamCopyProperty": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamCreateWithAllocatedBuffers": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamCreateWithFile": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamGetError": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamGetStatus": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamOpen": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamRelease": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamRetain": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamScheduleWithRunLoop": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamSetClient": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamSetProperty": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamUnscheduleFromRunLoop": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CFWriteStreamWrite": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "CGAffineTransformCreateDictionaryRepresentation": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGAffineTransformMakeWithDictionaryRepresentation": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGColorCreateCopy": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorCreateCopyByMatchingToColorSpace": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorCreateCopyWithAlpha": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorCreateGenericCMYK": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorCreateGenericGray": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorCreateGenericGrayGamma2_2": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorCreateGenericHSB": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorCreateSRGB": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorCreateWithPattern": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorGetAlpha": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorGetColorSpace": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorGetComponents": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorGetConstantColor": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorGetLuminance": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorGetNumberOfComponents": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorHasAlpha": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorIsValid": [
+      "src/frameworks/core_graphics/cg_color.rs"
+    ],
+    "CGColorSpaceCopyName": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGColorSpaceCreateDeviceCMYK": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGColorSpaceCreateICCBased": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGColorSpaceCreateIndexed": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGColorSpaceCreatePattern": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGColorSpaceCreateWithICCProfile": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGColorSpaceGetNumberOfComponents": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGColorSpaceIsWideGamutRGB": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGColorSpaceSupportsOutput": [
+      "src/frameworks/core_graphics/cg_color_space.rs"
+    ],
+    "CGContextAddArc": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextAddCurveToPoint": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextAddEllipseInRect": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextAddLines": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextAddQuadCurveToPoint": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextAddRects": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextClipToMask": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextDrawLayerAtPoint": [
+      "src/frameworks/core_graphics/cg_layer.rs"
+    ],
+    "CGContextDrawLayerInRect": [
+      "src/frameworks/core_graphics/cg_layer.rs"
+    ],
+    "CGContextDrawTiledImage": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextEOFillPath": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextFlush": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextGetClipBoundingBox": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextGetTextMatrix": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextGetTextPosition": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextResetClip": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetAllowsFontSmoothing": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetAllowsFontSubpixelPositioning": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetAllowsFontSubpixelQuantization": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetAlpha": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetFillColor": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetFlatness": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetLineCap": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetLineDash": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetLineJoin": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetMiterLimit": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetRenderingIntent": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetShadow": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetShouldSubpixelPositionFonts": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetShouldSubpixelQuantizeFonts": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetStrokeColor": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetStrokeColorSpace": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetStrokeColorWithColor": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSetTextPosition": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextShowGlyphs": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextShowGlyphsWithAdvances": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextShowText": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextStrokeEllipseInRect": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextStrokeRect": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextStrokeRectWithWidth": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGContextSynchronize": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CGDataProviderCreateDirect": [
+      "src/frameworks/core_graphics/cg_data_provider.rs"
+    ],
+    "CGDataProviderGetInfo": [
+      "src/frameworks/core_graphics/cg_data_provider.rs"
+    ],
+    "CGDataProviderGetSize": [
+      "src/frameworks/core_graphics/cg_data_provider.rs"
+    ],
+    "CGFontCanCreatePostScriptSubset": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCopyFullName": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCopyGlyphNameForGlyph": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCopyPostScriptName": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCopyTableTags": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCopyVariationAxes": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCopyVariations": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCreateCopyWithVariations": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCreatePostScriptEncoding": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCreatePostScriptSubset": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCreateWithFontName": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontCreateWithPlatformFont": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontGetCapHeight": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontGetGlyphWithGlyphName": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontGetStemV": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontGetTypeID": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGFontGetXHeight": [
+      "src/frameworks/core_graphics/cg_font.rs"
+    ],
+    "CGImageCreateCopy": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageCreateFlippedVertically": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageCreateMaskWithImageMask": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageCreatePremultiplied": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageCreateScaled": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageCreateUnpremultiplied": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageCreateWithBitmapData": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageCreateWithMask": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageGetBitmapInfo": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageGetDecode": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageGetPixelFormatInfo": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageGetRenderingIntent": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageGetShouldInterpolate": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageGetTypeID": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageGetUTType": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageIsMask": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageReadPixels": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceCopyProperties": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceCopyPropertiesAtIndex": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceCreateImageAtIndex": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceCreateThumbnailAtIndex": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceCreateWithData": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceCreateWithURL": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceGetCount": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceGetStatus": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceGetStatusAtIndex": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGImageSourceGetTypeID": [
+      "src/frameworks/core_graphics/cg_image.rs"
+    ],
+    "CGLayerCreateWithContext": [
+      "src/frameworks/core_graphics/cg_layer.rs"
+    ],
+    "CGLayerGetContext": [
+      "src/frameworks/core_graphics/cg_layer.rs"
+    ],
+    "CGLayerGetSize": [
+      "src/frameworks/core_graphics/cg_layer.rs"
+    ],
+    "CGLayerRelease": [
+      "src/frameworks/core_graphics/cg_layer.rs"
+    ],
+    "CGLayerRetain": [
+      "src/frameworks/core_graphics/cg_layer.rs"
+    ],
+    "CGPathAddArcToPoint": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathAddCurveToPoint": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathAddLineToPoint": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathAddPath": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathAddQuadCurveToPoint": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathAddRect": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathCloseSubpath": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathContainsPoint": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathCreateCopy": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathCreateMutable": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathCreateMutableCopy": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathCreateWithEllipseInRect": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathCreateWithRect": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathEqualToPath": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathGetBoundingBox": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathGetCurrentPoint": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathIsEmpty": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathMoveToPoint": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathRelease": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPathRetain": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "CGPatternCreate": [
+      "src/frameworks/core_graphics/cg_pattern.rs"
+    ],
+    "CGPatternRelease": [
+      "src/frameworks/core_graphics/cg_pattern.rs"
+    ],
+    "CGPatternRetain": [
+      "src/frameworks/core_graphics/cg_pattern.rs"
+    ],
+    "CGPointCreateDictionaryRepresentation": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGPointMake": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGPointMakeWithDictionaryRepresentation": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGRectCreateDictionaryRepresentation": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGRectDivide": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGRectIsInfinite": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGRectMakeWithDictionaryRepresentation": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGRectStandardize": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGRectUnion": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGSizeCreateDictionaryRepresentation": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGSizeMake": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGSizeMakeWithDictionaryRepresentation": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CGVectorMake": [
+      "src/frameworks/core_graphics/cg_geometry.rs"
+    ],
+    "CMFormatDescriptionGetMediaType": [
+      "src/frameworks/core_media.rs"
+    ],
+    "CMTimeGetSeconds": [
+      "src/frameworks/core_media.rs"
+    ],
+    "CMTimeMake": [
+      "src/frameworks/core_media.rs"
+    ],
+    "CMTimeMakeWithSeconds": [
+      "src/frameworks/core_media.rs"
+    ],
+    "CNCopyCurrentNetworkInfo": [
+      "src/frameworks/captive_network.rs"
+    ],
+    "CNCopySupportedInterfaces": [
+      "src/frameworks/captive_network.rs"
+    ],
+    "CTFontCopyGraphicsFont": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontCopyPostScriptName": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontCreateCopyWithAttributes": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontCreateWithFontDescriptor": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontCreateWithGraphicsFont": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontDescriptorCopyAttribute": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontDescriptorCreateMatchingFontDescriptor": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontDescriptorCreateMatchingFontDescriptors": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontDescriptorCreateWithAttributes": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontGetLeading": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFontManagerRegisterGraphicsFont": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFrameDraw": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFrameGetLineOrigins": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFrameGetLines": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFrameGetStringRange": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFrameGetVisibleStringRange": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFramesetterCreateFrame": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFramesetterCreateWithAttributedString": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTFramesetterSuggestFrameSizeWithConstraints": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTLineCreateWithAttributedString": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTLineDraw": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTLineGetGlyphCount": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTLineGetGlyphRuns": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTLineGetImageBounds": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTLineGetTypographicBounds": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTParagraphStyleCreate": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTParagraphStyleCreateCopy": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTParagraphStyleGetValueForSpecifier": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTRunGetAttributes": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTRunGetGlyphCount": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTRunGetGlyphs": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTRunGetGlyphsPtr": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTRunGetPositions": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTRunGetPositionsPtr": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTTypesetterCreateLine": [
+      "src/frameworks/core_text.rs"
+    ],
+    "CTTypesetterCreateWithAttributedString": [
+      "src/frameworks/core_text.rs"
+    ],
+    "DisposeAUGraph": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "EAGLGetVersion": [
+      "src/frameworks/opengles/eagl.rs"
+    ],
+    "ExtAudioFileCreateWithURL": [
+      "src/frameworks/audio_toolbox/ext_audio_file.rs"
+    ],
+    "ExtAudioFileGetPropertyInfo": [
+      "src/frameworks/audio_toolbox/ext_audio_file.rs"
+    ],
+    "ExtAudioFileTell": [
+      "src/frameworks/audio_toolbox/ext_audio_file.rs"
+    ],
+    "ExtAudioFileWrapAudioFileID": [
+      "src/frameworks/audio_toolbox/ext_audio_file.rs"
+    ],
+    "GLKMatrix4Invert": [
+      "src/frameworks/gl_kit.rs"
+    ],
+    "MTAudioProcessingTapCreate": [
+      "src/frameworks/media_toolbox.rs"
+    ],
+    "MTAudioProcessingTapGetSourceAudio": [
+      "src/frameworks/media_toolbox.rs"
+    ],
+    "MTAudioProcessingTapGetStorage": [
+      "src/frameworks/media_toolbox.rs"
+    ],
+    "MTAudioProcessingTapGetTypeID": [
+      "src/frameworks/media_toolbox.rs"
+    ],
+    "MTLCreateSystemDefaultDevice": [
+      "src/frameworks/metal.rs"
+    ],
+    "NSAllocateObject": [
+      "src/frameworks/foundation/ns_file_manager.rs"
+    ],
+    "NSCopyObject": [
+      "src/frameworks/foundation/ns_object.rs"
+    ],
+    "NSDeallocateObject": [
+      "src/frameworks/foundation/ns_file_manager.rs"
+    ],
+    "NSDefaultMallocZone": [
+      "src/frameworks/uikit/ui_geometry.rs"
+    ],
+    "NSFullUserName": [
+      "src/frameworks/foundation/ns_file_manager.rs"
+    ],
+    "NSGetSizeAndAlignment": [
+      "src/frameworks/foundation.rs"
+    ],
+    "NSGetUncaughtExceptionHandler": [
+      "src/frameworks/foundation/ns_exception.rs"
+    ],
+    "NSOpenStepRootDirectory": [
+      "src/frameworks/foundation/ns_file_manager.rs"
+    ],
+    "NSProtocolFromString": [
+      "src/frameworks/foundation/ns_objc_runtime.rs"
+    ],
+    "NSStringFromProtocol": [
+      "src/frameworks/foundation/ns_objc_runtime.rs"
+    ],
+    "NSUserName": [
+      "src/frameworks/foundation/ns_file_manager.rs"
+    ],
+    "NSZoneFree": [
+      "src/libc/stdlib.rs"
+    ],
+    "NSZoneMalloc": [
+      "src/libc/stdlib.rs"
+    ],
+    "NSZoneRealloc": [
+      "src/libc/stdlib.rs"
+    ],
+    "NXGetAllArchInfos": [
+      "src/libc/mach_o.rs"
+    ],
+    "NXGetArchInfoFromCpuType": [
+      "src/libc/mach_o.rs"
+    ],
+    "NXGetArchInfoFromName": [
+      "src/libc/mach_o.rs"
+    ],
+    "NXGetLocalArchInfo": [
+      "src/libc/mach_o.rs"
+    ],
+    "NewAUGraph": [
+      "src/frameworks/audio_toolbox/au_graph.rs"
+    ],
+    "OSAtomicAdd64": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicAdd64Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicAnd32": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicAnd32Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicAnd32Orig": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicAnd32OrigBarrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicCompareAndSwap64": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicCompareAndSwap64Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicCompareAndSwapInt": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicCompareAndSwapLong": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicCompareAndSwapLongBarrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicDecrement32": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicDecrement32Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicDecrement64": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicDecrement64Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicIncrement32": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicIncrement32Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicIncrement64": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicIncrement64Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicOr32": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicOr32Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicOr32Orig": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicOr32OrigBarrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicTestAndClear": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicTestAndClearBarrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicTestAndSet": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicTestAndSetBarrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicXor32": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicXor32Barrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicXor32Orig": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSAtomicXor32OrigBarrier": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSSpinLockLock": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSSpinLockTry": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "OSSpinLockUnlock": [
+      "src/libc/libkern/os_atomic.rs"
+    ],
+    "SCNetworkReachabilityCreateWithAddressPair": [
+      "src/frameworks/system_configuration/sc_network_reachability.rs"
+    ],
+    "SCNetworkReachabilityRelease": [
+      "src/frameworks/system_configuration/sc_network_reachability.rs"
+    ],
+    "SCNetworkReachabilityRetain": [
+      "src/frameworks/system_configuration/sc_network_reachability.rs"
+    ],
+    "SCNetworkReachabilitySetDispatchQueue": [
+      "src/frameworks/system_configuration/sc_network_reachability.rs"
+    ],
+    "SecAccessCreate": [
+      "src/frameworks/security.rs"
+    ],
+    "SecCertificateCopyData": [
+      "src/frameworks/security.rs"
+    ],
+    "SecCertificateCopySubjectSummary": [
+      "src/frameworks/security.rs"
+    ],
+    "SecCertificateCreateWithData": [
+      "src/frameworks/security.rs"
+    ],
+    "SecCopyErrorMessageString": [
+      "src/frameworks/security.rs"
+    ],
+    "SecIdentityCopyCertificate": [
+      "src/frameworks/security.rs"
+    ],
+    "SecIdentityCopyPrivateKey": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeyDecrypt": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeyEncrypt": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeyGeneratePair": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeyGetBlockSize": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeyRawSign": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeyRawVerify": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainAddGenericPassword": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainAddInternetPassword": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainCopyDefault": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainFindGenericPassword": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainFindInternetPassword": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainGetVersion": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainItemDelete": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainItemFreeAttributesAndData": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainItemFreeContent": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainItemModifyAttributesAndData": [
+      "src/frameworks/security.rs"
+    ],
+    "SecKeychainOpen": [
+      "src/frameworks/security.rs"
+    ],
+    "SecPolicyCopyProperties": [
+      "src/frameworks/security.rs"
+    ],
+    "SecPolicyCreateBasicX509": [
+      "src/frameworks/security.rs"
+    ],
+    "SecPolicyCreateRevocation": [
+      "src/frameworks/security.rs"
+    ],
+    "SecPolicyCreateSSL": [
+      "src/frameworks/security.rs"
+    ],
+    "SecRandomCopyBytes": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustCopyPublicKey": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustCreateWithCertificates": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustEvaluate": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustEvaluateAsync": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustGetCertificateAtIndex": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustGetCertificateCount": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustSetAnchorCertificates": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustSetAnchorCertificatesOnly": [
+      "src/frameworks/security.rs"
+    ],
+    "SecTrustSetPolicies": [
+      "src/frameworks/security.rs"
+    ],
+    "UIAccessibilityIsGuidedAccessEnabled": [
+      "src/frameworks/uikit.rs"
+    ],
+    "UIGraphicsBeginImageContext": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsBeginImageContextWithOptions": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsBeginPDFContextToData": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsBeginPDFContextToFile": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsBeginPDFPage": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsBeginPDFPageWithInfo": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsEndImageContext": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsEndPDFContext": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsGetImageFromCurrentImageContext": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIGraphicsGetPDFContextBounds": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIImageJPEGRepresentation": [
+      "src/frameworks/uikit/ui_image.rs"
+    ],
+    "UIImagePNGRepresentation": [
+      "src/frameworks/uikit/ui_image.rs"
+    ],
+    "UIImageWriteToSavedPhotosAlbum": [
+      "src/frameworks/uikit/ui_image.rs"
+    ],
+    "UIRectClip": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIRectFillUsingBlendMode": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UIRectFrame": [
+      "src/frameworks/uikit/ui_graphics.rs"
+    ],
+    "UISaveVideoAtPathToSavedPhotosAlbum": [
+      "src/frameworks/uikit/ui_image_picker_controller.rs"
+    ],
+    "UIVideoAtPathIsCompatibleWithSavedPhotosAlbum": [
+      "src/frameworks/uikit/ui_image_picker_controller.rs"
+    ],
+    "_Exit": [
+      "src/libc/stdlib.rs"
+    ],
+    "_Unwind_SjLj_RaiseException": [
+      "src/libc/cxxabi.rs"
+    ],
+    "_Unwind_SjLj_Register": [
+      "src/libc/cxxabi.rs"
+    ],
+    "_Unwind_SjLj_Resume": [
+      "src/libc/cxxabi.rs"
+    ],
+    "_Unwind_SjLj_Resume_or_Rethrow": [
+      "src/libc/cxxabi.rs"
+    ],
+    "_Unwind_SjLj_Unregister": [
+      "src/libc/cxxabi.rs"
+    ],
+    "_ZN9SingletonI12TimerManagerE11getInstanceEv": [
+      "src/libc/math.rs"
+    ],
+    "_ZNSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6__initEPKcm": [
+      "src/libc/math.rs"
+    ],
+    "_ZNSt6vectorIN8InputMgr7KeyDataESaIS1_EE14_M_fill_insertEN9__gnu_cxx17__normal_iteratorIPS1_S3_EEmRKS1_": [
+      "src/libc/math.rs"
+    ],
+    "_ZNSt6vectorIN8InputMgr7KeyDataESaIS1_EE7reserveEm": [
+      "src/libc/math.rs"
+    ],
+    "_ZNSt6vectorIN8InputMgr9TouchDataESaIS1_EE7reserveEm": [
+      "src/libc/math.rs"
+    ],
+    "__ZN6RakNet6OP_NEWINS_7RakPeerEEEPT_PKcj": [
+      "src/frameworks/raknet.rs"
+    ],
+    "___objc_personality_v0": [
+      "src/objc.rs"
+    ],
+    "__assert": [
+      "src/libc/stdlib.rs"
+    ],
+    "__assert_fail": [
+      "src/libc/stdlib.rs"
+    ],
+    "__cxa_allocate_exception": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_begin_catch": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_call_unexpected": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_decrement_exception_refcount": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_end_catch": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_free_exception": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_guard_abort": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_guard_acquire": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_guard_release": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_increment_exception_refcount": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_pure_virtual": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_rethrow": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_throw": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__cxa_uncaught_exception": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__divdi3": [
+      "src/libc/math.rs"
+    ],
+    "__divsi3": [
+      "src/libc/math.rs"
+    ],
+    "__dynamic_cast": [
+      "src/libc/cxxabi.rs"
+    ],
+    "__fixdfdi": [
+      "src/libc/math.rs"
+    ],
+    "__fixsfdi": [
+      "src/libc/math.rs"
+    ],
+    "__fixunsdfdi": [
+      "src/libc/math.rs"
+    ],
+    "__fixunssfdi": [
+      "src/libc/math.rs"
+    ],
+    "__floatdidf": [
+      "src/libc/math.rs"
+    ],
+    "__floatdisf": [
+      "src/libc/math.rs"
+    ],
+    "__floatundidf": [
+      "src/libc/math.rs"
+    ],
+    "__floatundisf": [
+      "src/libc/math.rs"
+    ],
+    "__fpclassifyd": [
+      "src/libc/math.rs"
+    ],
+    "__h_errno_location": [
+      "src/libc/netdb.rs"
+    ],
+    "__isfinited": [
+      "src/libc/math.rs"
+    ],
+    "__isfinitef": [
+      "src/libc/math.rs"
+    ],
+    "__isinfd": [
+      "src/libc/math.rs"
+    ],
+    "__isinff": [
+      "src/libc/math.rs"
+    ],
+    "__isnand": [
+      "src/libc/math.rs"
+    ],
+    "__isnanf": [
+      "src/libc/math.rs"
+    ],
+    "__isnormald": [
+      "src/libc/math.rs"
+    ],
+    "__isnormalf": [
+      "src/libc/math.rs"
+    ],
+    "__longjmp": [
+      "src/libc/setjmp.rs"
+    ],
+    "__moddi3": [
+      "src/libc/math.rs"
+    ],
+    "__modsi3": [
+      "src/libc/math.rs"
+    ],
+    "__setjmp": [
+      "src/libc/setjmp.rs"
+    ],
+    "__signbitd": [
+      "src/libc/math.rs"
+    ],
+    "__signbitf": [
+      "src/libc/math.rs"
+    ],
+    "__sincos_stret": [
+      "src/libc/math.rs"
+    ],
+    "__sincosf_stret": [
+      "src/libc/math.rs"
+    ],
+    "__strncat_chk": [
+      "src/libc/string.rs"
+    ],
+    "__udivdi3": [
+      "src/libc/math.rs"
+    ],
+    "__udivsi3": [
+      "src/libc/math.rs"
+    ],
+    "__umoddi3": [
+      "src/libc/math.rs"
+    ],
+    "__umodsi3": [
+      "src/libc/math.rs"
+    ],
+    "__vsnprintf_chk": [
+      "src/libc/stdio/printf.rs"
+    ],
+    "_dyld_get_image_header": [
+      "src/libc/mach_o.rs"
+    ],
+    "_dyld_get_image_name": [
+      "src/libc/mach_o.rs"
+    ],
+    "_dyld_get_image_vmaddr_slide": [
+      "src/libc/mach_o.rs"
+    ],
+    "_dyld_image_count": [
+      "src/libc/mach_o.rs"
+    ],
+    "_dyld_register_func_for_add_image": [
+      "src/libc/mach_o.rs"
+    ],
+    "_dyld_register_func_for_remove_image": [
+      "src/libc/mach_o.rs"
+    ],
+    "_exit": [
+      "src/libc/stdlib.rs"
+    ],
+    "_longjmp": [
+      "src/libc/setjmp.rs"
+    ],
+    "_pthread_from_mach_thread_np": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "_setjmp": [
+      "src/libc/setjmp.rs"
+    ],
+    "abort": [
+      "src/libc/stdlib.rs"
+    ],
+    "acoshl": [
+      "src/libc/math.rs"
+    ],
+    "acosl": [
+      "src/libc/math.rs"
+    ],
+    "aio_cancel": [
+      "src/libc/aio.rs"
+    ],
+    "aio_error": [
+      "src/libc/aio.rs"
+    ],
+    "aio_fsync": [
+      "src/libc/aio.rs"
+    ],
+    "aio_read": [
+      "src/libc/aio.rs"
+    ],
+    "aio_return": [
+      "src/libc/aio.rs"
+    ],
+    "aio_suspend": [
+      "src/libc/aio.rs"
+    ],
+    "aio_write": [
+      "src/libc/aio.rs"
+    ],
+    "alarm": [
+      "src/libc/unistd.rs"
+    ],
+    "alcASAGetListener": [
+      "src/frameworks/openal.rs"
+    ],
+    "alcASAGetSource": [
+      "src/frameworks/openal.rs"
+    ],
+    "alcMacOSXGetRenderingQuality": [
+      "src/frameworks/openal.rs"
+    ],
+    "alcMacOSXRenderingQuality": [
+      "src/frameworks/openal.rs"
+    ],
+    "arc4random_addrandom": [
+      "src/libc/stdlib.rs"
+    ],
+    "arc4random_stir": [
+      "src/libc/stdlib.rs"
+    ],
+    "arc4random_uniform": [
+      "src/libc/stdlib.rs"
+    ],
+    "asctime": [
+      "src/libc/time.rs"
+    ],
+    "asinhl": [
+      "src/libc/math.rs"
+    ],
+    "asinl": [
+      "src/libc/math.rs"
+    ],
+    "asl_add_log_file": [
+      "src/libc/asl.rs"
+    ],
+    "asl_close": [
+      "src/libc/asl.rs"
+    ],
+    "asl_free": [
+      "src/libc/asl.rs"
+    ],
+    "asl_log": [
+      "src/libc/asl.rs"
+    ],
+    "asl_log_message": [
+      "src/libc/asl.rs"
+    ],
+    "asl_new": [
+      "src/libc/asl.rs"
+    ],
+    "asl_open": [
+      "src/libc/asl.rs"
+    ],
+    "asl_remove_log_file": [
+      "src/libc/asl.rs"
+    ],
+    "asl_set": [
+      "src/libc/asl.rs"
+    ],
+    "asl_set_filter": [
+      "src/libc/asl.rs"
+    ],
+    "asl_set_query": [
+      "src/libc/asl.rs"
+    ],
+    "asl_vlog": [
+      "src/libc/asl.rs"
+    ],
+    "asprintf": [
+      "src/libc/stdio/printf.rs"
+    ],
+    "atan2l": [
+      "src/libc/math.rs"
+    ],
+    "atanhl": [
+      "src/libc/math.rs"
+    ],
+    "atanl": [
+      "src/libc/math.rs"
+    ],
+    "backtrace": [
+      "src/libc/execinfo.rs"
+    ],
+    "backtrace_symbols": [
+      "src/libc/execinfo.rs"
+    ],
+    "backtrace_symbols_fd": [
+      "src/libc/execinfo.rs"
+    ],
+    "bcopy": [
+      "src/libc/string.rs"
+    ],
+    "cblas_saxpy": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "cblas_scopy": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "cblas_sdot": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "cblas_sgemv": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "cblas_snrm2": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "cblas_sscal": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "cbrt": [
+      "src/libc/math.rs"
+    ],
+    "cbrtf": [
+      "src/libc/math.rs"
+    ],
+    "cbrtl": [
+      "src/libc/math.rs"
+    ],
+    "ceill": [
+      "src/libc/math.rs"
+    ],
+    "chmod": [
+      "src/libc/unistd.rs"
+    ],
+    "class:ABNewPersonViewController": [
+      "src/frameworks/foundation/ab_people_picker_navigation_controller.rs"
+    ],
+    "class:ABPeoplePickerNavigationController": [
+      "src/frameworks/foundation/ab_people_picker_navigation_controller.rs"
+    ],
+    "class:ABPersonViewController": [
+      "src/frameworks/foundation/ab_people_picker_navigation_controller.rs"
+    ],
+    "class:ABUnknownPersonViewController": [
+      "src/frameworks/foundation/ab_people_picker_navigation_controller.rs"
+    ],
+    "class:ACAccount": [
+      "src/frameworks/accounts.rs"
+    ],
+    "class:ACAccountStore": [
+      "src/frameworks/accounts.rs"
+    ],
+    "class:ACAccountType": [
+      "src/frameworks/accounts.rs"
+    ],
+    "class:ADBannerView": [
+      "src/frameworks/game_kit/ad_banner_view.rs"
+    ],
+    "class:ADClient": [
+      "src/frameworks/game_kit/ad_banner_view.rs"
+    ],
+    "class:ADInterstitialAd": [
+      "src/frameworks/game_kit/ad_banner_view.rs"
+    ],
+    "class:ASIdentifierManager": [
+      "src/frameworks/foundation/asidentifier_manager.rs"
+    ],
+    "class:ATTrackingManager": [
+      "src/frameworks/foundation/asidentifier_manager.rs"
+    ],
+    "class:AVAsset": [
+      "src/frameworks/avfoundation/av_player.rs"
+    ],
+    "class:AVAssetTrack": [
+      "src/frameworks/avfoundation/av_player.rs"
+    ],
+    "class:AVAudioRecorder": [
+      "src/frameworks/avfoundation/av_audio_player.rs"
+    ],
+    "class:AVAudioSessionPortDescription": [
+      "src/frameworks/avfoundation/av_audio_session.rs"
+    ],
+    "class:AVAudioSessionRouteDescription": [
+      "src/frameworks/avfoundation/av_audio_session.rs"
+    ],
+    "class:AVCaptureDevice": [
+      "src/frameworks/avfoundation/av_capture.rs"
+    ],
+    "class:AVCaptureDeviceInput": [
+      "src/frameworks/avfoundation/av_capture.rs"
+    ],
+    "class:AVCaptureMetadataOutput": [
+      "src/frameworks/avfoundation/av_capture.rs"
+    ],
+    "class:AVCaptureOutput": [
+      "src/frameworks/avfoundation/av_capture.rs"
+    ],
+    "class:AVCaptureSession": [
+      "src/frameworks/avfoundation/av_capture.rs"
+    ],
+    "class:AVCaptureVideoDataOutput": [
+      "src/frameworks/avfoundation/av_capture.rs"
+    ],
+    "class:AVCaptureVideoPreviewLayer": [
+      "src/frameworks/avfoundation/av_capture.rs"
+    ],
+    "class:AVSpeechSynthesisVoice": [
+      "src/frameworks/avfoundation/av_speech.rs"
+    ],
+    "class:AVSpeechSynthesizer": [
+      "src/frameworks/avfoundation/av_speech.rs"
+    ],
+    "class:AVSpeechUtterance": [
+      "src/frameworks/avfoundation/av_speech.rs"
+    ],
+    "class:AVURLAsset": [
+      "src/frameworks/avfoundation/av_player.rs"
+    ],
+    "class:BarcodeReaderViewController": [
+      "src/frameworks/uikit/ui_view_controller.rs"
+    ],
+    "class:CAAnimationGroup": [
+      "src/frameworks/core_animation/ca_animation.rs"
+    ],
+    "class:CASpringAnimation": [
+      "src/frameworks/core_animation/ca_keyframe_animation.rs"
+    ],
+    "class:CAValueFunction": [
+      "src/frameworks/core_animation/ca_keyframe_animation.rs"
+    ],
+    "class:CFNetService": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "class:CFNetServiceBrowser": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "class:CFNetServiceMonitor": [
+      "src/frameworks/core_foundation/cf_net_service.rs"
+    ],
+    "class:CIColor": [
+      "src/frameworks/core_image.rs"
+    ],
+    "class:CIContext": [
+      "src/frameworks/core_image/pipeline.rs"
+    ],
+    "class:CIFilter": [
+      "src/frameworks/core_image/pipeline.rs"
+    ],
+    "class:CIImage": [
+      "src/frameworks/core_image/pipeline.rs"
+    ],
+    "class:CLLocation": [
+      "src/frameworks/core_location.rs"
+    ],
+    "class:CMAccelerometerData": [
+      "src/frameworks/core_motion.rs"
+    ],
+    "class:CMAttitude": [
+      "src/frameworks/core_motion.rs"
+    ],
+    "class:CMDeviceMotion": [
+      "src/frameworks/core_motion.rs"
+    ],
+    "class:CMGyroData": [
+      "src/frameworks/core_motion.rs"
+    ],
+    "class:CNMutablePostalAddress": [
+      "src/frameworks/contacts.rs"
+    ],
+    "class:CNPostalAddress": [
+      "src/frameworks/contacts.rs"
+    ],
+    "class:CTCarrier": [
+      "src/frameworks/core_telephony.rs"
+    ],
+    "class:ChipmunkHastySpace": [
+      "src/frameworks/foundation/chipmunk_space.rs"
+    ],
+    "class:ChipmunkSpace": [
+      "src/frameworks/foundation/chipmunk_space.rs"
+    ],
+    "class:FBSession": [
+      "src/frameworks/game_kit/fb_session.rs"
+    ],
+    "class:GKAchievement": [
+      "src/frameworks/game_kit/gk_achievement.rs"
+    ],
+    "class:GKAchievementViewController": [
+      "src/frameworks/game_kit/gk_leaderboard_view_controller.rs"
+    ],
+    "class:GKChallengeEventHandler": [
+      "src/frameworks/game_kit/gk_challenge_event_handler.rs"
+    ],
+    "class:GKFriendRequestComposeViewController": [
+      "src/frameworks/game_kit/gk_leaderboard_view_controller.rs"
+    ],
+    "class:GKLeaderboardViewController": [
+      "src/frameworks/game_kit/gk_leaderboard_view_controller.rs"
+    ],
+    "class:GKPeerPickerController": [
+      "src/frameworks/game_kit/gk_session.rs"
+    ],
+    "class:GKSessionDelegate": [
+      "src/frameworks/game_kit/gk_session.rs"
+    ],
+    "class:GKTurnBasedEventHandler": [
+      "src/frameworks/game_kit/gk_turn_based_event_handler.rs"
+    ],
+    "class:GLKView": [
+      "src/frameworks/gl_kit.rs"
+    ],
+    "class:GLKViewController": [
+      "src/frameworks/gl_kit.rs"
+    ],
+    "class:LocalyticsAmpSession": [
+      "src/frameworks/localytics.rs"
+    ],
+    "class:MFMessageComposeViewController": [
+      "src/frameworks/media_player/mf_mail_compose_view_controller.rs"
+    ],
+    "class:MPVolumeView": [
+      "src/frameworks/media_player/mp_volume_view.rs"
+    ],
+    "class:MTLBuffer": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLCommandBuffer": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLCommandQueue": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLDepthStencilDescriptor": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLDepthStencilState": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLDevice": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLFunction": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLLibrary": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLRenderCommandEncoder": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLRenderPassColorAttachmentDescriptor": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLRenderPassColorAttachmentDescriptorArray": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLRenderPassDescriptor": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLRenderPipelineColorAttachmentDescriptor": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLRenderPipelineDescriptor": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLRenderPipelineState": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLSamplerDescriptor": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLStencilDescriptor": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:MTLTexture": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:NSAttributeDescription": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSBlockOperation": [
+      "src/frameworks/foundation/ns_operation.rs"
+    ],
+    "class:NSCache": [
+      "src/frameworks/foundation/ns_file_handle.rs"
+    ],
+    "class:NSComparisonPredicate": [
+      "src/frameworks/foundation/ns_predicate.rs"
+    ],
+    "class:NSCompoundPredicate": [
+      "src/frameworks/foundation/ns_predicate.rs"
+    ],
+    "class:NSCondition": [
+      "src/frameworks/foundation/ns_condition.rs"
+    ],
+    "class:NSDecimalNumber": [
+      "src/frameworks/foundation/ns_decimal_number.rs"
+    ],
+    "class:NSDecimalNumberHandler": [
+      "src/frameworks/foundation/ns_decimal_number.rs"
+    ],
+    "class:NSEntityDescription": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSFetchRequest": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSHTTPCookieStorage": [
+      "src/frameworks/foundation/ns_http_cookie_storage.rs"
+    ],
+    "class:NSHTTPURLResponse": [
+      "src/frameworks/foundation/ns_url_response.rs"
+    ],
+    "class:NSHashTable": [
+      "src/frameworks/foundation/ns_hash_table.rs"
+    ],
+    "class:NSHost": [
+      "src/frameworks/foundation/ns_host.rs"
+    ],
+    "class:NSIndexSet": [
+      "src/frameworks/foundation/ns_index_set.rs"
+    ],
+    "class:NSInputStream": [
+      "src/frameworks/foundation/ns_input_stream.rs"
+    ],
+    "class:NSInvocationOperation": [
+      "src/frameworks/foundation/ns_operation.rs"
+    ],
+    "class:NSLayoutConstraint": [
+      "src/frameworks/uikit/ui_layout_placeholders.rs"
+    ],
+    "class:NSLocalizableString": [
+      "src/frameworks/uikit/ui_layout_placeholders.rs"
+    ],
+    "class:NSMachPort": [
+      "src/frameworks/foundation/ns_port.rs"
+    ],
+    "class:NSManagedObject": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSManagedObjectContext": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSManagedObjectModel": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSMapTable": [
+      "src/frameworks/foundation/ns_map_table.rs"
+    ],
+    "class:NSMetadataQuery": [
+      "src/frameworks/foundation/ns_metadata_query.rs"
+    ],
+    "class:NSMutableOrderedSet": [
+      "src/frameworks/foundation/ns_ordered_set.rs"
+    ],
+    "class:NSMutableParagraphStyle": [
+      "src/frameworks/uikit/ns_paragraph_style.rs"
+    ],
+    "class:NSNetService": [
+      "src/frameworks/foundation/ns_net_service.rs"
+    ],
+    "class:NSNetServiceBrowser": [
+      "src/frameworks/foundation/ns_net_service.rs"
+    ],
+    "class:NSOrderedSet": [
+      "src/frameworks/foundation/ns_ordered_set.rs"
+    ],
+    "class:NSOutputStream": [
+      "src/frameworks/foundation/ns_input_stream.rs"
+    ],
+    "class:NSParagraphStyle": [
+      "src/frameworks/uikit/ns_paragraph_style.rs"
+    ],
+    "class:NSPersistentStore": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSPersistentStoreCoordinator": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSPipe": [
+      "src/frameworks/foundation/ns_file_handle.rs"
+    ],
+    "class:NSPointerArray": [
+      "src/frameworks/foundation/ns_pointer_array.rs"
+    ],
+    "class:NSPort": [
+      "src/frameworks/foundation/ns_port.rs"
+    ],
+    "class:NSPredicate": [
+      "src/frameworks/foundation/ns_predicate.rs"
+    ],
+    "class:NSProgress": [
+      "src/frameworks/foundation/ns_progress.rs"
+    ],
+    "class:NSPropertyDescription": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSRegularExpression": [
+      "src/frameworks/foundation/ns_regular_expression.rs"
+    ],
+    "class:NSRelationshipDescription": [
+      "src/frameworks/foundation/ns_persistent_store_coordinator.rs"
+    ],
+    "class:NSSortDescriptor": [
+      "src/frameworks/foundation/ns_sort_descriptor.rs"
+    ],
+    "class:NSStream": [
+      "src/frameworks/foundation/ns_input_stream.rs"
+    ],
+    "class:NSTextCheckingResult": [
+      "src/frameworks/foundation/ns_text_checking_result.rs"
+    ],
+    "class:NSURLProtocol": [
+      "src/frameworks/foundation/url_protocol.rs"
+    ],
+    "class:NSURLResponse": [
+      "src/frameworks/foundation/ns_url_response.rs"
+    ],
+    "class:NSURLSession": [
+      "src/frameworks/foundation/ns_url_session.rs"
+    ],
+    "class:NSURLSessionConfiguration": [
+      "src/frameworks/foundation/ns_url_session.rs"
+    ],
+    "class:NSURLSessionDataTask": [
+      "src/frameworks/foundation/ns_url_session.rs"
+    ],
+    "class:NSURLSessionDownloadTask": [
+      "src/frameworks/foundation/ns_url_session.rs"
+    ],
+    "class:NSURLSessionTask": [
+      "src/frameworks/foundation/ns_url_session.rs"
+    ],
+    "class:NSURLSessionUploadTask": [
+      "src/frameworks/foundation/ns_url_session.rs"
+    ],
+    "class:NSUUID": [
+      "src/frameworks/foundation/ns_uuid.rs"
+    ],
+    "class:NSUbiquitousKeyValueStore": [
+      "src/frameworks/foundation/ns_ubiquitous_key_value_store.rs"
+    ],
+    "class:NSUndoManager": [
+      "src/frameworks/foundation/ns_undo_manager.rs",
+      "src/frameworks/uikit/ui_undo_manager.rs"
+    ],
+    "class:PKContact": [
+      "src/frameworks/pass_kit.rs"
+    ],
+    "class:PKPayment": [
+      "src/frameworks/pass_kit.rs"
+    ],
+    "class:PKPaymentSummaryItem": [
+      "src/frameworks/pass_kit.rs"
+    ],
+    "class:PKPaymentToken": [
+      "src/frameworks/pass_kit.rs"
+    ],
+    "class:RPScreenRecorder": [
+      "src/frameworks/replay_kit.rs"
+    ],
+    "class:SFSafariViewController": [
+      "src/frameworks/safari_services.rs"
+    ],
+    "class:SLComposeViewController": [
+      "src/frameworks/social.rs"
+    ],
+    "class:SLRequest": [
+      "src/frameworks/social.rs"
+    ],
+    "class:TCUILaunchDelegate": [
+      "src/frameworks/uikit/ui_launch_delegate.rs"
+    ],
+    "class:TWTweetComposeViewController": [
+      "src/frameworks/tw_tweet_compose_view_controller.rs"
+    ],
+    "class:TouchHLEMTLSamplerState": [
+      "src/frameworks/metal.rs"
+    ],
+    "class:UIActionSheet": [
+      "src/frameworks/uikit/ui_action_sheet.rs"
+    ],
+    "class:UIActivity": [
+      "src/frameworks/uikit/ui_activity.rs"
+    ],
+    "class:UIActivityItemProvider": [
+      "src/frameworks/uikit/ui_activity.rs"
+    ],
+    "class:UIActivityViewController": [
+      "src/frameworks/uikit/ui_activity.rs"
+    ],
+    "class:UIAlertAction": [
+      "src/frameworks/uikit/ui_alert_controller.rs"
+    ],
+    "class:UIAlertController": [
+      "src/frameworks/uikit/ui_alert_controller.rs"
+    ],
+    "class:UICachedDeviceWhiteColor": [
+      "src/frameworks/uikit/ui_color.rs"
+    ],
+    "class:UICollectionReusableView": [
+      "src/frameworks/uikit/ui_view/ui_collection_view.rs"
+    ],
+    "class:UICollectionView": [
+      "src/frameworks/uikit/ui_view/ui_collection_view.rs"
+    ],
+    "class:UICollectionViewCell": [
+      "src/frameworks/uikit/ui_view/ui_collection_view.rs"
+    ],
+    "class:UICollectionViewController": [
+      "src/frameworks/uikit/ui_view/ui_collection_view.rs"
+    ],
+    "class:UICollectionViewFlowLayout": [
+      "src/frameworks/uikit/ui_view/ui_collection_view.rs"
+    ],
+    "class:UICollectionViewLayout": [
+      "src/frameworks/uikit/ui_view/ui_collection_view.rs"
+    ],
+    "class:UICustomObject": [
+      "src/frameworks/uikit/ui_custom_object.rs"
+    ],
+    "class:UIDocument": [
+      "src/frameworks/uikit/ui_document.rs"
+    ],
+    "class:UIFontDescriptor": [
+      "src/frameworks/uikit/ui_layout_placeholders.rs"
+    ],
+    "class:UIGestureRecognizer": [
+      "src/frameworks/uikit/ui_gesture_recognizer.rs"
+    ],
+    "class:UIKeyboard": [
+      "src/frameworks/uikit/ui_keyboard.rs"
+    ],
+    "class:UIKeyboardImpl": [
+      "src/frameworks/uikit/ui_keyboard.rs"
+    ],
+    "class:UILayoutGuide": [
+      "src/frameworks/uikit/ui_layout_placeholders.rs"
+    ],
+    "class:UILongPressGestureRecognizer": [
+      "src/frameworks/uikit/ui_gesture_recognizer.rs"
+    ],
+    "class:UINavigationBar": [
+      "src/frameworks/uikit/ui_navigation_bar.rs"
+    ],
+    "class:UIPageViewController": [
+      "src/frameworks/uikit/ui_page_view_controller.rs"
+    ],
+    "class:UIPanGestureRecognizer": [
+      "src/frameworks/uikit/ui_gesture_recognizer.rs"
+    ],
+    "class:UIPinchGestureRecognizer": [
+      "src/frameworks/uikit/ui_pinch_gesture_recognizer.rs"
+    ],
+    "class:UIPopoverController": [
+      "src/frameworks/uikit/ui_popover_controller.rs"
+    ],
+    "class:UIProgressView": [
+      "src/frameworks/uikit/ui_view/ui_table_view.rs"
+    ],
+    "class:UIRefreshControl": [
+      "src/frameworks/uikit/ui_view/ui_refresh_control.rs"
+    ],
+    "class:UIRotationGestureRecognizer": [
+      "src/frameworks/uikit/ui_rotation_gesture_recognizer.rs"
+    ],
+    "class:UIRuntimeOutletCollectionConnection": [
+      "src/frameworks/uikit/ui_nib.rs"
+    ],
+    "class:UISearchBar": [
+      "src/frameworks/uikit/ui_search_bar.rs"
+    ],
+    "class:UISplitViewController": [
+      "src/frameworks/uikit/ui_split_view_controller.rs"
+    ],
+    "class:UIStoryboard": [
+      "src/frameworks/uikit/ui_storyboard.rs"
+    ],
+    "class:UIStoryboardPlaceholder": [
+      "src/frameworks/uikit/ui_storyboard.rs"
+    ],
+    "class:UIStoryboardSegue": [
+      "src/frameworks/uikit/ui_storyboard.rs"
+    ],
+    "class:UISwipeGestureRecognizer": [
+      "src/frameworks/uikit/ui_gesture_recognizer.rs"
+    ],
+    "class:UITabBar": [
+      "src/frameworks/uikit/ui_tab_bar_controller.rs"
+    ],
+    "class:UITabBarController": [
+      "src/frameworks/uikit/ui_tab_bar_controller.rs"
+    ],
+    "class:UITabBarItem": [
+      "src/frameworks/uikit/ui_tab_bar_item.rs"
+    ],
+    "class:UITableView": [
+      "src/frameworks/uikit/ui_view/ui_table_view.rs"
+    ],
+    "class:UITableViewCell": [
+      "src/frameworks/uikit/ui_view/ui_table_view.rs"
+    ],
+    "class:UITableViewCellContentView": [
+      "src/frameworks/uikit/ui_view/ui_table_view.rs"
+    ],
+    "class:UITableViewController": [
+      "src/frameworks/uikit/ui_view/ui_table_view.rs"
+    ],
+    "class:UITapGestureRecognizer": [
+      "src/frameworks/uikit/ui_gesture_recognizer.rs"
+    ],
+    "class:UITextInputStringTokenizer": [
+      "src/frameworks/uikit/ui_text_input.rs"
+    ],
+    "class:UITextInputTraits": [
+      "src/frameworks/uikit/ui_keyboard.rs"
+    ],
+    "class:UITextPosition": [
+      "src/frameworks/uikit/ui_text_input.rs"
+    ],
+    "class:UITextRange": [
+      "src/frameworks/uikit/ui_text_input.rs"
+    ],
+    "class:UITextSelectionView": [
+      "src/frameworks/uikit/ui_view/ui_text_selection_view.rs"
+    ],
+    "class:UITraitCollection": [
+      "src/frameworks/uikit/ui_screen.rs"
+    ],
+    "class:UIUserNotificationSettings": [
+      "src/frameworks/uikit/ui_application.rs"
+    ],
+    "class:VideoViewController": [
+      "src/frameworks/uikit/ui_view_controller.rs"
+    ],
+    "class:WCSession": [
+      "src/frameworks/watch_connectivity.rs"
+    ],
+    "class:WCSessionFile": [
+      "src/frameworks/watch_connectivity.rs"
+    ],
+    "class:WCSessionFileTransfer": [
+      "src/frameworks/watch_connectivity.rs"
+    ],
+    "class:WCSessionUserInfoTransfer": [
+      "src/frameworks/watch_connectivity.rs"
+    ],
+    "class:_UILayoutGuide": [
+      "src/frameworks/uikit/ui_layout_placeholders.rs"
+    ],
+    "class:_UILayoutSupportConstraint": [
+      "src/frameworks/uikit/ui_layout_placeholders.rs"
+    ],
+    "class:_touchHLE_CFHTTPMessage": [
+      "src/frameworks/cf_http_message.rs"
+    ],
+    "class:_touchHLE_CFHost": [
+      "src/frameworks/core_foundation/cf_host.rs"
+    ],
+    "class:_touchHLE_CFReadStream": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "class:_touchHLE_CFRunLoopSource": [
+      "src/frameworks/core_foundation/cf_run_loop.rs"
+    ],
+    "class:_touchHLE_CFSocket": [
+      "src/frameworks/core_foundation/cf_socket.rs"
+    ],
+    "class:_touchHLE_CFWriteStream": [
+      "src/frameworks/core_foundation/cf_stream.rs"
+    ],
+    "class:_touchHLE_CGLayer": [
+      "src/frameworks/core_graphics/cg_layer.rs"
+    ],
+    "class:_touchHLE_CGPath": [
+      "src/frameworks/core_graphics/cg_path.rs"
+    ],
+    "class:_touchHLE_CGPattern": [
+      "src/frameworks/core_graphics/cg_pattern.rs"
+    ],
+    "class:_touchHLE_CTFontDescriptor": [
+      "src/frameworks/core_text.rs"
+    ],
+    "class:_touchHLE_CTFrame": [
+      "src/frameworks/core_text.rs"
+    ],
+    "class:_touchHLE_CTFramesetter": [
+      "src/frameworks/core_text.rs"
+    ],
+    "class:_touchHLE_CTLine": [
+      "src/frameworks/core_text.rs"
+    ],
+    "class:_touchHLE_CTTypesetter": [
+      "src/frameworks/core_text.rs"
+    ],
+    "class:_touchHLE_DispatchAfter": [
+      "src/libc/dispatch.rs"
+    ],
+    "class:_touchHLE_NSMutableOrderedSet": [
+      "src/frameworks/foundation/ns_ordered_set.rs"
+    ],
+    "class:_touchHLE_NSOrderedSet": [
+      "src/frameworks/foundation/ns_ordered_set.rs"
+    ],
+    "class_addMethod": [
+      "src/objc.rs"
+    ],
+    "class_conformsToProtocol": [
+      "src/objc.rs"
+    ],
+    "class_copyIvarList": [
+      "src/objc.rs"
+    ],
+    "class_copyMethodList": [
+      "src/objc.rs"
+    ],
+    "class_copyPropertyList": [
+      "src/objc.rs"
+    ],
+    "class_copyProtocolList": [
+      "src/objc.rs"
+    ],
+    "class_getClassMethod": [
+      "src/objc.rs"
+    ],
+    "class_getInstanceMethod": [
+      "src/objc.rs"
+    ],
+    "class_getInstanceVariable": [
+      "src/objc.rs"
+    ],
+    "class_getMethodImplementation_stret": [
+      "src/objc.rs"
+    ],
+    "class_getName": [
+      "src/objc.rs"
+    ],
+    "class_isMetaClass": [
+      "src/objc.rs"
+    ],
+    "class_respondsToSelector": [
+      "src/objc.rs"
+    ],
+    "class_setSuperclass": [
+      "src/objc.rs"
+    ],
+    "clock_get_attributes": [
+      "src/libc/mach/host.rs"
+    ],
+    "clock_get_time": [
+      "src/libc/mach/host.rs"
+    ],
+    "coshl": [
+      "src/libc/math.rs"
+    ],
+    "cosl": [
+      "src/libc/math.rs"
+    ],
+    "creat": [
+      "src/libc/posix_io.rs"
+    ],
+    "csops": [
+      "src/libc/codesign.rs"
+    ],
+    "ctime": [
+      "src/libc/time.rs"
+    ],
+    "cxxabi_throw_intercept": [
+      "src/dyld.rs"
+    ],
+    "dirname": [
+      "src/libc/stdlib.rs"
+    ],
+    "dispatch_after_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_apply": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_apply_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_async_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_barrier_async": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_barrier_async_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_barrier_sync": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_barrier_sync_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_debug": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_get_context": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_get_current_queue": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_get_main_queue": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_get_specific": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_group_async_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_group_enter": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_group_leave": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_group_notify": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_group_notify_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_main": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_once_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_queue_attr_make_with_qos_class": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_queue_create": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_queue_get_label": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_queue_get_specific": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_queue_release": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_queue_retain": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_queue_set_specific": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_set_context": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_set_finalizer_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_set_target_queue": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_source_get_data": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_source_get_handle": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_source_get_mask": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_source_merge_data": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_source_set_cancel_handler_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_source_set_event_handler_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_source_testcancel": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_sync_f": [
+      "src/libc/dispatch.rs"
+    ],
+    "dispatch_walltime": [
+      "src/libc/dispatch.rs"
+    ],
+    "dladdr": [
+      "src/libc/dlfcn.rs"
+    ],
+    "dlerror": [
+      "src/libc/dlfcn.rs"
+    ],
+    "drand48": [
+      "src/libc/stdlib.rs"
+    ],
+    "drem": [
+      "src/libc/math.rs"
+    ],
+    "dremf": [
+      "src/libc/math.rs"
+    ],
+    "duplocale": [
+      "src/libc/clocale.rs"
+    ],
+    "dyld_stub_binder": [
+      "src/dyld.rs"
+    ],
+    "ecvt": [
+      "src/libc/stdlib.rs"
+    ],
+    "erand48": [
+      "src/libc/stdlib.rs"
+    ],
+    "exp2l": [
+      "src/libc/math.rs"
+    ],
+    "expl": [
+      "src/libc/math.rs"
+    ],
+    "explicit_bzero": [
+      "src/libc/string.rs"
+    ],
+    "expm1l": [
+      "src/libc/math.rs"
+    ],
+    "fabsl": [
+      "src/libc/math.rs"
+    ],
+    "fchmod": [
+      "src/libc/unistd.rs"
+    ],
+    "fdim": [
+      "src/libc/math.rs"
+    ],
+    "fdimf": [
+      "src/libc/math.rs"
+    ],
+    "fegetenv": [
+      "src/libc/math.rs"
+    ],
+    "fesetenv": [
+      "src/libc/math.rs"
+    ],
+    "fgetxattr": [
+      "src/libc/stdlib.rs"
+    ],
+    "flistxattr": [
+      "src/libc/stdlib.rs"
+    ],
+    "floorl": [
+      "src/libc/math.rs"
+    ],
+    "fma": [
+      "src/libc/math.rs"
+    ],
+    "fmaf": [
+      "src/libc/math.rs"
+    ],
+    "fmal": [
+      "src/libc/math.rs"
+    ],
+    "fmaxl": [
+      "src/libc/math.rs"
+    ],
+    "fminl": [
+      "src/libc/math.rs"
+    ],
+    "fmodl": [
+      "src/libc/math.rs"
+    ],
+    "fork": [
+      "src/libc/unistd.rs"
+    ],
+    "freehostent": [
+      "src/libc/netdb.rs"
+    ],
+    "freelocale": [
+      "src/libc/clocale.rs"
+    ],
+    "fremovexattr": [
+      "src/libc/stdlib.rs"
+    ],
+    "freopen": [
+      "src/libc/stdio.rs"
+    ],
+    "frexpl": [
+      "src/libc/math.rs"
+    ],
+    "fsetxattr": [
+      "src/libc/stdlib.rs"
+    ],
+    "gai_strerror": [
+      "src/libc/netdb.rs"
+    ],
+    "gcvt": [
+      "src/libc/stdlib.rs"
+    ],
+    "getegid": [
+      "src/libc/unistd.rs"
+    ],
+    "gethostbyaddr": [
+      "src/libc/netdb.rs"
+    ],
+    "gethostbyname2": [
+      "src/libc/netdb.rs"
+    ],
+    "getipnodebyname": [
+      "src/libc/netdb.rs"
+    ],
+    "getloadavg": [
+      "src/libc/stdlib.rs"
+    ],
+    "getnameinfo": [
+      "src/libc/netdb.rs"
+    ],
+    "getpeername": [
+      "src/libc/socket.rs",
+      "src/libc/sys/socket.rs"
+    ],
+    "getpwuid_r": [
+      "src/libc/pwd.rs"
+    ],
+    "getrlimit": [
+      "src/libc/sys/resource.rs"
+    ],
+    "getrusage": [
+      "src/libc/time.rs"
+    ],
+    "getservbyname": [
+      "src/libc/netdb.rs"
+    ],
+    "getservbyport": [
+      "src/libc/netdb.rs"
+    ],
+    "getwc": [
+      "src/libc/wchar.rs"
+    ],
+    "getwchar": [
+      "src/libc/wchar.rs"
+    ],
+    "getxattr": [
+      "src/libc/stdlib.rs"
+    ],
+    "glBeginQuery": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBeginQueryEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBeginTransformFeedback": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBindBufferBase": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBindBufferRange": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBindFramebuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBindRenderbuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBindSampler": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBindTransformFeedback": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBindVertexArray": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBlendEquation": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glBlitFramebuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glCheckFramebufferStatus": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glClearBufferfi": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glClearBufferfv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glClearBufferiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glClearBufferuiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glClientWaitSync": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glClientWaitSyncAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glCompressedTexImage3D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glCompressedTexSubImage2D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glCompressedTexSubImage3D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glCopyBufferSubData": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glCopyTexSubImage3D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteFramebuffers": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteQueries": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteQueriesEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteRenderbuffers": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteSamplers": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteSync": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteSyncAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteTransformFeedbacks": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDeleteVertexArrays": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDetachShader": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawArraysInstanced": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawBuffers": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawElementsInstanced": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawRangeElements": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawTexfOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawTexfvOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawTexiOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawTexivOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawTexsOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawTexsvOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawTexxOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glDrawTexxvOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glEndQuery": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glEndQueryEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glEndTransformFeedback": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glFenceSync": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glFenceSyncAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glFlushMappedBufferRange": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glFramebufferRenderbuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glFramebufferTexture2D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glFramebufferTextureLayer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGenFramebuffers": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGenQueries": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGenQueriesEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGenRenderbuffers": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGenSamplers": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGenTransformFeedbacks": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGenVertexArrays": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGenerateMipmap": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetActiveAttrib": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetActiveUniform": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetActiveUniformBlockName": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetActiveUniformBlockiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetActiveUniformsiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetBufferParameteri64v": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetBufferPointerv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetBufferPointervOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetClipPlanef": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetClipPlanex": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetFragDataLocation": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetFramebufferAttachmentParameteriv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetInteger64i_v": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetInteger64v": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetInteger64vAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetIntegeri_v": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetInternalformativ": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetLightfv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetLightxv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetMaterialfv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetMaterialxv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetObjectLabelEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetProgramBinary": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetQueryObjectuiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetQueryObjectuivEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetQueryiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetQueryivEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetRenderbufferParameteriv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetSamplerParameterfv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetSamplerParameteriv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetShaderPrecisionFormat": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetShaderSource": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetStringi": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetSynciv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetSyncivAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetTexEnvxv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetTexParameterfv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetTexParameteriv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetTexParameterxv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetTransformFeedbackVarying": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetUniformBlockIndex": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetUniformIndices": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetUniformuiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetVertexAttribIiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetVertexAttribIuiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetVertexAttribPointerv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetVertexAttribfv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glGetVertexAttribiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glInvalidateFramebuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glInvalidateSubFramebuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsFramebuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsProgram": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsQuery": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsQueryEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsRenderbuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsSampler": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsShader": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsSync": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsSyncAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsTransformFeedback": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsVertexArray": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glIsVertexArrayOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glLabelObjectEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glMapBufferRange": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glPauseTransformFeedback": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glPointSizePointerOES": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glPopGroupMarkerEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glProgramBinary": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glProgramParameteri": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glPushGroupMarkerEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glReadBuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glReleaseShaderCompiler": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glRenderbufferStorage": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glRenderbufferStorageMultisample": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glRenderbufferStorageMultisampleAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glResolveMultisampleFramebufferAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glResumeTransformFeedback": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glSamplerParameterf": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glSamplerParameterfv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glSamplerParameteri": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glSamplerParameteriv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glShaderBinary": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glStencilFuncSeparate": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glStencilMaskSeparate": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glStencilOpSeparate": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glTexImage3D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glTexStorage2D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glTexStorage2DEXT": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glTexStorage3D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glTexSubImage3D": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glTransformFeedbackVaryings": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform1f": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform1ui": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform1uiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform2f": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform2i": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform2ui": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform2uiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform3f": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform3i": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform3ui": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform3uiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform4f": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform4i": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform4ui": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniform4uiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniformBlockBinding": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniformMatrix2x3fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniformMatrix2x4fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniformMatrix3x2fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniformMatrix3x4fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniformMatrix4x2fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUniformMatrix4x3fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glUnmapBuffer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttrib1f": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttrib1fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttrib2f": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttrib2fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttrib3f": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttrib3fv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttrib4f": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttribDivisor": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttribI4i": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttribI4iv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttribI4ui": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttribI4uiv": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glVertexAttribIPointer": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glWaitSync": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "glWaitSyncAPPLE": [
+      "src/frameworks/opengles/gles_guest.rs"
+    ],
+    "host_get_clock_service": [
+      "src/libc/mach/host.rs"
+    ],
+    "host_info": [
+      "src/libc/mach_o.rs"
+    ],
+    "host_statistics64": [
+      "src/libc/mach/host.rs"
+    ],
+    "htmlDocDumpMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htmlDocDumpMemoryFormat": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htmlFreeParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htmlNewDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htmlNewParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htmlReadDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htmlReadFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htmlReadMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htmlSaveFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "htonl": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "htons": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "hypotf": [
+      "src/libc/math.rs"
+    ],
+    "hypotl": [
+      "src/libc/math.rs"
+    ],
+    "if_freenameindex": [
+      "src/libc/ifaddrs.rs"
+    ],
+    "if_indextoname": [
+      "src/libc/ifaddrs.rs"
+    ],
+    "ilogb": [
+      "src/libc/math.rs"
+    ],
+    "ilogbf": [
+      "src/libc/math.rs"
+    ],
+    "imp_implementationWithBlock": [
+      "src/objc.rs"
+    ],
+    "index": [
+      "src/libc/string.rs"
+    ],
+    "inet_aton": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "inet_lnaof": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "inet_makeaddr": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "inet_netof": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "inet_network": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "inet_ntoa": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "inflateReset2": [
+      "src/libc/stdlib.rs"
+    ],
+    "isalnum": [
+      "src/libc/ctype.rs"
+    ],
+    "isalpha": [
+      "src/libc/ctype.rs"
+    ],
+    "isblank": [
+      "src/libc/ctype.rs"
+    ],
+    "iscntrl": [
+      "src/libc/ctype.rs"
+    ],
+    "isdigit": [
+      "src/libc/ctype.rs"
+    ],
+    "isgraph": [
+      "src/libc/ctype.rs"
+    ],
+    "islower": [
+      "src/libc/ctype.rs"
+    ],
+    "isprint": [
+      "src/libc/ctype.rs"
+    ],
+    "ispunct": [
+      "src/libc/ctype.rs"
+    ],
+    "isspace": [
+      "src/libc/ctype.rs"
+    ],
+    "isupper": [
+      "src/libc/ctype.rs"
+    ],
+    "iswalnum": [
+      "src/libc/wchar.rs"
+    ],
+    "iswalpha": [
+      "src/libc/wchar.rs"
+    ],
+    "iswcntrl": [
+      "src/libc/wchar.rs"
+    ],
+    "iswdigit": [
+      "src/libc/wchar.rs"
+    ],
+    "iswlower": [
+      "src/libc/wchar.rs"
+    ],
+    "iswprint": [
+      "src/libc/wchar.rs"
+    ],
+    "iswpunct": [
+      "src/libc/wchar.rs"
+    ],
+    "iswspace": [
+      "src/libc/wchar.rs"
+    ],
+    "iswupper": [
+      "src/libc/wchar.rs"
+    ],
+    "isxdigit": [
+      "src/libc/ctype.rs"
+    ],
+    "jrand48": [
+      "src/libc/stdlib.rs"
+    ],
+    "kevent": [
+      "src/libc/stdlib.rs"
+    ],
+    "kqueue": [
+      "src/libc/stdlib.rs"
+    ],
+    "lcong48": [
+      "src/libc/stdlib.rs"
+    ],
+    "ldexpl": [
+      "src/libc/math.rs"
+    ],
+    "ldiv": [
+      "src/libc/stdlib.rs"
+    ],
+    "link": [
+      "src/libc/unistd.rs"
+    ],
+    "listxattr": [
+      "src/libc/stdlib.rs"
+    ],
+    "llrint": [
+      "src/libc/math.rs"
+    ],
+    "llrintf": [
+      "src/libc/math.rs"
+    ],
+    "llroundl": [
+      "src/libc/math.rs"
+    ],
+    "localeconv": [
+      "src/libc/clocale.rs"
+    ],
+    "localeconv_l": [
+      "src/libc/clocale.rs"
+    ],
+    "log10l": [
+      "src/libc/math.rs"
+    ],
+    "log1pl": [
+      "src/libc/math.rs"
+    ],
+    "log2l": [
+      "src/libc/math.rs"
+    ],
+    "logb": [
+      "src/libc/math.rs"
+    ],
+    "logbf": [
+      "src/libc/math.rs"
+    ],
+    "logbl": [
+      "src/libc/math.rs"
+    ],
+    "logl": [
+      "src/libc/math.rs"
+    ],
+    "lrand48": [
+      "src/libc/stdlib.rs"
+    ],
+    "lroundl": [
+      "src/libc/math.rs"
+    ],
+    "mach_error_string": [
+      "src/libc/mach/error.rs"
+    ],
+    "mach_port_destroy": [
+      "src/libc/mach/mach_port.rs"
+    ],
+    "mach_port_mod_refs": [
+      "src/libc/mach/mach_port.rs"
+    ],
+    "mach_wait_until": [
+      "src/libc/mach/time.rs"
+    ],
+    "malloc_zone_from_ptr": [
+      "src/libc/malloc.rs"
+    ],
+    "malloc_zone_memalign": [
+      "src/libc/malloc.rs"
+    ],
+    "mbsrtowcs": [
+      "src/libc/wchar.rs"
+    ],
+    "mbsrtowcs_l": [
+      "src/libc/wchar.rs"
+    ],
+    "mbtowc": [
+      "src/libc/wchar.rs"
+    ],
+    "mbtowc_l": [
+      "src/libc/stdlib.rs"
+    ],
+    "memmem": [
+      "src/libc/string.rs"
+    ],
+    "memrchr": [
+      "src/libc/string.rs"
+    ],
+    "method_copyArgumentType": [
+      "src/objc.rs"
+    ],
+    "method_copyReturnType": [
+      "src/objc.rs"
+    ],
+    "method_exchangeImplementations": [
+      "src/objc.rs"
+    ],
+    "method_getArgumentType": [
+      "src/objc.rs"
+    ],
+    "method_getImplementation": [
+      "src/objc.rs"
+    ],
+    "method_getName": [
+      "src/objc.rs"
+    ],
+    "method_getNumberOfArguments": [
+      "src/objc.rs"
+    ],
+    "method_getReturnType": [
+      "src/objc.rs"
+    ],
+    "method_getTypeEncoding": [
+      "src/objc.rs"
+    ],
+    "method_setImplementation": [
+      "src/objc.rs"
+    ],
+    "mkdtemp": [
+      "src/libc/stdlib.rs"
+    ],
+    "mkstemp": [
+      "src/libc/stdlib.rs"
+    ],
+    "mktemp": [
+      "src/libc/stdlib.rs"
+    ],
+    "mlock": [
+      "src/libc/mmap.rs"
+    ],
+    "modfl": [
+      "src/libc/math.rs"
+    ],
+    "mrand48": [
+      "src/libc/stdlib.rs"
+    ],
+    "msync": [
+      "src/libc/mmap.rs"
+    ],
+    "munlock": [
+      "src/libc/mmap.rs"
+    ],
+    "nanf": [
+      "src/libc/math.rs"
+    ],
+    "nearbyint": [
+      "src/libc/math.rs"
+    ],
+    "nearbyintf": [
+      "src/libc/math.rs"
+    ],
+    "nearbyintl": [
+      "src/libc/math.rs"
+    ],
+    "newlocale": [
+      "src/libc/clocale.rs"
+    ],
+    "nl_langinfo": [
+      "src/libc/clocale.rs"
+    ],
+    "nl_langinfo_l": [
+      "src/libc/clocale.rs"
+    ],
+    "nrand48": [
+      "src/libc/stdlib.rs"
+    ],
+    "ntohl": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "ntohs": [
+      "src/libc/arpa/inet.rs"
+    ],
+    "objc_alloc": [
+      "src/objc.rs"
+    ],
+    "objc_allocWithZone": [
+      "src/objc.rs"
+    ],
+    "objc_allocateClassPair": [
+      "src/objc.rs"
+    ],
+    "objc_autorelease": [
+      "src/objc.rs"
+    ],
+    "objc_autoreleaseReturnValue": [
+      "src/objc.rs"
+    ],
+    "objc_begin_catch": [
+      "src/objc.rs"
+    ],
+    "objc_copyClassList": [
+      "src/objc.rs"
+    ],
+    "objc_copyClassNamesForImage": [
+      "src/objc.rs"
+    ],
+    "objc_copyImageNames": [
+      "src/objc.rs"
+    ],
+    "objc_copyWeak": [
+      "src/objc/weak.rs"
+    ],
+    "objc_destroyWeak": [
+      "src/objc/weak.rs"
+    ],
+    "objc_disposeClassPair": [
+      "src/objc.rs"
+    ],
+    "objc_end_catch": [
+      "src/objc.rs"
+    ],
+    "objc_getAssociatedObject": [
+      "src/objc.rs"
+    ],
+    "objc_getClassList": [
+      "src/objc.rs"
+    ],
+    "objc_getMetaClass": [
+      "src/objc.rs"
+    ],
+    "objc_getProtocol": [
+      "src/objc.rs"
+    ],
+    "objc_getRequiredClass": [
+      "src/objc.rs"
+    ],
+    "objc_initWeak": [
+      "src/objc/weak.rs"
+    ],
+    "objc_loadWeak": [
+      "src/objc/weak.rs"
+    ],
+    "objc_loadWeakRetained": [
+      "src/objc/weak.rs"
+    ],
+    "objc_lookUpClass": [
+      "src/objc.rs"
+    ],
+    "objc_moveWeak": [
+      "src/objc/weak.rs"
+    ],
+    "objc_msgSendSuper2_stret": [
+      "src/objc.rs"
+    ],
+    "objc_readClassPair": [
+      "src/objc.rs"
+    ],
+    "objc_registerClassPair": [
+      "src/objc.rs"
+    ],
+    "objc_release": [
+      "src/objc.rs"
+    ],
+    "objc_removeAssociatedObjects": [
+      "src/objc.rs"
+    ],
+    "objc_retain": [
+      "src/objc.rs"
+    ],
+    "objc_retainAutorelease": [
+      "src/objc.rs"
+    ],
+    "objc_retainAutoreleaseReturnValue": [
+      "src/objc.rs"
+    ],
+    "objc_retainAutoreleasedReturnValue": [
+      "src/objc.rs"
+    ],
+    "objc_retainBlock": [
+      "src/objc.rs"
+    ],
+    "objc_setAssociatedObject": [
+      "src/objc.rs"
+    ],
+    "objc_storeStrong": [
+      "src/objc.rs"
+    ],
+    "objc_storeWeak": [
+      "src/objc/weak.rs"
+    ],
+    "objc_storeWeakOrNil": [
+      "src/objc/weak.rs"
+    ],
+    "objc_unsafeClaimAutoreleasedReturnValue": [
+      "src/objc.rs"
+    ],
+    "object_getClassName": [
+      "src/objc.rs"
+    ],
+    "object_getIndexedIvars": [
+      "src/objc.rs"
+    ],
+    "object_getIvar": [
+      "src/objc.rs"
+    ],
+    "object_setIvar": [
+      "src/objc.rs"
+    ],
+    "open_dprotected_np": [
+      "src/libc/posix_io.rs"
+    ],
+    "pipe": [
+      "src/libc/unistd.rs"
+    ],
+    "poll": [
+      "src/libc/posix_io.rs"
+    ],
+    "powl": [
+      "src/libc/math.rs"
+    ],
+    "property_getAttributes": [
+      "src/objc.rs"
+    ],
+    "property_getName": [
+      "src/objc.rs"
+    ],
+    "protocol_conformsToProtocol": [
+      "src/objc.rs"
+    ],
+    "protocol_getMethodDescription": [
+      "src/objc.rs"
+    ],
+    "protocol_getName": [
+      "src/objc.rs"
+    ],
+    "pthread_attr_setscope": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_attr_setstack": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_attr_setstackaddr": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_cancel": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_cond_timedwait_relative_np": [
+      "src/libc/pthread/cond.rs"
+    ],
+    "pthread_condattr_destroy": [
+      "src/libc/pthread/cond.rs"
+    ],
+    "pthread_condattr_getclock": [
+      "src/libc/pthread/cond.rs"
+    ],
+    "pthread_condattr_getpshared": [
+      "src/libc/pthread/cond.rs"
+    ],
+    "pthread_condattr_init": [
+      "src/libc/pthread/cond.rs"
+    ],
+    "pthread_condattr_setclock": [
+      "src/libc/pthread/cond.rs"
+    ],
+    "pthread_condattr_setpshared": [
+      "src/libc/pthread/cond.rs"
+    ],
+    "pthread_create_suspended_np": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_exit": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_getname_np": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_kill": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_mutex_unlock": [
+      "src/libc/pthread/mutex.rs"
+    ],
+    "pthread_mutexattr_getprioceiling": [
+      "src/libc/pthread/mutex.rs"
+    ],
+    "pthread_mutexattr_getprotocol": [
+      "src/libc/pthread/mutex.rs"
+    ],
+    "pthread_mutexattr_gettype": [
+      "src/libc/pthread/mutex.rs"
+    ],
+    "pthread_mutexattr_setprioceiling": [
+      "src/libc/pthread/mutex.rs"
+    ],
+    "pthread_mutexattr_setprotocol": [
+      "src/libc/pthread/mutex.rs"
+    ],
+    "pthread_rwlock_destroy": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlock_init": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlock_rdlock": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlock_tryrdlock": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlock_trywrlock": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlock_unlock": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlock_wrlock": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlockattr_destroy": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlockattr_getpshared": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlockattr_init": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_rwlockattr_setpshared": [
+      "src/libc/pthread/rwlock.rs"
+    ],
+    "pthread_setcancelstate": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_setname_np": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_sigmask": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_threadid_np": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "putenv": [
+      "src/libc/stdlib.rs"
+    ],
+    "putwc": [
+      "src/libc/wchar.rs"
+    ],
+    "putwchar": [
+      "src/libc/wchar.rs"
+    ],
+    "quick_exit": [
+      "src/libc/stdlib.rs"
+    ],
+    "raise": [
+      "src/libc/signal.rs"
+    ],
+    "readdir_r": [
+      "src/libc/dirent.rs"
+    ],
+    "reallocf": [
+      "src/libc/stdlib.rs"
+    ],
+    "remainder": [
+      "src/libc/math.rs"
+    ],
+    "remainderf": [
+      "src/libc/math.rs"
+    ],
+    "remainderl": [
+      "src/libc/math.rs"
+    ],
+    "removexattr": [
+      "src/libc/stdlib.rs"
+    ],
+    "remquo": [
+      "src/libc/math.rs"
+    ],
+    "remquof": [
+      "src/libc/math.rs"
+    ],
+    "res_9_nclose": [
+      "src/libc/resolv.rs"
+    ],
+    "res_9_ndestroy": [
+      "src/libc/resolv.rs"
+    ],
+    "res_9_ninit": [
+      "src/libc/resolv.rs"
+    ],
+    "rewinddir": [
+      "src/libc/dirent.rs"
+    ],
+    "rintf": [
+      "src/libc/math.rs"
+    ],
+    "rintl": [
+      "src/libc/math.rs"
+    ],
+    "rmdir": [
+      "src/libc/unistd.rs"
+    ],
+    "roundl": [
+      "src/libc/math.rs"
+    ],
+    "sbrk": [
+      "src/libc/unistd.rs"
+    ],
+    "scalbln": [
+      "src/libc/math.rs"
+    ],
+    "scalblnf": [
+      "src/libc/math.rs"
+    ],
+    "scalbn": [
+      "src/libc/math.rs"
+    ],
+    "scalbnf": [
+      "src/libc/math.rs"
+    ],
+    "seed48": [
+      "src/libc/stdlib.rs"
+    ],
+    "sel_getName": [
+      "src/objc.rs"
+    ],
+    "sel_getUid": [
+      "src/objc.rs"
+    ],
+    "sel_isEqual": [
+      "src/objc.rs"
+    ],
+    "sem_getvalue": [
+      "src/libc/semaphore.rs"
+    ],
+    "semaphore_signal_all": [
+      "src/libc/mach/semaphore.rs"
+    ],
+    "semaphore_signal_thread": [
+      "src/libc/mach/semaphore.rs"
+    ],
+    "semaphore_timedwait": [
+      "src/libc/mach/semaphore.rs"
+    ],
+    "semaphore_timedwait_signal": [
+      "src/libc/mach/semaphore.rs"
+    ],
+    "semaphore_trywait": [
+      "src/libc/mach/semaphore.rs"
+    ],
+    "semaphore_wait_signal": [
+      "src/libc/mach/semaphore.rs"
+    ],
+    "setpriority": [
+      "src/libc/unistd.rs"
+    ],
+    "setrlimit": [
+      "src/libc/sys/resource.rs"
+    ],
+    "setvbuf": [
+      "src/libc/stdio.rs"
+    ],
+    "shm_unlink": [
+      "src/libc/mmap.rs"
+    ],
+    "sigaltstack": [
+      "src/libc/signal.rs"
+    ],
+    "sincos": [
+      "src/libc/math.rs"
+    ],
+    "sincosf": [
+      "src/libc/math.rs"
+    ],
+    "sinhl": [
+      "src/libc/math.rs"
+    ],
+    "sinl": [
+      "src/libc/math.rs"
+    ],
+    "snprintf_l": [
+      "src/libc/stdio/printf.rs"
+    ],
+    "sprintf_l": [
+      "src/libc/stdio/printf.rs"
+    ],
+    "sqlite3_bind_blob": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_bind_double": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_bind_int": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_bind_int64": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_bind_null": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_bind_text": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_busy_timeout": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_changes": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_clear_bindings": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_close": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_close_v2": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_blob": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_bytes": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_count": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_double": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_int": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_int64": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_name": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_text": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_column_type": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_data_count": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_errcode": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_errmsg": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_exec": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_finalize": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_free": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_last_insert_rowid": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_open": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_open_v2": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_prepare": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_prepare_v2": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_reset": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqlite3_step": [
+      "src/frameworks/libsqlite3.rs"
+    ],
+    "sqrtl": [
+      "src/libc/math.rs"
+    ],
+    "srand48": [
+      "src/libc/stdlib.rs"
+    ],
+    "stpcpy": [
+      "src/libc/string.rs"
+    ],
+    "stpncpy": [
+      "src/libc/string.rs"
+    ],
+    "strcasestr": [
+      "src/libc/string.rs"
+    ],
+    "strchrnul": [
+      "src/libc/string.rs"
+    ],
+    "strerror_r": [
+      "src/libc/string.rs"
+    ],
+    "strfry": [
+      "src/libc/string.rs"
+    ],
+    "strftime_l": [
+      "src/libc/time.rs"
+    ],
+    "strlcat": [
+      "src/libc/string.rs"
+    ],
+    "strndup": [
+      "src/libc/string.rs"
+    ],
+    "strnlen": [
+      "src/libc/string.rs"
+    ],
+    "strtod_l": [
+      "src/libc/stdlib.rs"
+    ],
+    "strtof_l": [
+      "src/libc/stdlib.rs"
+    ],
+    "strtok_r": [
+      "src/libc/string.rs"
+    ],
+    "strtold": [
+      "src/libc/stdlib.rs"
+    ],
+    "strtold_l": [
+      "src/libc/stdlib.rs"
+    ],
+    "strtoll": [
+      "src/libc/stdlib.rs"
+    ],
+    "strtoll_l": [
+      "src/libc/stdlib.rs"
+    ],
+    "strtoull_l": [
+      "src/libc/stdlib.rs"
+    ],
+    "strverscmp": [
+      "src/libc/string.rs"
+    ],
+    "swift_getInitializedObjCClass": [
+      "src/objc.rs"
+    ],
+    "symlink": [
+      "src/libc/unistd.rs"
+    ],
+    "sync": [
+      "src/libc/unistd.rs"
+    ],
+    "syscall": [
+      "src/libc/unistd.rs"
+    ],
+    "tanhl": [
+      "src/libc/math.rs"
+    ],
+    "tanl": [
+      "src/libc/math.rs"
+    ],
+    "task_get_exception_ports": [
+      "src/libc/mach/arm/task.rs"
+    ],
+    "task_swap_exception_ports": [
+      "src/libc/mach/arm/task.rs"
+    ],
+    "tolower": [
+      "src/libc/ctype.rs"
+    ],
+    "toupper": [
+      "src/libc/ctype.rs"
+    ],
+    "towlower": [
+      "src/libc/wchar.rs"
+    ],
+    "towupper": [
+      "src/libc/wchar.rs"
+    ],
+    "truncl": [
+      "src/libc/math.rs"
+    ],
+    "ungetwc": [
+      "src/libc/wchar.rs"
+    ],
+    "uregex_close": [
+      "src/frameworks/libicucore.rs"
+    ],
+    "uregex_end": [
+      "src/frameworks/libicucore.rs"
+    ],
+    "uregex_find": [
+      "src/frameworks/libicucore.rs"
+    ],
+    "uregex_groupCount": [
+      "src/frameworks/libicucore.rs"
+    ],
+    "uregex_open": [
+      "src/frameworks/libicucore.rs"
+    ],
+    "uregex_setText": [
+      "src/frameworks/libicucore.rs"
+    ],
+    "uregex_start": [
+      "src/frameworks/libicucore.rs"
+    ],
+    "uselocale": [
+      "src/libc/clocale.rs"
+    ],
+    "uuid_clear": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_compare": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_copy": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_generate": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_generate_random": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_generate_time": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_is_null": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_parse": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_unparse": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_unparse_lower": [
+      "src/libc/uuid.rs"
+    ],
+    "uuid_unparse_upper": [
+      "src/libc/uuid.rs"
+    ],
+    "vDSP_create_fftsetup": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_ctoz": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_destroy_fftsetup": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_dotpr": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_fft_zip": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_fft_zop": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_fft_zrip": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_maxv": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_meanv": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_minv": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_normalize": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_rmsqv": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_sve": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_svesq": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vabs": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vadd": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vclr": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vdist": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vdiv": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vfill": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vintb": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vma": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vmax": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vmin": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vmul": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vneg": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vsadd": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vsdiv": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vsmul": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_vsub": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_ztoc": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vDSP_zvmags": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vImageConvert_AnyToAny": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vImageCopyBuffer": [
+      "src/frameworks/accelerate.rs"
+    ],
+    "vm_protect": [
+      "src/libc/mach/vm_map.rs"
+    ],
+    "vm_read_overwrite": [
+      "src/libc/mach/vm_map.rs"
+    ],
+    "vm_region_recurse": [
+      "src/libc/mach/vm_map.rs"
+    ],
+    "vm_remap": [
+      "src/libc/mach/vm_map.rs"
+    ],
+    "vsnprintf_l": [
+      "src/libc/stdio/printf.rs"
+    ],
+    "vsprintf_l": [
+      "src/libc/stdio/printf.rs"
+    ],
+    "vwprintf": [
+      "src/libc/stdio/printf.rs"
+    ],
+    "wcscasecmp": [
+      "src/libc/wchar.rs"
+    ],
+    "wcslcat": [
+      "src/libc/wchar.rs"
+    ],
+    "wcsncasecmp": [
+      "src/libc/wchar.rs"
+    ],
+    "wcstod": [
+      "src/libc/wchar.rs"
+    ],
+    "wcstof": [
+      "src/libc/wchar.rs"
+    ],
+    "wcstok": [
+      "src/libc/wchar.rs"
+    ],
+    "wcswidth": [
+      "src/libc/wchar.rs"
+    ],
+    "wctomb": [
+      "src/libc/wchar.rs"
+    ],
+    "wcwidth": [
+      "src/libc/wchar.rs"
+    ],
+    "wprintf": [
+      "src/libc/stdio/printf.rs"
+    ],
+    "xmlAddChild": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlAddNextSibling": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlAddPrevSibling": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlAddSibling": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlAttrName": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlAttrNext": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBufferAdd": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBufferCat": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBufferContent": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBufferCreate": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBufferCreateSize": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBufferEmpty": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBufferFree": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBufferLength": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBuildRelativeURI": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlBuildURI": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCanonicPath": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCatalogCleanup": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCatalogResolvePublic": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCatalogResolveSystem": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCatalogResolveURI": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCharStrdup": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCheckVersion": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlChildElementCount": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlChildrenNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCleanupMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCleanupParser": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlClearParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCopyNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCreatePushParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCtxtGetLastError": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCtxtReadDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCtxtReadFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCtxtReadMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCtxtReset": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlCtxtResetLastError": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlDocCopyNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlDocDumpFormatMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlDocDumpFormatMemoryEnc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlDocDumpMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlDocDumpMemoryEnc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlDocGetRootElement": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlDocSetRootElement": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlEncodeEntitiesReentrant": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlEncodeSpecialChars": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlErrorGetCode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlErrorGetFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlErrorGetLevel": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlErrorGetLine": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlErrorGetMessage": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFirstElementChild": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeDtd": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeImpl": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeNodeList": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeNs": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeTextReader": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeTextWriter": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeURI": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlFreeValidCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlGetLastChild": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlGetLastError": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlGetLineNo": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlGetNoNsProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlGetNodePath": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlGetNsProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlGetProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlHasNsProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlHasProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlInitMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlInitParser": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlLastElementChild": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlLoadCatalog": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlLoadCatalogs": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlMemoryDump": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewCDataBlock": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewChild": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewComment": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewDocNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewDocText": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewDtd": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewNs": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewNsProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewText": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewTextChild": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewTextWriterDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewTextWriterMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNewValidCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNextElementSibling": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeAddContent": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeGetContent": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeGetDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeGetName": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeGetNext": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeGetParent": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeGetPrev": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeGetProperties": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeGetType": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeListGetString": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeSetContent": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlNodeSetName": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlParseChunk": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlParseDTD": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlParseDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlParseFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlParseMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlParseURI": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlPreviousElementSibling": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlReadDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlReadFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlReadMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlReaderForDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlReaderForFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlReaderForMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlRelaxNGFree": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlRelaxNGFreeParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlRelaxNGFreeValidCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlRelaxNGNewMemParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlRelaxNGNewParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlRelaxNGNewValidCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlRelaxNGParse": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlRelaxNGValidateDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlReplaceNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlResetLastError": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSAXUserParseMemory": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSaveFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSaveFileEnc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSaveFormatFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSaveFormatFileEnc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSaveUri": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaFree": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaFreeParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaFreeValidCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaNewMemParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaNewParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaNewValidCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaParse": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaValidateDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaValidateFile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchemaValidateOneElement": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchematronFree": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchematronFreeParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchematronFreeValidCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchematronNewMemParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchematronNewParserCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchematronNewValidCtxt": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchematronParse": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSchematronValidateDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSearchNs": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSearchNsByHref": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSetNs": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSetNsProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlSetProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrEqual": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrcasecmp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrcat": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrchr": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrcmp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrdup": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrlen": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrncasecmp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrncat": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrncmp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrndup": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrstr": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlStrsub": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderAttributeCount": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderClose": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderConstLocalName": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderConstName": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderConstNamespaceUri": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderConstPrefix": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderConstValue": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderCurrentDoc": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderCurrentNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderDepth": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderExpand": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderGetAttribute": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderGetAttributeNo": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderGetAttributeNs": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderHasAttributes": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderHasValue": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderIsEmptyElement": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderLocalName": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderMoveToAttribute": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderMoveToElement": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderMoveToFirstAttribute": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderMoveToNextAttribute": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderName": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderNamespaceUri": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderNext": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderNextSibling": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderNodeType": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderPrefix": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderRead": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderReadInnerXml": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderReadOuterXml": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderReadString": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextReaderValue": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterEndDocument": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterEndElement": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterFlush": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterFullEndElement": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterSetIndent": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterSetIndentString": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterStartDocument": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterStartElement": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterStartElementNS": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterWriteAttribute": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterWriteAttributeNS": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterWriteCDATA": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterWriteComment": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterWritePI": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterWriteRaw": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlTextWriterWriteString": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlURIEscape": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlURIEscapeStr": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlUnlinkNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlUnsetNsProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlUnsetProp": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlValidateDocument": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlValidateDtd": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXIncludeProcess": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXIncludeProcessFlags": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXIncludeProcessTree": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXIncludeProcessTreeFlags": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathCastToBoolean": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathCastToNumber": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathCastToString": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathCompile": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathCompiledEval": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathEval": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathEvalExpression": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathFreeCompExpr": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathFreeContext": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathFreeObject": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathNewContext": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathObjectGetBool": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathObjectGetFloat": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathObjectGetNodeSetItem": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathObjectGetNodeSetSize": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathObjectGetString": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathObjectGetType": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathRegisterNs": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPathSetContextNode": [
+      "src/frameworks/libxml2.rs"
+    ],
+    "xmlXPtrEval": [
+      "src/frameworks/libxml2.rs"
+    ]
+  },
+  "uf": {
+    "CGContextClip": [
+      "src/frameworks/core_graphics/cg_context.rs"
+    ],
+    "CTFontDrawGlyphs": [
+      "src/frameworks/core_text.rs"
+    ],
+    "__srget": [
+      "src/libc/stdio.rs"
+    ],
+    "class:AVAudioMix": [
+      "src/frameworks/avfoundation/av_player.rs"
+    ],
+    "class:AVAudioMixInputParameters": [
+      "src/frameworks/avfoundation/av_player.rs"
+    ],
+    "class:GCControllerAxisInput": [
+      "src/frameworks/game_controller.rs"
+    ],
+    "class:GCControllerButtonInput": [
+      "src/frameworks/game_controller.rs"
+    ],
+    "class:GCControllerDirectionPad": [
+      "src/frameworks/game_controller.rs"
+    ],
+    "class:GCControllerElement": [
+      "src/frameworks/game_controller.rs"
+    ],
+    "class:GCExtendedGamepad": [
+      "src/frameworks/game_controller.rs"
+    ],
+    "class:GCGamepad": [
+      "src/frameworks/game_controller.rs"
+    ],
+    "class:GKMatch": [
+      "src/frameworks/game_kit/gk_match.rs"
+    ],
+    "class:GKMatchRequest": [
+      "src/frameworks/game_kit/gk_matchmaker.rs"
+    ],
+    "class:GKPlayer": [
+      "src/frameworks/game_kit/gk_local_player.rs"
+    ],
+    "class:MyClass": [
+      "src/objc/classes.rs"
+    ],
+    "class:SKRequest": [
+      "src/frameworks/store_kit/sk_product.rs"
+    ],
+    "class:UIBarItem": [
+      "src/frameworks/uikit/ui_bar_button_item.rs"
+    ],
+    "class:_touchHLE_MoviePlayerView": [
+      "src/frameworks/media_player/movie_player.rs"
+    ],
+    "class:_touchHLE_UIDevice_Static": [
+      "src/frameworks/uikit/ui_device.rs"
+    ],
+    "class:_touchHLE_UIView_AnimationDelegate": [
+      "src/frameworks/uikit/ui_view.rs"
+    ],
+    "objc_enumerationMutation": [
+      "src/objc.rs"
+    ],
+    "objc_exception_rethrow": [
+      "src/objc.rs"
+    ],
+    "pthread_attr_getschedparam": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_getconcurrency": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "pthread_setconcurrency": [
+      "src/libc/pthread/thread.rs"
+    ],
+    "wcsftime": [
+      "src/libc/wchar.rs"
+    ]
+  }
+}

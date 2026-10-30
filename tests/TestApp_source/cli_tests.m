@@ -10,9 +10,11 @@
 #include <CoreFoundation/CFBase.h>
 #include <CoreFoundation/CFBundle.h>
 #include <CoreFoundation/CFDictionary.h>
+#include <CoreFoundation/CFLocale.h>
 #include <CoreFoundation/CFNumber.h>
 #include <CoreFoundation/CFString.h>
 #include <CoreFoundation/CFURL.h>
+#include <CoreFoundation/CFUUID.h>
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>
@@ -37,6 +39,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <uuid/uuid.h>
 #include <wchar.h>
 
 #import "SyncTester.h"
@@ -130,6 +133,1401 @@ char *str_format(const char *format, ...) {
   vsnprintf(str, 256, format, args);
   va_end(args);
   return str;
+}
+
+// A description callback overwrites live argument registers during %@.
+int test_uuid_c_values() {
+  uuid_t value, copy;
+  uuid_string_t string;
+  const char *canonical = "550E8400-E29B-41D4-A716-446655440000";
+  if (uuid_parse(canonical, value))
+    return 1;
+  uuid_copy(copy, value);
+  if (uuid_compare(copy, value) || uuid_is_null(value))
+    return 2;
+  uuid_unparse(value, string);
+  if (strcmp(string, canonical))
+    return 3;
+  uuid_unparse_lower(value, string);
+  if (strcmp(string, "550e8400-e29b-41d4-a716-446655440000"))
+    return 4;
+  if (uuid_parse("550E8400E29B41D4A716446655440000", copy) != -1 ||
+      uuid_parse("zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz", copy) != -1 ||
+      uuid_compare(copy, value))
+    return 5;
+  uuid_generate_random(copy);
+  if ((copy[6] >> 4) != 4 || (copy[8] & 0xc0) != 0x80)
+    return 6;
+  uuid_clear(copy);
+  return uuid_is_null(copy) ? 0 : 7;
+}
+
+int test_named_semaphore_reopen() {
+  const char *name = "hyper_reopen";
+  sem_t *a = sem_open(name, O_CREAT | O_EXCL, 0600, 1);
+  if (a == SEM_FAILED)
+    return 1;
+  sem_t *b = sem_open(name, 0);
+  if (a != b)
+    return 2;
+  errno = 0;
+  if (sem_open(name, O_CREAT | O_EXCL, 0600, 1) != SEM_FAILED ||
+      errno != EEXIST)
+    return 3;
+  if (sem_wait(b) || sem_post(a))
+    return 4;
+  if (sem_close(a) || sem_unlink(name))
+    return 5;
+  errno = 0;
+  return sem_open(name, 0) == SEM_FAILED && errno == ENOENT ? 0 : 6;
+}
+
+int test_variadic_callback_snapshot() {
+  NSString *format = [NSString stringWithUTF8String:"%@ %d %d"];
+  NSString *object = [NSString stringWithUTF8String:"object"];
+  NSString *value = [NSString stringWithFormat:format, object, 17, 29];
+  return [value isEqualToString:[NSString stringWithUTF8String:"object 17 29"]]
+             ? 0
+             : 1;
+}
+
+int test_semaphore_lifecycle_and_unlink() {
+  const char *name = "uf_lifetime";
+  sem_t *old = sem_open(name, O_CREAT | O_EXCL, 0600, 2);
+  if (old == SEM_FAILED || sem_wait(old))
+    return 1;
+  errno = EDOM;
+  if (sem_close(old) || errno != EDOM)
+    return 2;
+  old = sem_open(name, 0);
+  int value = -99;
+  if (old == SEM_FAILED || sem_getvalue(old, &value) || value != 1)
+    return 3;
+  if (sem_destroy(old) != -1 || errno != EINVAL)
+    return 4;
+  if (sem_unlink(name))
+    return 5;
+  if (sem_unlink(name) != -1 || errno != ENOENT)
+    return 6;
+  if (sem_open(name, 0) != SEM_FAILED || errno != ENOENT)
+    return 7;
+  sem_t *fresh = sem_open(name, O_CREAT | O_EXCL, 0600, 7);
+  if (fresh == SEM_FAILED || fresh == old || sem_post(old))
+    return 8;
+  if (sem_getvalue(old, &value) || value != 2 || sem_getvalue(fresh, &value) ||
+      value != 7)
+    return 9;
+  if (sem_close(old) || sem_close(fresh) || sem_unlink(name))
+    return 10;
+  return 0;
+}
+
+int test_semaphore_error_boundaries() {
+  sem_t *bad[] = {NULL, SEM_FAILED};
+  int value = 123;
+  for (unsigned i = 0; i < 2; ++i) {
+    if (sem_post(bad[i]) != -1 || errno != EINVAL || sem_wait(bad[i]) != -1 ||
+        errno != EINVAL || sem_trywait(bad[i]) != -1 || errno != EINVAL ||
+        sem_close(bad[i]) != -1 || errno != EINVAL ||
+        sem_destroy(bad[i]) != -1 || errno != EINVAL ||
+        sem_getvalue(bad[i], &value) != -1 || errno != EINVAL || value != 123)
+      return 1;
+  }
+  sem_t local;
+  if (sem_init((sem_t *)1, 0, 0) != -1 || errno != EINVAL)
+    return 12;
+  if (sem_init(&local, 1, 0) != -1 || errno != ENOTSUP)
+    return 2;
+  if (sem_init(&local, 0, 0))
+    return 3;
+  if (sem_init(&local, 0, 1) != -1 || errno != EBUSY)
+    return 4;
+  if (sem_close(&local) != -1 || errno != EINVAL)
+    return 5;
+  if (sem_getvalue(&local, NULL) != -1 || errno != EFAULT)
+    return 6;
+  if (sem_trywait(&local) != -1 || errno != EAGAIN)
+    return 7;
+  errno = EDOM;
+  if (sem_post(&local) || errno != EDOM || sem_wait(&local) || errno != EDOM ||
+      sem_destroy(&local) || errno != EDOM)
+    return 8;
+  if (sem_post(&local) != -1 || errno != EINVAL)
+    return 9;
+  if (sem_open("", O_CREAT, 0600, 0) != SEM_FAILED || errno != EINVAL)
+    return 10;
+  if (sem_unlink(NULL) != -1 || errno != EFAULT)
+    return 11;
+  return 0;
+}
+
+int test_semaphore_counter_limits() {
+  const char *name = "uf_overflow";
+  if (sem_open(name, O_CREAT, 0600, SEM_VALUE_MAX + 1u) != SEM_FAILED ||
+      errno != EINVAL)
+    return 1;
+  sem_t *sem = sem_open(name, O_CREAT | O_EXCL, 0600, SEM_VALUE_MAX);
+  if (sem == SEM_FAILED)
+    return 2;
+  int value;
+  if (sem_post(sem) != -1 || errno != EOVERFLOW || sem_getvalue(sem, &value) ||
+      value != SEM_VALUE_MAX)
+    return 3;
+  if (sem_trywait(sem) || sem_post(sem))
+    return 4;
+  if (sem_close(sem) || sem_unlink(name))
+    return 5;
+  return 0;
+}
+
+// Keep this fixture buildable with the pre-GCD common SDK as well.
+extern void *dispatch_semaphore_create(long value);
+extern long dispatch_semaphore_wait(void *semaphore,
+                                    unsigned long long timeout);
+extern long dispatch_semaphore_signal(void *semaphore);
+extern void dispatch_release(void *object);
+
+int test_dispatch_semaphore_independent_limit() {
+  void *semaphore = dispatch_semaphore_create(40000);
+  if (!semaphore)
+    return 1;
+  int failed = dispatch_semaphore_wait(semaphore, 0) != 0 ||
+               dispatch_semaphore_signal(semaphore) != 0;
+  dispatch_release(semaphore);
+  return failed;
+}
+
+static sem_t *uf_wait_target;
+static sem_t *uf_wait_ready;
+static void *uf_wait_worker(void *unused) {
+  sem_post(uf_wait_ready);
+  sem_wait(uf_wait_target);
+  return NULL;
+}
+
+int test_semaphore_waiter_cleanup() {
+  for (int named = 0; named < 2; ++named) {
+    sem_t local;
+    uf_wait_target =
+        named ? sem_open("uf_wait", O_CREAT | O_EXCL, 0600, 0) : &local;
+    if (uf_wait_target == SEM_FAILED || (!named && sem_init(&local, 0, 0)))
+      return 1;
+    uf_wait_ready = sem_open("uf_ready", O_CREAT | O_EXCL, 0600, 0);
+    if (uf_wait_ready == SEM_FAILED)
+      return 2;
+    pthread_t worker;
+    if (pthread_create(&worker, NULL, uf_wait_worker, NULL))
+      return 3;
+    if (sem_wait(uf_wait_ready))
+      return 4;
+    usleep(20000); // Let the worker enter its blocking wait.
+    int result =
+        named ? sem_close(uf_wait_target) : sem_destroy(uf_wait_target);
+    if (result != -1 || errno != EBUSY)
+      return 5;
+    if (named && sem_unlink("uf_wait"))
+      return 6;
+    if (sem_post(uf_wait_target) || pthread_join(worker, NULL))
+      return 7;
+    int value = -99;
+    if (sem_getvalue(uf_wait_target, &value) || value != 0)
+      return 8;
+    if (named ? sem_close(uf_wait_target) : sem_destroy(uf_wait_target))
+      return 9;
+    if (sem_close(uf_wait_ready) || sem_unlink("uf_ready"))
+      return 10;
+  }
+  return 0;
+}
+
+// Runtime lookup keeps these tests buildable with the legacy common SDK.
+int test_nsuuid_values() {
+  id cls = NSClassFromString([NSString stringWithUTF8String:"NSUUID"]);
+  if (cls == nil)
+    return 1;
+  unsigned char bytes[16] = {0x55, 0x0e, 0x84, 0x00, 0xe2, 0x9b, 0x41, 0xd4,
+                             0xa7, 0x16, 0x44, 0x66, 0x55, 0x44, 0x00, 0x00};
+  NSString *canonical =
+      [NSString stringWithUTF8String:"550E8400-E29B-41D4-A716-446655440000"];
+  id a = [[cls alloc] initWithUUIDString:canonical];
+  id b = [[cls alloc] initWithUUIDBytes:bytes];
+  unsigned char result[16];
+  [a getUUIDBytes:result];
+  int failed = !a || !b || ![a isEqual:b] || [a hash] != [b hash] ||
+               memcmp(bytes, result, 16) ||
+               ![[a UUIDString] isEqualToString:canonical] ||
+               [a isEqual:[NSString stringWithUTF8String:"not a UUID"]];
+  id copy = [a copy];
+  failed |= copy != a;
+  [a release];
+  failed |= ![copy isEqual:b];
+  [copy release];
+  [b release];
+  id bad = [[cls alloc]
+      initWithUUIDString:
+          [NSString stringWithUTF8String:"💥0000000000000000000000000000"]];
+  failed |= bad != nil;
+  [bad release];
+  return failed;
+}
+
+static CFUUIDRef uf_uuid_from_bytes(const unsigned char *b, int constant) {
+  if (constant)
+    return CFUUIDGetConstantUUIDWithBytes(NULL, b[0], b[1], b[2], b[3], b[4],
+                                          b[5], b[6], b[7], b[8], b[9], b[10],
+                                          b[11], b[12], b[13], b[14], b[15]);
+  return CFUUIDCreateWithBytes(NULL, b[0], b[1], b[2], b[3], b[4], b[5], b[6],
+                               b[7], b[8], b[9], b[10], b[11], b[12], b[13],
+                               b[14], b[15]);
+}
+
+int test_cfuuid_byte_abi() {
+  unsigned char bytes[16] = {1, 0, 0x80, 0x7f, 0x34, 0x12, 0xc0, 0xff,
+                             0, 0, 0,    0x80, 0xff, 0xfe, 0xfd, 0xfc};
+  CFUUIDBytes value;
+  memcpy(&value, bytes, 16);
+  CFUUIDRef a = uf_uuid_from_bytes(bytes, 0);
+  CFUUIDRef (*volatile from_aggregate)(CFAllocatorRef, CFUUIDBytes) =
+      CFUUIDCreateFromUUIDBytes;
+  CFUUIDBytes (*volatile get_aggregate)(CFUUIDRef) = CFUUIDGetUUIDBytes;
+  CFUUIDRef b = from_aggregate(kCFAllocatorSystemDefault, value);
+  if (!a || !b || a != b || !CFEqual(a, b) || CFHash(a) != CFHash(b))
+    return 1;
+  struct {
+    unsigned char before[4];
+    CFUUIDBytes value;
+    unsigned char after[4];
+  } guarded;
+  memset(&guarded, 0xa5, sizeof(guarded));
+  guarded.value = get_aggregate(a);
+  if (memcmp(&guarded.value, bytes, 16) ||
+      memcmp(guarded.before, "\xa5\xa5\xa5\xa5", 4) ||
+      memcmp(guarded.after, "\xa5\xa5\xa5\xa5", 4))
+    return 2;
+  CFRelease(a);
+  guarded.value = get_aggregate(b);
+  if (memcmp(&guarded.value, bytes, 16))
+    return 3;
+  CFRelease(b);
+  return 0;
+}
+
+int test_cf_copy_description_ownership() {
+  UInt8 bytes[16] = {0};
+  CFUUIDRef uuid = uf_uuid_from_bytes(bytes, 0);
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  CFStringRef description = CFCopyDescription(uuid);
+  [pool drain];
+  CFRelease(uuid);
+  char output[64];
+  int ok = description &&
+           CFStringGetCString(description, output, sizeof(output),
+                              kCFStringEncodingUTF8) &&
+           !strcmp(output, "00000000-0000-0000-0000-000000000000");
+  if (description)
+    CFRelease(description);
+  return ok ? 0 : 1;
+}
+
+int test_cfuuid_string_and_reference_lifetimes() {
+  unsigned char bytes[16] = {0x55, 0x0e, 0x84, 0,    0xe2, 0x9b, 0x41, 0xd4,
+                             0xa7, 0x16, 0x44, 0x66, 0x55, 0x44, 0,    0};
+  CFUUIDRef uuid = uf_uuid_from_bytes(bytes, 0);
+  id pool = [[NSAutoreleasePool alloc] init];
+  CFStringRef text = CFUUIDCreateString(NULL, uuid);
+  [pool release];
+  CFRelease(uuid);
+  char output[64];
+  if (!text ||
+      !CFStringGetCString(text, output, sizeof(output),
+                          kCFStringEncodingUTF8) ||
+      strcmp(output, "550E8400-E29B-41D4-A716-446655440000"))
+    return 1;
+  CFRelease(text);
+  for (int i = 0; i < 128; i++) {
+    uuid = uf_uuid_from_bytes(bytes, 0);
+    if (!uuid || CFGetRetainCount(uuid) != 1)
+      return 2;
+    CFUUIDBytes copy = CFUUIDGetUUIDBytes(uuid);
+    if (memcmp(&copy, bytes, 16))
+      return 3;
+    CFRelease(uuid);
+  }
+  uuid = CFUUIDCreate(NULL);
+  CFUUIDBytes random = CFUUIDGetUUIDBytes(uuid);
+  const unsigned char *raw = (const unsigned char *)&random;
+  if ((raw[6] & 0xf0) != 0x40 || (raw[8] & 0xc0) != 0x80)
+    return 4;
+  CFRelease(uuid);
+  return 0;
+}
+
+int test_cfuuid_constants() {
+  unsigned char bytes[16] = {0x01, 0xa2, 0x73, 0xb4, 0xc5, 0xd6, 0x47, 0xe8,
+                             0xa9, 0xfa, 0x0b, 0x1c, 0x2d, 0x3e, 0x4f, 0xc0};
+  CFUUIDRef root = uf_uuid_from_bytes(bytes, 1);
+  CFIndex original_count = CFGetRetainCount(root);
+  for (int i = 0; i < 128; i++)
+    if (uf_uuid_from_bytes(bytes, 1) != root)
+      return 1;
+  if (CFGetRetainCount(root) != original_count)
+    return 2;
+  CFUUIDRef owned = uf_uuid_from_bytes(bytes, 0);
+  if (owned != root)
+    return 3;
+  CFRelease(owned);
+  CFUUIDBytes value = CFUUIDGetUUIDBytes(root);
+  if (memcmp(&value, bytes, 16) || CFGetRetainCount(root) != original_count)
+    return 4;
+  owned = (CFUUIDRef)CFRetain(root);
+  CFRelease(owned);
+  bytes[15] = 0xc1;
+  owned = uf_uuid_from_bytes(bytes, 0);
+  CFUUIDRef promoted = uf_uuid_from_bytes(bytes, 1);
+  if (owned != promoted)
+    return 5;
+  CFRelease(owned);
+  value = CFUUIDGetUUIDBytes(promoted);
+  if (memcmp(&value, bytes, 16) || uf_uuid_from_bytes(bytes, 1) != promoted)
+    return 6;
+  // Get results are borrowed constants; do not CFRelease them directly.
+  return 0;
+}
+
+int test_cfuuid_historical_parser() {
+  const char *canonical = "550E8400-E29B-41D4-A716-446655440000";
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, canonical, kCFStringEncodingUTF8);
+  CFUUIDRef a = CFUUIDCreateFromString(NULL, text);
+  CFRelease(text);
+  text = CFStringCreateWithCString(
+      NULL, "{550e8400-e29b-41d4-a716-446655440000}", kCFStringEncodingUTF8);
+  CFUUIDRef b = CFUUIDCreateFromString(NULL, text);
+  CFRelease(text);
+  if (!a || a != b)
+    return 1;
+  CFRelease(a);
+  CFRelease(b);
+  text = CFStringCreateWithCString(NULL, "", kCFStringEncodingUTF8);
+  if (CFUUIDCreateFromString(NULL, text) || CFUUIDCreateFromString(NULL, NULL))
+    return 2;
+  CFRelease(text);
+  UniChar units[37];
+  units[0] = 0xd800; // A raw unpaired surrogate must not cause UTF-8 slicing.
+  for (int i = 0; i < 36; i++)
+    units[i + 1] = (unsigned char)canonical[i];
+  text = CFStringCreateWithCharacters(NULL, units, 37);
+  a = CFUUIDCreateFromString(NULL, text);
+  CFRelease(text);
+  CFStringRef roundtrip = CFUUIDCreateString(NULL, a);
+  char output[64];
+  if (!CFStringGetCString(roundtrip, output, sizeof(output),
+                          kCFStringEncodingUTF8) ||
+      strcmp(output, canonical))
+    return 3;
+  CFRelease(roundtrip);
+  CFRelease(a);
+  text = CFStringCreateWithCString(NULL, "55", kCFStringEncodingUTF8);
+  a = CFUUIDCreateFromString(NULL, text);
+  CFRelease(text);
+  CFUUIDBytes partial = CFUUIDGetUUIDBytes(a);
+  unsigned char expected[16] = {0x55};
+  if (memcmp(&partial, expected, 16))
+    return 4;
+  CFRelease(a);
+  return 0;
+}
+
+static int uf_dict_retains, uf_dict_releases;
+static const void *uf_dict_retain(CFAllocatorRef allocator, const void *value) {
+  (void)allocator;
+  uf_dict_retains++;
+  return value;
+}
+static void uf_dict_release(CFAllocatorRef allocator, const void *value) {
+  (void)allocator;
+  (void)value;
+  uf_dict_releases++;
+}
+
+static CFHashCode uf_dict_collision_hash(const void *key) {
+  (void)key;
+  return 1;
+}
+
+static Boolean uf_dict_int_equal(const void *a, const void *b) {
+  return *(const int *)a == *(const int *)b;
+}
+
+static CFComparisonResult uf_array_int_compare(const void *a, const void *b,
+                                               void *context) {
+  (*(int *)context)++;
+  return (*(const int *)a > *(const int *)b) -
+         (*(const int *)a < *(const int *)b);
+}
+
+int test_cfarray_custom_callbacks() {
+  CFArrayCallBacks callbacks = {0, uf_dict_retain, uf_dict_release, NULL,
+                                uf_dict_int_equal};
+  int a = 42, b = 42, c = 17;
+  uf_dict_retains = uf_dict_releases = 0;
+  CFMutableArrayRef array = CFArrayCreateMutable(NULL, 0, &callbacks);
+  CFArrayAppendValue(array, &a);
+  CFArrayInsertValueAtIndex(array, 0, &c);
+  CFArrayExchangeValuesAtIndices(array, 0, 1);
+  if (CFArrayGetValueAtIndex(array, 0) != &a ||
+      CFArrayGetValueAtIndex(array, 1) != &c || uf_dict_retains != 2 ||
+      uf_dict_releases != 0)
+    return 13;
+  int comparisons = 0;
+  CFArraySortValues(array, CFRangeMake(0, 2), uf_array_int_compare,
+                    &comparisons);
+  if (comparisons == 0 || CFArrayGetValueAtIndex(array, 0) != &c ||
+      CFArrayGetValueAtIndex(array, 1) != &a || uf_dict_retains != 2 ||
+      uf_dict_releases != 0)
+    return 14;
+  CFArrayExchangeValuesAtIndices(array, 1, 1);
+  if (!CFArrayContainsValue(array, CFRangeMake(0, 2), &b) ||
+      CFArrayGetFirstIndexOfValue(array, CFRangeMake(0, 2), &b) != 1 ||
+      uf_dict_retains != 2)
+    return 1;
+  CFArraySetValueAtIndex(array, 0, &b);
+  CFArrayRemoveValueAtIndex(array, 1);
+  if (uf_dict_retains != 3 || uf_dict_releases != 2)
+    return 2;
+  CFArrayRemoveAllValues(array);
+  CFArrayAppendValue(array, &a);
+  CFRelease(array);
+  if (uf_dict_retains != 4 || uf_dict_releases != 4)
+    return 3;
+  uf_dict_retains = uf_dict_releases = 0;
+  array = CFArrayCreateMutable(NULL, 0, &callbacks);
+  CFArrayAppendValue(array, &a);
+  CFArrayRef copy = CFArrayCreateCopy(NULL, array);
+  CFMutableArrayRef mutable_copy = CFArrayCreateMutableCopy(NULL, 0, copy);
+  CFRelease(array);
+  if (uf_dict_retains != 3 || uf_dict_releases != 1 ||
+      !CFArrayContainsValue(copy, CFRangeMake(0, 1), &b))
+    return 7;
+  CFArraySetValueAtIndex(mutable_copy, 0, &c);
+  CFRelease(copy);
+  CFRelease(mutable_copy);
+  if (uf_dict_retains != 4 || uf_dict_releases != 4)
+    return 8;
+  uf_dict_retains = uf_dict_releases = 0;
+  array = CFArrayCreateMutable(NULL, 0, &callbacks);
+  CFArrayAppendValue(array, &a);
+  CFArrayAppendValue(array, &c);
+  const void *replacement[] = {&a, &b};
+  CFArrayReplaceValues(array, CFRangeMake(0, 2), replacement, 2);
+  if (uf_dict_retains != 4 || uf_dict_releases != 2 ||
+      CFArrayGetValueAtIndex(array, 0) != &a ||
+      CFArrayGetValueAtIndex(array, 1) != &b)
+    return 19;
+  CFRelease(array);
+  if (uf_dict_releases != 4)
+    return 20;
+  uf_dict_retains = uf_dict_releases = 0;
+  array = CFArrayCreateMutable(NULL, 0, &callbacks);
+  CFArrayAppendValue(array, &a);
+  CFArrayAppendArray(array, array, CFRangeMake(0, 1));
+  CFRelease(array);
+  if (uf_dict_retains != 2 || uf_dict_releases != 2)
+    return 12;
+  uf_dict_retains = uf_dict_releases = 0;
+  const void *initial[] = {&a, &c};
+  copy = CFArrayCreate(NULL, initial, 2, &callbacks);
+  if (uf_dict_retains != 2 || CFArrayGetCount(copy) != 2 ||
+      !CFArrayContainsValue(copy, CFRangeMake(0, 2), &b))
+    return 9;
+  CFRelease(copy);
+  if (uf_dict_releases != 2)
+    return 10;
+  copy = CFArrayCreate(NULL, NULL, 0, NULL);
+  if (CFArrayGetCount(copy) != 0)
+    return 11;
+  CFRelease(copy);
+  unsigned char bytes[16] = {0x91};
+  CFUUIDRef uuid = uf_uuid_from_bytes(bytes, 0);
+  array = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+  CFArrayAppendValue(array, uuid);
+  if (CFGetRetainCount(uuid) != 2 ||
+      !CFArrayContainsValue(array, CFRangeMake(0, 1), uuid))
+    return 4;
+  CFRelease(array);
+  if (CFGetRetainCount(uuid) != 1)
+    return 5;
+  CFRelease(uuid);
+  int low = -100, high = 100;
+  array = CFArrayCreateMutable(NULL, 0, NULL);
+  CFArrayAppendValue(array, &low);
+  CFArrayAppendValue(array, &a);
+  CFArrayAppendValue(array, &b);
+  CFArrayAppendValue(array, &c);
+  CFArrayAppendValue(array, &high);
+  comparisons = 0;
+  CFArraySortValues(array, CFRangeMake(1, 3), uf_array_int_compare,
+                    &comparisons);
+  if (!comparisons || CFArrayGetValueAtIndex(array, 0) != &low ||
+      CFArrayGetValueAtIndex(array, 1) != &c ||
+      CFArrayGetValueAtIndex(array, 2) != &a ||
+      CFArrayGetValueAtIndex(array, 3) != &b ||
+      CFArrayGetValueAtIndex(array, 4) != &high)
+    return 15;
+  CFRelease(array);
+  NSNumber *n1 = [[NSNumber alloc] initWithInt:42];
+  NSNumber *n2 = [[NSNumber alloc] initWithInt:42];
+  NSNumber *n3 = [[NSNumber alloc] initWithInt:17];
+  array = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+  CFArrayAppendValue(array, n1);
+  int matches = CFArrayContainsValue(array, CFRangeMake(0, 1), n2) &&
+                !CFArrayContainsValue(array, CFRangeMake(0, 1), n3);
+  CFRelease(array);
+  [n1 release];
+  [n2 release];
+  [n3 release];
+  if (!matches)
+    return 6;
+  int many[64];
+  array = CFArrayCreateMutable(NULL, 0, NULL);
+  for (int i = 0; i < 64; i++) {
+    many[i] = (i * 37) % 64;
+    CFArrayAppendValue(array, &many[i]);
+  }
+  comparisons = 0;
+  CFArraySortValues(array, CFRangeMake(0, 64), uf_array_int_compare,
+                    &comparisons);
+  for (int i = 0; i < 64; i++)
+    if (*(const int *)CFArrayGetValueAtIndex(array, i) != i)
+      return 16;
+  if (comparisons <= 0 || comparisons > 1024)
+    return 17;
+  int needle = 33, below = -1, above = 100;
+  comparisons = 0;
+  if (CFArrayBSearchValues(array, CFRangeMake(2, 60), &needle,
+                           uf_array_int_compare, &comparisons) != 33 ||
+      CFArrayBSearchValues(array, CFRangeMake(2, 60), &below,
+                           uf_array_int_compare, &comparisons) != 2 ||
+      CFArrayBSearchValues(array, CFRangeMake(2, 60), &above,
+                           uf_array_int_compare, &comparisons) != 62 ||
+      CFArrayBSearchValues(array, CFRangeMake(7, 0), &needle,
+                           uf_array_int_compare, &comparisons) != 7 ||
+      comparisons == 0)
+    return 18;
+  CFRelease(array);
+  return 0;
+}
+
+int test_cfurl_legacy_percent_decode() {
+  CFStringRef original =
+      CFStringCreateWithCString(NULL, "A%2FB%E4%B8%AD", kCFStringEncodingUTF8);
+  CFStringRef leave =
+      CFStringCreateWithCString(NULL, "/", kCFStringEncodingUTF8);
+  CFStringRef result =
+      CFURLCreateStringByReplacingPercentEscapes(NULL, original, leave);
+  CFRelease(leave);
+  char buffer[64];
+  if (!result ||
+      !CFStringGetCString(result, buffer, sizeof(buffer),
+                          kCFStringEncodingUTF8) ||
+      strcmp(buffer, "A%2FB\xe4\xb8\xad"))
+    return 1;
+  CFRelease(result);
+  result = CFURLCreateStringByReplacingPercentEscapes(NULL, original, NULL);
+  if (!result ||
+      !CFStringGetCString(result, buffer, sizeof(buffer),
+                          kCFStringEncodingUTF8) ||
+      strcmp(buffer, "A%2FB%E4%B8%AD"))
+    return 2;
+  CFRelease(result);
+  CFRelease(original);
+  original =
+      CFStringCreateWithCString(NULL, "%C3%A9%2F", kCFStringEncodingUTF8);
+  leave = CFStringCreateWithCString(NULL, "\xc3\xa9/", kCFStringEncodingUTF8);
+  result = CFURLCreateStringByReplacingPercentEscapes(NULL, original, leave);
+  if (!result ||
+      !CFStringGetCString(result, buffer, sizeof(buffer),
+                          kCFStringEncodingUTF8) ||
+      strcmp(buffer, "%C3%A9%2F"))
+    return 4;
+  CFRelease(result);
+  CFRelease(leave);
+  CFRelease(original);
+  original = CFStringCreateWithCString(NULL, "%FF", kCFStringEncodingUTF8);
+  leave = CFStringCreateWithCString(NULL, "", kCFStringEncodingUTF8);
+  result = CFURLCreateStringByReplacingPercentEscapes(NULL, original, leave);
+  CFRelease(leave);
+  CFRelease(original);
+  return result == NULL ? 0 : 3;
+}
+
+static int uf_url_string_equals(CFStringRef string, const char *expected) {
+  char buffer[128];
+  return string &&
+         CFStringGetCString(string, buffer, sizeof(buffer),
+                            kCFStringEncodingUTF8) &&
+         !strcmp(buffer, expected);
+}
+
+int test_cfurl_query_and_fragment() {
+  const char *inputs[] = {"http://e/a?q=%C3%A9%2F#f%20x",
+                          "file://host/a?q=%2F#f%20x"};
+  const char *raw_query[] = {"q=%C3%A9%2F", "q=%2F"};
+  const char *decoded_query[] = {"q=\xc3\xa9%2F", "q=%2F"};
+  CFStringRef leave =
+      CFStringCreateWithCString(NULL, "/", kCFStringEncodingUTF8);
+  for (int i = 0; i < 2; i++) {
+    CFStringRef text =
+        CFStringCreateWithCString(NULL, inputs[i], kCFStringEncodingUTF8);
+    CFURLRef url = CFURLCreateWithString(NULL, text, NULL);
+    CFRelease(text);
+    CFStringRef raw = CFURLCopyQueryString(url, NULL);
+    CFStringRef decoded = CFURLCopyQueryString(url, leave);
+    CFStringRef fragment = CFURLCopyFragment(url, leave);
+    CFRelease(url);
+    if (!uf_url_string_equals(raw, raw_query[i]) ||
+        !uf_url_string_equals(decoded, decoded_query[i]) ||
+        !uf_url_string_equals(fragment, "f x"))
+      return i + 1;
+    CFRelease(raw);
+    CFRelease(decoded);
+    CFRelease(fragment);
+  }
+  CFRelease(leave);
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "http://e/a?#", kCFStringEncodingUTF8);
+  CFURLRef url = CFURLCreateWithString(NULL, text, NULL);
+  CFRelease(text);
+  CFStringRef query = CFURLCopyQueryString(url, NULL);
+  CFStringRef fragment = CFURLCopyFragment(url, NULL);
+  CFRelease(url);
+  int ok =
+      uf_url_string_equals(query, "") && uf_url_string_equals(fragment, "");
+  CFRelease(query);
+  CFRelease(fragment);
+  return ok ? 0 : 3;
+}
+
+int test_cfurl_create_bytes() {
+  const char *bytes = "http://example.com/a%2Fb";
+  CFURLRef url = CFURLCreateWithBytes(NULL, (const UInt8 *)bytes, strlen(bytes),
+                                      kCFStringEncodingASCII, NULL);
+  if (!url)
+    return 1;
+  CFStringRef scheme = CFURLCopyScheme(url);
+  CFStringRef path = CFURLCopyPath(url);
+  Boolean is_file = [(NSURL *)url isFileURL];
+  CFRelease(url);
+  int ok = uf_url_string_equals(scheme, "http") &&
+           uf_url_string_equals(path, "/a%2Fb") && !is_file;
+  if (scheme)
+    CFRelease(scheme);
+  if (path)
+    CFRelease(path);
+  return ok ? 0 : 2;
+}
+
+int test_cfurl_directory_path() {
+  const char *inputs[] = {"http://e",       "http://e/",    "http://e/a/",
+                          "http://e/a",     "http://e/a/.", "http://e/a/..",
+                          "http://e/a/%2e", "about:blank",  "abc/"};
+  const Boolean expected[] = {false, true,  true,  false, true,
+                              true,  false, false, true};
+  for (int i = 0; i < 9; i++) {
+    CFStringRef text =
+        CFStringCreateWithCString(NULL, inputs[i], kCFStringEncodingUTF8);
+    CFURLRef url = CFURLCreateWithString(NULL, text, NULL);
+    CFRelease(text);
+    Boolean actual = CFURLHasDirectoryPath(url);
+    CFRelease(url);
+    if (actual != expected[i])
+      return i + 1;
+  }
+  CFStringRef path =
+      CFStringCreateWithCString(NULL, "/tmp/test", kCFStringEncodingUTF8);
+  CFURLRef url =
+      CFURLCreateWithFileSystemPath(NULL, path, kCFURLPOSIXPathStyle, true);
+  CFRelease(path);
+  Boolean actual = CFURLHasDirectoryPath(url);
+  CFRelease(url);
+  if (!actual)
+    return 10;
+  path = CFStringCreateWithCString(NULL, "//", kCFStringEncodingUTF8);
+  url = CFURLCreateWithFileSystemPath(NULL, path, kCFURLPOSIXPathStyle, false);
+  CFRelease(path);
+  actual = CFURLHasDirectoryPath(url);
+  CFRelease(url);
+  return actual ? 11 : 0;
+}
+
+int test_cfurl_escaped_path() {
+  const char *inputs[] = {"http://host/a%2Fb%20c", "file://host/a%2Fb%20c",
+                          "relative/path",         "http://e",
+                          "about:blank",           "http://e/"};
+  const char *expected[] = {"/a%2Fb%20c", "/a%2Fb%20c", "relative/path",
+                            "",           NULL,         "/"};
+  const char *strict_expected[] = {"a%2Fb%20c", "a%2Fb%20c", "relative/path",
+                                   NULL,        NULL,        ""};
+  for (int i = 0; i < 6; i++) {
+    CFStringRef text =
+        CFStringCreateWithCString(NULL, inputs[i], kCFStringEncodingUTF8);
+    CFURLRef url = CFURLCreateWithString(NULL, text, NULL);
+    CFRelease(text);
+    CFStringRef path = CFURLCopyPath(url);
+    Boolean absolute = 77;
+    CFStringRef strict = CFURLCopyStrictPath(url, &absolute);
+    Boolean decomposable = CFURLCanBeDecomposed(url);
+    CFRelease(url);
+    if (decomposable != (i != 4) || absolute != (i < 2 || i == 5) ||
+        (strict_expected[i] &&
+         !uf_url_string_equals(strict, strict_expected[i])) ||
+        (!strict_expected[i] && strict))
+      return i + 10;
+    if (strict)
+      CFRelease(strict);
+    if (expected[i]) {
+      if (!uf_url_string_equals(path, expected[i]))
+        return i + 1;
+      CFRelease(path);
+    } else if (path) {
+      CFRelease(path);
+      return i + 1;
+    }
+  }
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "/tmp/a b#c", kCFStringEncodingUTF8);
+  CFURLRef url =
+      CFURLCreateWithFileSystemPath(NULL, text, kCFURLPOSIXPathStyle, true);
+  CFRelease(text);
+  CFStringRef path = CFURLCopyPath(url);
+  Boolean absolute = 0;
+  CFStringRef strict = CFURLCopyStrictPath(url, &absolute);
+  CFRelease(url);
+  int ok = uf_url_string_equals(path, "/tmp/a%20b%23c/") && absolute &&
+           uf_url_string_equals(strict, "tmp/a%20b%23c/");
+  CFRelease(path);
+  CFRelease(strict);
+  return ok ? 0 : 6;
+}
+
+int test_cfurl_host_name() {
+  const char *inputs[] = {"file:///tmp/a",
+                          "file://localhost/tmp/a",
+                          "file://server:8/tmp",
+                          "http://e%78ample.com:3/a",
+                          "http://user:pass@[::1]:5/",
+                          "http:/p"};
+  const char *expected[] = {NULL,          "localhost", "server",
+                            "example.com", "::1",       NULL};
+  for (int i = 0; i < 6; i++) {
+    CFStringRef text =
+        CFStringCreateWithCString(NULL, inputs[i], kCFStringEncodingUTF8);
+    CFURLRef url = CFURLCreateWithString(NULL, text, NULL);
+    CFRelease(text);
+    CFStringRef host = CFURLCopyHostName(url);
+    CFRelease(url);
+    if (expected[i]) {
+      char buffer[64];
+      if (!host ||
+          !CFStringGetCString(host, buffer, sizeof(buffer),
+                              kCFStringEncodingUTF8) ||
+          strcmp(buffer, expected[i]))
+        return i + 1;
+      CFRelease(host);
+    } else if (host) {
+      CFRelease(host);
+      return i + 1;
+    }
+  }
+  return 0;
+}
+
+int test_cfurl_port_number() {
+  const char *inputs[] = {"http://example.com:0/",  "http://e:65536/",
+                          "http://u:p@[::1]:8080/", "http://example.com:/",
+                          "http://e:abc/",          "http://e:999999999999/",
+                          "file://server:8080/tmp", "http://e:-12/"};
+  const int expected[] = {0, 65536, 8080, -1, -1, 2147483647, 8080, -12};
+  for (int i = 0; i < 8; i++) {
+    CFStringRef text =
+        CFStringCreateWithCString(NULL, inputs[i], kCFStringEncodingUTF8);
+    CFURLRef url = CFURLCreateWithString(NULL, text, NULL);
+    CFRelease(text);
+    if (!url || CFURLGetPortNumber(url) != expected[i])
+      return i + 1;
+    CFRelease(url);
+  }
+  return 0;
+}
+
+int test_cfurl_copy_scheme() {
+  CFStringRef url_text = CFStringCreateWithCString(NULL, "HTTP://example.com/a",
+                                                   kCFStringEncodingUTF8);
+  CFURLRef url = CFURLCreateWithString(NULL, url_text, NULL);
+  CFRelease(url_text);
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  CFStringRef scheme = CFURLCopyScheme(url);
+  [pool drain];
+  CFRelease(url);
+  char buffer[16];
+  if (!scheme ||
+      !CFStringGetCString(scheme, buffer, sizeof(buffer),
+                          kCFStringEncodingUTF8) ||
+      strcmp(buffer, "HTTP"))
+    return 1;
+  CFRelease(scheme);
+  url_text =
+      CFStringCreateWithCString(NULL, "relative/path", kCFStringEncodingUTF8);
+  url = CFURLCreateWithString(NULL, url_text, NULL);
+  CFRelease(url_text);
+  scheme = CFURLCopyScheme(url);
+  CFRelease(url);
+  if (scheme)
+    return 2;
+  url_text =
+      CFStringCreateWithCString(NULL, "/tmp/file", kCFStringEncodingUTF8);
+  url = CFURLCreateWithFileSystemPath(NULL, url_text, kCFURLPOSIXPathStyle,
+                                      false);
+  CFRelease(url_text);
+  scheme = CFURLCopyScheme(url);
+  CFRelease(url);
+  int ok = scheme &&
+           CFStringGetCString(scheme, buffer, sizeof(buffer),
+                              kCFStringEncodingUTF8) &&
+           !strcmp(buffer, "file");
+  if (scheme)
+    CFRelease(scheme);
+  return ok ? 0 : 3;
+}
+
+int test_cflocale_copy_lifetime() {
+  CFStringRef identifier =
+      CFStringCreateWithCString(NULL, "en_US", kCFStringEncodingUTF8);
+  CFLocaleRef locale = CFLocaleCreate(NULL, identifier);
+  CFRelease(identifier);
+  CFLocaleRef copy = CFLocaleCreateCopy(kCFAllocatorSystemDefault, locale);
+  CFRelease(locale);
+  CFStringRef country = CFLocaleGetValue(copy, kCFLocaleCountryCode);
+  char buffer[16];
+  int ok = country &&
+           CFStringGetCString(country, buffer, sizeof(buffer),
+                              kCFStringEncodingUTF8) &&
+           !strcmp(buffer, "US");
+  CFRelease(copy);
+  return ok ? 0 : 1;
+}
+
+int test_cfdata_copy_and_empty_range() {
+  unsigned char source[] = {3, 4, 5};
+  NSMutableData *mutable_data = [[NSMutableData alloc] initWithBytes:source
+                                                              length:3];
+  CFDataRef copy = CFDataCreateCopy(NULL, (CFDataRef)mutable_data);
+  ((unsigned char *)[mutable_data mutableBytes])[0] = 9;
+  unsigned char result[] = {0xaa, 0xbb, 0xcc};
+  CFDataGetBytes(copy, CFRangeMake(3, 0), NULL);
+  CFDataGetBytes(copy, CFRangeMake(1, 1), &result[1]);
+  int ok = CFDataGetLength(copy) == 3 && CFDataGetBytePtr(copy)[0] == 3 &&
+           result[0] == 0xaa && result[1] == 4 && result[2] == 0xcc;
+  CFRelease(copy);
+  [mutable_data release];
+  copy = CFDataCreate(NULL, NULL, 0);
+  CFDataGetBytes(copy, CFRangeMake(0, 0), NULL);
+  ok = ok && CFDataGetLength(copy) == 0;
+  CFRelease(copy);
+  unsigned char payload[64];
+  for (int i = 0; i < 64; i++)
+    payload[i] = (unsigned char)(i * 3);
+  CFMutableDataRef growing = CFDataCreateMutable(NULL, 0);
+  CFDataAppendBytes(growing, payload, 64);
+  CFDataAppendBytes(growing, CFDataGetBytePtr(growing) + 8, 48);
+  CFDataAppendBytes(growing, NULL, 0);
+  const unsigned char *bytes = CFDataGetBytePtr(growing);
+  ok = ok && CFDataGetLength(growing) == 112 &&
+       memcmp(bytes, payload, 64) == 0 &&
+       memcmp(bytes + 64, payload + 8, 48) == 0;
+  CFRelease(growing);
+  return ok ? 0 : 1;
+}
+
+int test_cfdata_no_copy_deallocator() {
+  unsigned char *bytes = malloc(32);
+  if (!bytes)
+    return 1;
+  bytes[0] = 0x5a;
+  CFDataRef data = CFDataCreateWithBytesNoCopy(NULL, bytes, 32, NULL);
+  if (CFDataGetBytePtr(data) != bytes || CFDataGetBytePtr(data)[0] != 0x5a)
+    return 2;
+  CFRelease(data);
+  if (malloc_zone_from_ptr(bytes) != NULL)
+    return 3;
+  bytes = malloc(32);
+  if (!bytes)
+    return 4;
+  bytes[0] = 0x7b;
+  data = CFDataCreateWithBytesNoCopy(NULL, bytes, 32, kCFAllocatorNull);
+  if (CFDataGetBytePtr(data) != bytes)
+    return 5;
+  CFRelease(data);
+  if (malloc_zone_from_ptr(bytes) == NULL || bytes[0] != 0x7b)
+    return 6;
+  free(bytes);
+  return 0;
+}
+
+int test_cfdata_equality_and_dictionary_keys() {
+  unsigned char bytes[] = {4, 5, 6};
+  unsigned char other_bytes[] = {4, 5, 7};
+  CFDataRef a = CFDataCreate(NULL, bytes, 3);
+  CFDataRef b = CFDataCreate(NULL, bytes, 3);
+  CFDataRef different = CFDataCreate(NULL, other_bytes, 3);
+  CFDataRef empty_a = CFDataCreate(NULL, NULL, 0);
+  CFDataRef empty_b = CFDataCreate(NULL, NULL, 0);
+  CFStringRef string =
+      CFStringCreateWithCString(NULL, "data", kCFStringEncodingUTF8);
+  if (!CFEqual(a, b) || CFEqual(a, different) || !CFEqual(empty_a, empty_b) ||
+      CFEqual(a, string) || CFEqual(string, a) || CFHash(a) != CFHash(b))
+    return 1;
+  CFMutableDictionaryRef dict =
+      CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks,
+                                &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(dict, a, string);
+  if (CFDictionaryGetValue(dict, b) != string ||
+      CFDictionaryContainsKey(dict, different))
+    return 2;
+  CFRelease(dict);
+  CFRelease(a);
+  CFRelease(b);
+  CFRelease(different);
+  CFRelease(empty_a);
+  CFRelease(empty_b);
+  CFRelease(string);
+  return 0;
+}
+
+int test_cfdata_mutable_copy_and_length() {
+  unsigned char original[] = {1, 2, 3};
+  CFDataRef source = CFDataCreate(NULL, original, 3);
+  CFMutableDataRef data = CFDataCreateMutableCopy(NULL, 0, source);
+  CFDataSetLength(data, 6);
+  UInt8 *bytes = CFDataGetMutableBytePtr(data);
+  if (CFDataGetLength(data) != 6 || memcmp(bytes, original, 3) != 0 ||
+      bytes[3] || bytes[4] || bytes[5])
+    return 1;
+  bytes[0] = 9;
+  if (CFDataGetBytePtr(source)[0] != 1)
+    return 2;
+  CFDataSetLength(data, 1);
+  CFDataIncreaseLength(data, 3);
+  bytes = CFDataGetMutableBytePtr(data);
+  if (bytes[0] != 9 || bytes[1] || bytes[2] || bytes[3])
+    return 3;
+  CFDataSetLength(data, 0);
+  (void)CFDataGetMutableBytePtr(data);
+  CFRelease(data);
+  CFRelease(source);
+  return 0;
+}
+
+int test_cfdata_replace_and_delete() {
+  const unsigned char original[] = {0, 1, 2, 3, 4, 5};
+  CFMutableDataRef data = CFDataCreateMutable(NULL, 0);
+  CFDataAppendBytes(data, original, 6);
+  CFDataReplaceBytes(data, CFRangeMake(1, 2), CFDataGetBytePtr(data) + 3, 3);
+  const unsigned char grown[] = {0, 3, 4, 5, 3, 4, 5};
+  if (CFDataGetLength(data) != 7 ||
+      memcmp(CFDataGetBytePtr(data), grown, sizeof(grown)))
+    return 1;
+  CFDataDeleteBytes(data, CFRangeMake(2, 3));
+  const unsigned char shrunk[] = {0, 3, 4, 5};
+  if (CFDataGetLength(data) != 4 ||
+      memcmp(CFDataGetBytePtr(data), shrunk, sizeof(shrunk)))
+    return 2;
+  const unsigned char prefix[] = {9, 8};
+  CFDataReplaceBytes(data, CFRangeMake(0, 0), prefix, 2);
+  const unsigned char inserted[] = {9, 8, 0, 3, 4, 5};
+  if (CFDataGetLength(data) != 6 ||
+      memcmp(CFDataGetBytePtr(data), inserted, sizeof(inserted)))
+    return 3;
+  CFDataReplaceBytes(data, CFRangeMake(1, 4), CFDataGetBytePtr(data) + 3, 2);
+  const unsigned char overlap_shrunk[] = {9, 3, 4, 5};
+  if (CFDataGetLength(data) != 4 ||
+      memcmp(CFDataGetBytePtr(data), overlap_shrunk, sizeof(overlap_shrunk)))
+    return 5;
+  CFDataReplaceBytes(data, CFRangeMake(0, 4), NULL, 0);
+  if (CFDataGetLength(data) != 0)
+    return 4;
+  CFRelease(data);
+  return 0;
+}
+
+int test_cfdictionary_contains_value_callbacks() {
+  CFDictionaryValueCallBacks values = {0, NULL, NULL, NULL, uf_dict_int_equal};
+  int key, key2, missing, stored = 42, equal = 42, different = 17;
+  CFMutableDictionaryRef dict =
+      CFDictionaryCreateMutable(NULL, 0, NULL, &values);
+  CFDictionarySetValue(dict, &key, &stored);
+  CFDictionarySetValue(dict, &key2, &equal);
+  if (!CFDictionaryContainsValue(dict, &equal) ||
+      CFDictionaryContainsValue(dict, &different) ||
+      CFDictionaryGetCountOfValue(dict, &equal) != 2 ||
+      CFDictionaryGetCountOfValue(dict, &different) != 0 ||
+      CFDictionaryGetCountOfKey(dict, &key) != 1 ||
+      CFDictionaryGetCountOfKey(dict, &missing) != 0)
+    return 1;
+  CFRelease(dict);
+  dict = CFDictionaryCreateMutable(NULL, 0, NULL, NULL);
+  CFDictionarySetValue(dict, &key, NULL);
+  if (!CFDictionaryContainsValue(dict, NULL) ||
+      CFDictionaryGetCountOfValue(dict, NULL) != 1 ||
+      CFDictionaryContainsValue(dict, &equal))
+    return 2;
+  CFRelease(dict);
+  return 0;
+}
+
+int test_nsmutabledictionary_replacement_key_lifetime() {
+  NSString *key = [[NSString alloc] initWithUTF8String:"key"];
+  NSString *value = [[NSString alloc] initWithUTF8String:"value"];
+  NSMutableDictionary *dict = [[NSMutableDictionary alloc] init];
+  [dict setObject:value forKey:key];
+  NSUInteger count = [key retainCount];
+  for (int i = 0; i < 32; i++)
+    [dict setObject:value forKey:key];
+  int ok = [dict count] == 1 && [key retainCount] == count;
+  [dict release];
+  ok = ok && [key retainCount] == 1;
+  [value release];
+  [key release];
+  return ok ? 0 : 1;
+}
+
+int test_nsmutablearray_remove_multiple_matches() {
+  NSNumber *one = [NSNumber numberWithInt:1];
+  NSNumber *two = [NSNumber numberWithInt:2];
+  NSMutableArray *array =
+      [[NSMutableArray alloc] initWithObjects:one, two, one, one, two, nil];
+  [array removeObject:one];
+  int ok = [array count] == 2 && [[array objectAtIndex:0] isEqual:two] &&
+           [[array objectAtIndex:1] isEqual:two];
+  [array release];
+  NSString *value = [[NSString alloc] initWithUTF8String:"kept"];
+  array = [[NSMutableArray alloc] initWithObjects:value, nil];
+  [value release];
+  const void *replacement[] = {[array objectAtIndex:0]};
+  CFArrayReplaceValues((CFMutableArrayRef)array, CFRangeMake(0, 1), replacement,
+                       1);
+  ok = ok && [array count] == 1 &&
+       !strcmp([[array objectAtIndex:0] UTF8String], "kept");
+  [array release];
+  return ok ? 0 : 1;
+}
+
+struct uf_array_visit_context {
+  const void *values[3];
+  int count;
+};
+static void uf_array_visit(const void *value, void *context) {
+  struct uf_array_visit_context *visit = context;
+  if (visit->count < 3)
+    visit->values[visit->count] = value;
+  visit->count++;
+}
+
+int test_cfarray_nonretaining_mutations() {
+  int first, second, third;
+  CFMutableArrayRef array = CFArrayCreateMutable(NULL, 0, NULL);
+  CFArrayAppendValue(array, &first);
+  CFArrayInsertValueAtIndex(array, 0, &second);
+  CFArraySetValueAtIndex(array, 1, &third);
+  CFArraySetValueAtIndex(array, 2, &first);
+  if (CFArrayGetCount(array) != 3 ||
+      CFArrayGetValueAtIndex(array, 0) != &second ||
+      CFArrayGetValueAtIndex(array, 1) != &third ||
+      CFArrayGetValueAtIndex(array, 2) != &first)
+    return 1;
+  CFArrayAppendValue(array, &third);
+  CFArrayAppendValue(array, NULL);
+  if (!CFArrayContainsValue(array, CFRangeMake(0, 5), &third) ||
+      CFArrayGetFirstIndexOfValue(array, CFRangeMake(0, 5), &third) != 1 ||
+      CFArrayGetLastIndexOfValue(array, CFRangeMake(0, 5), &third) != 3 ||
+      CFArrayGetCountOfValue(array, CFRangeMake(0, 5), &third) != 2 ||
+      CFArrayGetFirstIndexOfValue(array, CFRangeMake(0, 5), NULL) != 4 ||
+      CFArrayContainsValue(array, CFRangeMake(0, 1), &third))
+    return 4;
+  const void *output[4] = {&second, NULL, NULL, &second};
+  CFArrayGetValues(array, CFRangeMake(1, 2), &output[1]);
+  if (output[0] != &second || output[1] != &third || output[2] != &first ||
+      output[3] != &second)
+    return 3;
+  CFArrayGetValues(array, CFRangeMake(5, 0), NULL);
+  struct uf_array_visit_context visit = {{NULL, NULL, NULL}, 0};
+  CFArrayApplyFunction(array, CFRangeMake(1, 3), uf_array_visit, &visit);
+  CFArrayApplyFunction(array, CFRangeMake(5, 0), uf_array_visit, &visit);
+  if (visit.count != 3 || visit.values[0] != &third ||
+      visit.values[1] != &first || visit.values[2] != &third)
+    return 7;
+  CFArrayAppendArray(array, array, CFRangeMake(0, 2));
+  if (CFArrayGetCount(array) != 7 ||
+      CFArrayGetValueAtIndex(array, 5) != &second ||
+      CFArrayGetValueAtIndex(array, 6) != &third)
+    return 8;
+  const void *replacement[] = {NULL, &first};
+  CFArrayReplaceValues(array, CFRangeMake(5, 2), replacement, 2);
+  if (CFArrayGetValueAtIndex(array, 5) != NULL ||
+      CFArrayGetValueAtIndex(array, 6) != &first)
+    return 9;
+  CFArrayRef copy = CFArrayCreateCopy(NULL, array);
+  CFMutableArrayRef mutable_copy = CFArrayCreateMutableCopy(NULL, 0, copy);
+  if (CFArrayGetValueAtIndex(copy, 1) != &third ||
+      CFArrayGetValueAtIndex(mutable_copy, 2) != &first)
+    return 6;
+  CFArraySetValueAtIndex(mutable_copy, 0, &first);
+  CFRelease(copy);
+  CFRelease(mutable_copy);
+  CFArrayRemoveAllValues(array);
+  if (CFArrayGetCount(array) != 0)
+    return 2;
+  CFArrayAppendValue(array, &third);
+  CFRelease(array);
+  NSString *a = [[NSString alloc] initWithUTF8String:"same"];
+  NSString *b = [[NSString alloc] initWithUTF8String:"same"];
+  NSArray *bridged = [[NSArray alloc] initWithObjects:a, nil];
+  int equal = CFArrayContainsValue((CFArrayRef)bridged, CFRangeMake(0, 1), b);
+  [bridged release];
+  [a release];
+  [b release];
+  if (!equal)
+    return 5;
+  return 0;
+}
+
+int test_cfdictionary_presence_and_collision() {
+  CFDictionaryKeyCallBacks keys = {0,    NULL, NULL,
+                                   NULL, NULL, uf_dict_collision_hash};
+  int k1, k2, missing, value, sentinel;
+  CFMutableDictionaryRef dict = CFDictionaryCreateMutable(NULL, 0, &keys, NULL);
+  CFDictionarySetValue(dict, &k1, NULL);
+  CFDictionarySetValue(dict, &k2, &value);
+  CFDictionaryAddValue(dict, &k1, &value);
+  const void *result = &sentinel;
+  if (!CFDictionaryContainsKey(dict, &k1) ||
+      !CFDictionaryGetValueIfPresent(dict, &k1, &result) || result != NULL ||
+      CFDictionaryGetCount(dict) != 2)
+    return 1;
+  if (!CFDictionaryGetValueIfPresent(dict, &k2, &result) || result != &value ||
+      !CFDictionaryGetValueIfPresent(dict, &k2, NULL))
+    return 2;
+  result = &sentinel;
+  if (CFDictionaryContainsKey(dict, &missing) ||
+      CFDictionaryGetValueIfPresent(dict, &missing, &result) ||
+      result != &sentinel)
+    return 3;
+  CFDictionaryReplaceValue(dict, &missing, &sentinel);
+  CFDictionaryReplaceValue(dict, &k1, &sentinel);
+  if (CFDictionaryGetCount(dict) != 2 ||
+      !CFDictionaryGetValueIfPresent(dict, &k1, &result) ||
+      result != &sentinel || CFDictionaryContainsKey(dict, &missing))
+    return 6;
+  CFDictionaryRemoveValue(dict, &k1);
+  if (CFDictionaryContainsKey(dict, &k1) || !CFDictionaryContainsKey(dict, &k2))
+    return 4;
+  CFRelease(dict);
+  NSString *key = [[NSString alloc] initWithUTF8String:"key"];
+  NSString *object = [[NSString alloc] initWithUTF8String:"value"];
+  NSDictionary *bridged =
+      [[NSDictionary alloc] initWithObjectsAndKeys:object, key, nil];
+  result = NULL;
+  if (!CFDictionaryGetValueIfPresent((CFDictionaryRef)bridged, key, &result) ||
+      result != object ||
+      !CFDictionaryContainsKey((CFDictionaryRef)bridged, key) ||
+      !CFDictionaryContainsValue((CFDictionaryRef)bridged, object) ||
+      CFDictionaryContainsValue((CFDictionaryRef)bridged, key))
+    return 5;
+  [bridged release];
+  [object release];
+  [key release];
+  return 0;
+}
+
+int test_cfdictionary_callback_lifecycle() {
+  CFDictionaryKeyCallBacks keys = {0,    uf_dict_retain, uf_dict_release,
+                                   NULL, NULL,           NULL};
+  CFDictionaryValueCallBacks values = {0, uf_dict_retain, uf_dict_release, NULL,
+                                       NULL};
+  int k1, k2, v1, v2;
+  uf_dict_retains = uf_dict_releases = 0;
+  CFMutableDictionaryRef dict = CFDictionaryCreateMutable(NULL, 0, &keys, NULL);
+  CFDictionarySetValue(dict, &k1, &v1);
+  CFDictionarySetValue(dict, &k2, &v2);
+  CFDictionaryRemoveValue(dict, &k1);
+  if (uf_dict_retains != 2 || uf_dict_releases != 1)
+    return 1;
+  CFRelease(dict);
+  if (uf_dict_releases != 2)
+    return 2;
+  uf_dict_retains = uf_dict_releases = 0;
+  dict = CFDictionaryCreateMutable(NULL, 0, NULL, &values);
+  CFDictionarySetValue(dict, &k1, &v1);
+  CFDictionarySetValue(dict, &k2, &v2);
+  CFDictionaryRemoveAllValues(dict);
+  if (uf_dict_retains != 2 || uf_dict_releases != 2 ||
+      CFDictionaryGetCount(dict) != 0)
+    return 3;
+  CFDictionarySetValue(dict, &k1, &v1);
+  CFRelease(dict);
+  return uf_dict_retains == 3 && uf_dict_releases == 3 ? 0 : 4;
+}
+
+int test_cfdictionary_replaces_equal_key() {
+  CFDictionaryKeyCallBacks keys = {
+      0,    uf_dict_retain,    uf_dict_release,
+      NULL, uf_dict_int_equal, uf_dict_collision_hash};
+  CFDictionaryValueCallBacks values = {0, uf_dict_retain, uf_dict_release, NULL,
+                                       NULL};
+  int original = 5, equal_key = 5, first, second;
+  uf_dict_retains = uf_dict_releases = 0;
+  CFMutableDictionaryRef dict =
+      CFDictionaryCreateMutable(NULL, 0, &keys, &values);
+  CFDictionarySetValue(dict, &original, &first);
+  CFDictionarySetValue(dict, &equal_key, &second);
+  const void *stored_key = NULL;
+  CFDictionaryGetKeysAndValues(dict, &stored_key, NULL);
+  if (CFDictionaryGetCount(dict) != 1 || stored_key != &equal_key ||
+      CFDictionaryGetValue(dict, &equal_key) != &second ||
+      uf_dict_retains != 4 || uf_dict_releases != 2)
+    return 1;
+  CFRelease(dict);
+  return uf_dict_retains == 4 && uf_dict_releases == 4 ? 0 : 2;
+}
+
+struct uf_dictionary_visit_context {
+  const void *key1;
+  const void *key2;
+  const void *value1;
+  int seen;
+};
+static void uf_dictionary_visit(const void *key, const void *value, void *ctx) {
+  struct uf_dictionary_visit_context *visit = ctx;
+  if (key == visit->key1 && value == visit->value1)
+    visit->seen |= 1;
+  else if (key == visit->key2 && value == NULL)
+    visit->seen |= 2;
+  else
+    visit->seen |= 4;
+}
+
+int test_cfdictionary_apply_function() {
+  int key1, key2, value1;
+  const void *keys[] = {&key1, &key2};
+  const void *values[] = {&value1, NULL};
+  CFDictionaryRef dict = CFDictionaryCreate(NULL, keys, values, 2, NULL, NULL);
+  struct uf_dictionary_visit_context visit = {&key1, &key2, &value1, 0};
+  CFDictionaryApplyFunction(dict, uf_dictionary_visit, &visit);
+  CFRelease(dict);
+  if (visit.seen != 3)
+    return 1;
+  dict = CFDictionaryCreate(NULL, NULL, NULL, 0, NULL, NULL);
+  visit.seen = 0;
+  CFDictionaryApplyFunction(dict, uf_dictionary_visit, &visit);
+  CFRelease(dict);
+  if (visit.seen != 0)
+    return 2;
+  NSString *key = [[NSString alloc] initWithUTF8String:"key"];
+  NSString *value = [[NSString alloc] initWithUTF8String:"value"];
+  NSDictionary *bridged =
+      [[NSDictionary alloc] initWithObjectsAndKeys:value, key, nil];
+  visit.key1 = key;
+  visit.value1 = value;
+  visit.seen = 0;
+  CFDictionaryApplyFunction((CFDictionaryRef)bridged, uf_dictionary_visit,
+                            &visit);
+  [bridged release];
+  [value release];
+  [key release];
+  return visit.seen == 1 ? 0 : 3;
+}
+
+int test_cfdictionary_create_and_copy_callbacks() {
+  CFDictionaryKeyCallBacks keys = {0,    uf_dict_retain, uf_dict_release,
+                                   NULL, NULL,           NULL};
+  CFDictionaryValueCallBacks values = {0, uf_dict_retain, uf_dict_release, NULL,
+                                       NULL};
+  int k1, k2, v1, v2, v3;
+  const void *source_keys[] = {&k1, &k2};
+  const void *source_values[] = {&v1, &v2};
+  uf_dict_retains = uf_dict_releases = 0;
+  CFDictionaryRef source =
+      CFDictionaryCreate(NULL, source_keys, source_values, 2, &keys, &values);
+  CFDictionaryRef copy = CFDictionaryCreateCopy(NULL, source);
+  CFMutableDictionaryRef mutable_copy =
+      CFDictionaryCreateMutableCopy(NULL, 0, copy);
+  CFRelease(source);
+  if (uf_dict_retains != 12 || uf_dict_releases != 4 ||
+      CFDictionaryGetCount(copy) != 2 || CFDictionaryGetValue(copy, &k2) != &v2)
+    return 1;
+  CFDictionarySetValue(mutable_copy, &k1, &v3);
+  if (CFDictionaryGetValue(copy, &k1) != &v1 ||
+      CFDictionaryGetValue(mutable_copy, &k1) != &v3)
+    return 2;
+  CFRelease(copy);
+  CFRelease(mutable_copy);
+  if (uf_dict_retains != 14 || uf_dict_releases != 14)
+    return 3;
+  const void *null_values[] = {NULL};
+  source = CFDictionaryCreate(NULL, source_keys, null_values, 1, NULL, NULL);
+  if (!CFDictionaryContainsKey(source, &k1) ||
+      CFDictionaryGetValue(source, &k1) != NULL)
+    return 4;
+  CFRelease(source);
+  return 0;
+}
+
+int test_cfuuid_cf_collection_interop() {
+  unsigned char bytes[16] = {0x33};
+  CFUUIDRef a = uf_uuid_from_bytes(bytes, 0), b = uf_uuid_from_bytes(bytes, 0);
+  bytes[15] = 1;
+  CFUUIDRef other = uf_uuid_from_bytes(bytes, 0);
+  CFStringRef value =
+      CFStringCreateWithCString(NULL, "value", kCFStringEncodingUTF8);
+  if (!CFEqual(a, b) || CFEqual(a, other) || CFEqual(a, value) ||
+      CFEqual(value, a))
+    return 1;
+  CFMutableDictionaryRef dictionary =
+      CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks,
+                                &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(dictionary, a, value);
+  CFRelease(a);
+  if (CFDictionaryGetValue(dictionary, b) != value ||
+      CFDictionaryGetValue(dictionary, other))
+    return 2;
+  CFRelease(dictionary);
+  CFRelease(b);
+  CFRelease(other);
+  CFRelease(value);
+  return 0;
+}
+
+int test_cfstring_character_creation() {
+  UniChar units[] = {'A', 0, 'B', 0xd800};
+  id pool = [[NSAutoreleasePool alloc] init];
+  CFStringRef string =
+      CFStringCreateWithCharacters(kCFAllocatorSystemDefault, units, 4);
+  units[0] = 'X';
+  [pool release];
+  if (!string || CFStringGetLength(string) != 4 ||
+      CFStringGetCharacterAtIndex(string, 0) != 'A' ||
+      CFStringGetCharacterAtIndex(string, 1) ||
+      CFStringGetCharacterAtIndex(string, 2) != 'B' ||
+      CFStringGetCharacterAtIndex(string, 3) != 0xd800)
+    return 1;
+  CFRelease(string);
+  pool = [[NSAutoreleasePool alloc] init];
+  string = CFStringCreateWithCharacters(NULL, NULL, 0);
+  [pool release];
+  if (!string || CFStringGetLength(string))
+    return 2;
+  CFRelease(string);
+  return 0;
 }
 
 int test_vsnprintf() {
@@ -984,6 +2382,143 @@ int test_valloc() {
   if (ptr == NULL)
     return -3;
   free(ptr);
+  return 0;
+}
+
+int test_allocation_failure_contracts() {
+  void *(*volatile allocate)(size_t) = malloc;
+  void *(*volatile zeroed)(size_t, size_t) = calloc;
+  void *(*volatile aligned)(size_t) = valloc;
+  void *(*volatile resize)(void *, size_t) = realloc;
+  void *(*volatile resize_free)(void *, size_t) = reallocf;
+  const size_t impossible = (size_t)-1;
+  errno = 0;
+  if (allocate(impossible) || errno != ENOMEM)
+    return 1;
+  errno = 0;
+  if (zeroed(0x80000001u, 2) || errno != ENOMEM)
+    return 2;
+  errno = 0;
+  if (aligned(impossible) || errno != ENOMEM)
+    return 3;
+  unsigned char *old = allocate(32);
+  if (!old)
+    return 4;
+  memset(old, 0x5a, 32);
+  errno = 0;
+  if (resize(old, impossible) || errno != ENOMEM || malloc_size(old) < 32)
+    return 5;
+  for (int i = 0; i < 32; i++)
+    if (old[i] != 0x5a)
+      return 6;
+  free(old);
+  errno = 0;
+  old = allocate(32);
+  if (!old || resize_free(old, impossible) || errno != ENOMEM)
+    return 7;
+  // reallocf consumed old. Do not free or read it after failure.
+  errno = EDOM;
+  void *nil_free = NULL;
+  free(nil_free);
+  if (errno != EDOM)
+    return 8;
+  return 0;
+}
+
+int test_allocation_zero_and_resize_contracts() {
+  void *(*volatile allocate)(size_t) = malloc;
+  void *(*volatile zeroed)(size_t, size_t) = calloc;
+  void *(*volatile resize)(void *, size_t) = realloc;
+  errno = EDOM;
+  void *a = allocate(0), *b = zeroed(0, (size_t)-1);
+  if (!a || !b || a == b || errno != EDOM)
+    return 1;
+  void *c = resize(a, 0);
+  if (!c || c == a || errno != EDOM)
+    return 2;
+  free(b);
+  free(c);
+  if (errno != EDOM)
+    return 3;
+  unsigned char *bytes = zeroed(17, 3);
+  if (!bytes || errno != EDOM)
+    return 4;
+  for (int i = 0; i < 51; i++)
+    if (bytes[i])
+      return 5;
+  memcpy(bytes, "preserve", 8);
+  unsigned char *grown = resize(bytes, 1024);
+  if (!grown || memcmp(grown, "preserve", 8) || errno != EDOM)
+    return 6;
+  free(grown);
+  return errno != EDOM ? 7 : 0;
+}
+
+static void *uf_allocation_errno_worker(void *unused) {
+  (void)unused;
+  // errno is initially available before the worker's first libc allocation.
+  if (errno != 0)
+    return (void *)1;
+  void *(*volatile allocate)(size_t) = malloc;
+  if (allocate((size_t)-1) || errno != ENOMEM)
+    return (void *)2;
+  void *p = allocate(32);
+  if (!p || errno != ENOMEM)
+    return (void *)3;
+  free(p);
+  return NULL;
+}
+
+int test_allocation_errno_is_thread_local() {
+  pthread_t thread;
+  void *result = (void *)99;
+  errno = EDOM;
+  if (pthread_create(&thread, NULL, uf_allocation_errno_worker, NULL) ||
+      pthread_join(thread, &result))
+    return 1;
+  return result || errno != EDOM ? 2 : 0;
+}
+
+int TestApp_allocation_exhaustion_main(void) {
+  // Keep these allocations alive until this dedicated test process exits.
+  // Guest malloc reserves virtual ranges without touching their contents.
+  void *(*volatile allocate)(size_t) = malloc;
+  void *(*volatile resize)(void *, size_t) = realloc;
+  void *(*volatile resize_free)(void *, size_t) = reallocf;
+  const size_t block = 32u * 1024 * 1024;
+  malloc_zone_t *zone = malloc_create_zone(0, 0);
+  if (!zone)
+    return 8;
+  unsigned char *old = allocate(block);
+  if (!old)
+    return 1;
+  memset(old, 0x5a, 64);
+  int count = 0;
+  while (allocate(block))
+    if (++count > 128)
+      return 2;
+  if (count == 0 || errno != ENOMEM)
+    return 3;
+  char error_text[32];
+  errno = EDOM;
+  if (strerror_r(EINVAL, error_text, sizeof(error_text)) ||
+      strcmp(error_text, "Invalid argument") || errno != EDOM)
+    return 10;
+  if (zone->malloc(zone, block * 2) || errno != ENOMEM ||
+      malloc_create_zone(block * 2, 0) || errno != ENOMEM)
+    return 9;
+  malloc_destroy_zone(zone);
+  if (resize(old, block * 2) || errno != ENOMEM || malloc_size(old) < block)
+    return 4;
+  for (int i = 0; i < 64; i++)
+    if (old[i] != 0x5a)
+      return 5;
+  if (resize_free(old, block * 2) || errno != ENOMEM)
+    return 6;
+  // No block fitted before reallocf: this only succeeds if it freed old.
+  if (!allocate(block))
+    return 7;
+  puts("PASS allocation exhaustion and reallocf release");
   return 0;
 }
 
@@ -2239,6 +3774,317 @@ int test_strncat() {
   }
 
   return 0;
+}
+
+// Declare APIs missing from the legacy test SDK without changing that SDK.
+extern size_t strnlen(const char *, size_t);
+extern char *strndup(const char *, size_t);
+extern void *memrchr(const void *, int, size_t);
+extern char *__strncat_chk(char *, const char *, size_t, size_t);
+extern void *memmem(const void *, size_t, const void *, size_t);
+extern char *stpcpy(char *, const char *);
+extern char *stpncpy(char *, const char *, size_t);
+extern char *strchrnul(const char *, int);
+extern char *strcasestr(const char *, const char *);
+extern void explicit_bzero(void *, size_t);
+extern int strverscmp(const char *, const char *);
+extern char *strfry(char *);
+
+int test_version_comparison_extensions() {
+  int (*volatile compare)(const char *, const char *) = strverscmp;
+  const char *ordered[] = {"000", "00", "01", "010", "09", "0", "1", "9", "10"};
+  for (int i = 0; i < 9; i++) {
+    for (int j = 0; j < 9; j++) {
+      int value = compare(ordered[i], ordered[j]);
+      if (((value > 0) - (value < 0)) != ((i > j) - (i < j)))
+        return 1;
+    }
+  }
+  if (compare("a", "1") <= 0 || compare("item#99", "item#100") >= 0 ||
+      compare("part1_f012", "part1_f01") <= 0 || compare("0/", "01") <= 0)
+    return 2;
+  char long_number[513], longer[514];
+  memset(long_number, '9', 512);
+  long_number[512] = 0;
+  memset(longer, '1', 513);
+  longer[513] = 0;
+  if (compare(long_number, longer) >= 0 || compare(long_number, "2") <= 0)
+    return 3;
+  char a[] = {(char)0xff, '9', 0}, b[] = {(char)0xff, '1', '0', 0};
+  return compare(a, b) >= 0 ? 4 : 0;
+}
+
+int test_shuffle_extensions() {
+  char *(*volatile shuffle)(char *) = strfry;
+  char empty[] = {0, 'Z'}, one[] = {'x', 0, 'Z'};
+  errno = EDOM;
+  if (shuffle(empty) != empty || empty[0] || empty[1] != 'Z' ||
+      shuffle(one) != one || memcmp(one, "x\0Z", 3) || errno != EDOM)
+    return 1;
+  unsigned char guarded[258];
+  guarded[0] = guarded[257] = 'Z';
+  for (int i = 1; i <= 255; i++)
+    guarded[i] = (unsigned char)i;
+  guarded[256] = 0;
+  for (int run = 0; run < 32; run++) {
+    unsigned counts[256] = {0};
+    if (shuffle((char *)guarded + 1) != (char *)guarded + 1 || errno != EDOM ||
+        guarded[0] != 'Z' || guarded[257] != 'Z' || guarded[256])
+      return 2;
+    for (int i = 1; i <= 255; i++)
+      counts[guarded[i]]++;
+    if (counts[0])
+      return 3;
+    for (int i = 1; i <= 255; i++)
+      if (counts[i] != 1)
+        return 4;
+  }
+  srand(42);
+  int expected = rand();
+  srand(42);
+  if (!shuffle((char *)guarded + 1) || rand() != expected)
+    return 5;
+  return 0;
+}
+
+int test_reentrant_error_message_extensions() {
+  int (*volatile describe)(int, char *, size_t) = strerror_r;
+  char buf[128];
+  errno = EDOM;
+  if (describe(EINVAL, buf, sizeof(buf)) || strcmp(buf, "Invalid argument") ||
+      strcmp(buf, strerror(EINVAL)) || errno != EDOM)
+    return 1;
+  memset(buf, 'Z', sizeof(buf));
+  if (describe(EINVAL, buf, 4) != ERANGE || memcmp(buf, "Inv\0ZZ", 6) ||
+      errno != EDOM)
+    return 2;
+  if (describe(EINVAL, NULL, 0) != ERANGE || describe(-1, NULL, 0) != EINVAL ||
+      errno != EDOM)
+    return 3;
+  if (describe(-1, buf, sizeof(buf)) != EINVAL ||
+      strcmp(buf, "Unknown error: -1") || describe(-1, buf, 4) != EINVAL ||
+      memcmp(buf, "Unk\0", 4) || errno != EDOM)
+    return 4;
+  if (describe(0, buf, sizeof(buf)) != EINVAL ||
+      strcmp(buf, "Unknown error: 0"))
+    return 5;
+  buf[0] = buf[1] = 'Z';
+  if (describe(EINVAL, buf, 1) != ERANGE || buf[0] || buf[1] != 'Z')
+    return 6;
+  if (errno != EDOM)
+    return 7;
+  // Historical Darwin warns for unknown strerror values, including cache hits.
+  for (int i = 0; i < 2; i++) {
+    errno = EDOM;
+    if (strcmp(strerror(0), "Unknown error: 0") || errno != EINVAL)
+      return 8;
+    errno = EDOM;
+    if (strcmp(strerror(-1), "Unknown error: -1") || errno != EINVAL)
+      return 9;
+  }
+  return 0;
+}
+
+static sem_t uf_error_message_go, uf_error_message_done;
+
+static void *uf_error_message_worker(void *unused) {
+  (void)unused;
+  char buf[64];
+  errno = EIO;
+  int failed = 0;
+  for (int i = 0; i < 16; i++) {
+    if (sem_wait(&uf_error_message_go))
+      return (void *)2;
+    if (strerror_r(ENOENT, buf, sizeof(buf)) ||
+        strcmp(buf, "No such file or directory") || errno != EIO)
+      failed = 1;
+    if (sem_post(&uf_error_message_done))
+      return (void *)3;
+  }
+  return (void *)(uintptr_t)failed;
+}
+
+int test_reentrant_error_messages_across_threads() {
+  pthread_t thread;
+  void *result = (void *)99;
+  char buf[64];
+  if (sem_init(&uf_error_message_go, 0, 0) ||
+      sem_init(&uf_error_message_done, 0, 0) ||
+      pthread_create(&thread, NULL, uf_error_message_worker, NULL))
+    return 1;
+  errno = EDOM;
+  int failed = 0;
+  for (int i = 0; i < 16; i++) {
+    if (sem_post(&uf_error_message_go) || sem_wait(&uf_error_message_done))
+      return 2;
+    if (strerror_r(EINVAL, buf, sizeof(buf)) ||
+        strcmp(buf, "Invalid argument") || errno != EDOM)
+      failed = 1;
+  }
+  if (pthread_join(thread, &result) || result || failed || errno != EDOM ||
+      sem_destroy(&uf_error_message_go) || sem_destroy(&uf_error_message_done))
+    return 3;
+  // UF's completed usleep has no error to replace the caller's errno with.
+  return usleep(0) || errno != EDOM ? 4 : 0;
+}
+
+int test_binary_substring_extensions() {
+  void *(*volatile find)(const void *, size_t, const void *, size_t) = memmem;
+  char binary[] = {'x', 0, 'a', 'b', 0, 'a', 'b'};
+  char needle[] = {0, 'a', 'b'};
+  if (find(binary, 7, needle, 3) != binary + 1 ||
+      find(binary + 2, 5, binary + 4, 3) != binary + 4 ||
+      find(binary, 7, "bad", 3) || find(NULL, 0, NULL, 1) ||
+      find(binary, 7, NULL, 0) != binary || find(NULL, 0, NULL, 0))
+    return 1;
+  char repeated[513], pattern[129];
+  memset(repeated, 'a', sizeof(repeated));
+  memset(pattern, 'a', sizeof(pattern));
+  repeated[512] = pattern[128] = 'b';
+  return find(repeated, 513, pattern, 129) != repeated + 384 ? 2 : 0;
+}
+
+int test_end_pointer_copy_extensions() {
+  char *(*volatile copy)(char *, const char *) = stpcpy;
+  char *(*volatile bounded)(char *, const char *, size_t) = stpncpy;
+  char dest[12];
+  memset(dest, 'Z', sizeof(dest));
+  if (copy(dest, "a") != dest + 1 || memcmp(dest, "a\0ZZ", 4))
+    return 1;
+  if (copy(dest, "") != dest || dest[0] || dest[2] != 'Z')
+    return 2;
+  if (copy(copy(dest, "ab"), "cd") != dest + 4 || strcmp(dest, "abcd"))
+    return 3;
+  char raw[] = {'a', 'b', 'c', 'd'};
+  memset(dest, 'Z', sizeof(dest));
+  if (bounded(dest, raw, 4) != dest + 4 || memcmp(dest, "abcdZZ", 6))
+    return 4;
+  if (bounded(dest, "xy", 6) != dest + 2 || memcmp(dest, "xy\0\0\0\0ZZ", 8))
+    return 5;
+  return bounded(NULL, NULL, 0) ? 6 : 0;
+}
+
+int test_case_and_terminator_search_extensions() {
+  char *(*volatile terminator)(const char *, int) = strchrnul;
+  char *(*volatile folded)(const char *, const char *) = strcasestr;
+  char text[] = "aBcABc";
+  if (terminator(text, 'B' + 256) != text + 1 ||
+      terminator(text, 'z') != text + 6 || terminator(text, 0) != text + 6)
+    return 1;
+  if (folded(text, "bCa") != text + 1 || folded(text, "") != text ||
+      folded(text, "too long") || folded(text, "xyz"))
+    return 2;
+  char bytes[] = {(char)0xe9, 'A', 'b', 0};
+  char query[] = {(char)0xe9, 'a', 0};
+  return folded(bytes, query) != bytes ? 3 : 0;
+}
+
+int test_overlap_copy_and_explicit_wipe_extensions() {
+  void (*volatile move)(const void *, void *, size_t) = bcopy;
+  void (*volatile wipe)(void *, size_t) = explicit_bzero;
+  char buffer[10] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 0, 'Z', 'Z'};
+  move(buffer, buffer + 2, 5);
+  if (memcmp(buffer, "ababcde\0ZZ", 10))
+    return 1;
+  move(buffer + 2, buffer, 5);
+  if (memcmp(buffer, "abcdede\0ZZ", 10))
+    return 2;
+  wipe(buffer + 1, 4);
+  if (memcmp(buffer, "a\0\0\0\0de\0ZZ", 10))
+    return 3;
+  move(NULL, NULL, 0);
+  wipe(NULL, 0);
+  return 0;
+}
+
+int test_bounded_string_extensions() {
+  char raw[3] = {'a', 'b', 'c'};
+  size_t (*volatile scan)(const char *, size_t) = strnlen;
+  char *(*volatile duplicate)(const char *, size_t) = strndup;
+  if (scan(raw, 3) != 3 || scan(NULL, 0) != 0)
+    return 1;
+  char *copy = duplicate(raw, 3);
+  if (!copy || strcmp(copy, "abc"))
+    return 2;
+  raw[0] = 'z';
+  if (copy[0] != 'a')
+    return 3;
+  free(copy);
+  copy = duplicate(NULL, 0);
+  if (!copy || copy[0])
+    return 4;
+  free(copy);
+  char dest[8] = "ab";
+  if (strlcat(dest, "cdefgh", 6) != 8 || strcmp(dest, "abcde"))
+    return 5;
+  char unterminated[4] = {'a', 'b', 'c', 'd'};
+  if (strlcat(unterminated, "xy", 4) != 6 || memcmp(unterminated, "abcd", 4))
+    return 6;
+  if (strlcat(NULL, "abc", 0) != 3 || strlcpy(NULL, "abc", 0) != 3)
+    return 7;
+  char guarded[8] = {'a', 'b', 0, 'Z', 'Z', 'Z', 'Z', 'Z'};
+  char *(*volatile checked)(char *, const char *, size_t, size_t) =
+      __strncat_chk;
+  if (checked(guarded, "xyz", 3, 6) != guarded ||
+      memcmp(guarded, "abxyz\0ZZ", 8))
+    return 8;
+  return 0;
+}
+
+int test_reentrant_tokenizer_extensions() {
+  char text[] = ",,a:b;;c,", other[] = "x|y", global[] = "g/h";
+  char *save = NULL, *other_save = NULL;
+  if (strcmp(strtok(global, "/"), "g"))
+    return 1;
+  if (strcmp(strtok_r(text, ",:;", &save), "a"))
+    return 2;
+  if (strcmp(strtok_r(other, "|", &other_save), "x"))
+    return 3;
+  if (strcmp(strtok_r(NULL, ",:;", &save), "b"))
+    return 4;
+  if (strcmp(strtok_r(NULL, "|", &other_save), "y"))
+    return 5;
+  if (strcmp(strtok(NULL, "/"), "h"))
+    return 6;
+  if (strcmp(strtok_r(NULL, ",:;", &save), "c"))
+    return 7;
+  if (strtok_r(NULL, ",:;", &save) || strtok_r(NULL, ",:;", &save) ||
+      strtok(NULL, "/") || strtok(NULL, "/"))
+    return 8;
+  char no_delimiter[] = "keep all";
+  if (strcmp(strtok_r(no_delimiter, "", &save), "keep all") ||
+      strtok_r(NULL, "", &save))
+    return 9;
+  return 0;
+}
+
+int test_reverse_search_and_index_extensions() {
+  char bytes[] = {'a', 0, 'b', 'a'};
+  if (memrchr(bytes, 'a', 4) != bytes + 3 ||
+      memrchr(bytes, 256, 4) != bytes + 1 || memrchr(bytes, 'z', 4) ||
+      memrchr(NULL, 0, 0))
+    return 1;
+  char string[] = "aba";
+  if (index(string, 'a') != string || index(string, 0) != string + 3 ||
+      index(string, 'z'))
+    return 2;
+  return 0;
+}
+
+int TestApp_fortify_failure_main(const char *mode) {
+  char buffer[8] = {'a', 'b', 0, 'Z', 'Z', 'Z', 'Z', 'Z'};
+  size_t capacity = 4;
+  if (!strcmp(mode, "--fortify-unterminated")) {
+    buffer[2] = 'c';
+    capacity = 3;
+  } else if (!strcmp(mode, "--fortify-zero")) {
+    capacity = 0;
+  }
+  char *(*volatile checked)(char *, const char *, size_t, size_t) =
+      __strncat_chk;
+  checked(buffer, "xyz", 3, capacity);
+  puts("FORTIFY_RETURNED_UNEXPECTEDLY");
+  return 1;
 }
 
 int test_strlcpy() {
@@ -6620,6 +8466,186 @@ int test_malloc_zone_struct_dispatch() {
   return 0;
 }
 
+int test_malloc_zone_extended_dispatch() {
+  malloc_zone_t *zones[2] = {malloc_default_zone(), malloc_create_zone(0, 0)};
+  for (int i = 0; i < 2; i++) {
+    malloc_zone_t *zone = zones[i];
+    if (!zone || zone->version < 5 || !zone->calloc || !zone->valloc ||
+        !zone->memalign)
+      return 1;
+    unsigned char *a = zone->calloc(zone, 17, 3);
+    unsigned char *b = zone->valloc(zone, 5001);
+    void *c = zone->memalign(zone, 65536, 17);
+    if (!a || !b || !c || ((uintptr_t)b & 4095) || ((uintptr_t)c & 65535))
+      return 2;
+    for (int j = 0; j < 51; j++)
+      if (a[j])
+        return 3;
+    for (int j = 0; j < 5001; j++)
+      if (b[j])
+        return 4;
+    if (malloc_zone_from_ptr(a) != zone || malloc_zone_from_ptr(b) != zone ||
+        malloc_zone_from_ptr(c) != zone || zone->size(zone, c) < 17)
+      return 5;
+    zone->free(zone, a);
+    zone->free(zone, b);
+    zone->free(zone, c);
+    zone->free(zone, NULL);
+    a = malloc_zone_calloc(zone, 5, 7);
+    b = malloc_zone_valloc(zone, 1);
+    c = malloc_zone_memalign(zone, 8192, 1);
+    if (!a || !b || !c || ((uintptr_t)b & 4095) || ((uintptr_t)c & 8191))
+      return 6;
+    free(a);
+    free(b);
+    free(c);
+  }
+  zones[1]->destroy(zones[1]);
+  return 0;
+}
+
+int test_malloc_zone_ownership_and_destruction() {
+  malloc_zone_t *a = malloc_create_zone(4096, 0);
+  malloc_zone_t *b = malloc_create_zone(4096, 0);
+  if (!a || !b || a == b)
+    return 1;
+  unsigned char *p = malloc_zone_malloc(a, 32);
+  unsigned char *q = malloc_zone_memalign(b, 8192, 17);
+  if (!p || !q || a->size(a, q) || b->size(b, p) ||
+      malloc_zone_from_ptr(p) != a || malloc_zone_from_ptr(q) != b)
+    return 2;
+  memset(p, 0x5a, 32);
+  memset(q, 0x33, 17);
+  if (malloc_size(p) < 32 || malloc_size(q) < 17)
+    return 3;
+  p = realloc(p, 1024);
+  if (!p || malloc_zone_from_ptr(p) != a)
+    return 4;
+  for (int i = 0; i < 32; i++)
+    if (p[i] != 0x5a)
+      return 5;
+  void *(*volatile resize)(void *, size_t) = realloc;
+  errno = 0;
+  if (resize(p, (size_t)-1) || errno != ENOMEM || a->size(a, p) < 1024)
+    return 6;
+  void *(*volatile resize_free)(void *, size_t) = reallocf;
+  if (resize_free(p, (size_t)-1) || errno != ENOMEM || malloc_zone_from_ptr(p))
+    return 7;
+  void *live = malloc_zone_malloc(a, 64);
+  void *aligned = malloc_zone_memalign(a, 65536, 17);
+  if (!live || !aligned)
+    return 8;
+  malloc_destroy_zone(a);
+  if (malloc_zone_from_ptr(live) || malloc_zone_from_ptr(aligned) ||
+      malloc_zone_from_ptr(q) != b)
+    return 9;
+  for (int i = 0; i < 17; i++)
+    if (q[i] != 0x33)
+      return 10;
+  free(q);
+  if (malloc_zone_from_ptr(q))
+    return 11;
+  malloc_destroy_zone(b);
+  int stack_value = 0;
+  return malloc_zone_from_ptr(NULL) || malloc_zone_from_ptr(&stack_value) ? 12
+                                                                          : 0;
+}
+
+int test_malloc_zone_names() {
+  malloc_zone_t *zone = malloc_create_zone(0, 0);
+  if (!zone)
+    return 1;
+  char name[] = "first";
+  malloc_set_zone_name(zone, name);
+  name[0] = 'X';
+  const char *first = malloc_get_zone_name(zone);
+  if (!first || strcmp(first, "first"))
+    return 2;
+  // The current name is a valid input; copy before freeing its old storage.
+  malloc_set_zone_name(zone, first);
+  const char *second = malloc_get_zone_name(zone);
+  if (!second || strcmp(second, "first") || malloc_zone_from_ptr(first))
+    return 3;
+  malloc_set_zone_name(zone, NULL);
+  if (malloc_get_zone_name(zone) || malloc_zone_from_ptr(second))
+    return 4;
+  malloc_set_zone_name(zone, "last");
+  const char *last = malloc_get_zone_name(zone);
+  if (!last || strcmp(last, "last"))
+    return 5;
+  malloc_destroy_zone(zone);
+  return malloc_zone_from_ptr(last) ? 6 : 0;
+}
+
+int test_posix_memalign_contracts() {
+  int (*volatile aligned)(void **, size_t, size_t) = posix_memalign;
+  size_t alignments[] = {4, 8, 16, 32, 64, 4096, 65536, 1048576};
+  for (unsigned i = 0; i < sizeof(alignments) / sizeof(alignments[0]); i++) {
+    for (size_t size = 0; size < 18; size += 17) {
+      void *p = NULL;
+      errno = EDOM;
+      if (aligned(&p, alignments[i], size) || !p ||
+          ((uintptr_t)p & (alignments[i] - 1)) || malloc_size(p) < size ||
+          errno != EDOM)
+        return 1;
+      if (size) {
+        memset(p, 0x5a, size);
+        p = realloc(p, 32768);
+        if (!p)
+          return 2;
+        for (size_t j = 0; j < size; j++)
+          if (((unsigned char *)p)[j] != 0x5a)
+            return 3;
+      }
+      free(p);
+    }
+  }
+  size_t invalid[] = {0, 1, 2, 3, 6, 24};
+  for (unsigned i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+    void *p = (void *)0x1234;
+    errno = EDOM;
+    if (aligned(&p, invalid[i], 17) != EINVAL || p != (void *)0x1234 ||
+        errno != EDOM)
+      return 4;
+  }
+  void *p = (void *)0x1234;
+  errno = EDOM;
+  return aligned(&p, 65536, (size_t)-1) != ENOMEM || p != (void *)0x1234 ||
+                 errno != EDOM
+             ? 5
+             : 0;
+}
+
+int test_malloc_zone_allocation_errors() {
+  malloc_zone_t *zone = malloc_create_zone(0, 0);
+  if (!zone)
+    return 1;
+  errno = 0;
+  if (zone->malloc(zone, (size_t)-1) || errno != ENOMEM)
+    return 2;
+  errno = 0;
+  if (zone->calloc(zone, 0x80000001u, 2) || errno != ENOMEM)
+    return 3;
+  errno = 0;
+  if (zone->valloc(zone, (size_t)-1) || errno != ENOMEM)
+    return 4;
+  errno = 0;
+  if (zone->memalign(zone, 3, 0) || errno != EINVAL)
+    return 5;
+  if (zone->memalign(zone, 65536, (size_t)-1) || errno != ENOMEM)
+    return 6;
+  if (malloc_create_zone((size_t)-1, 0) || errno != ENOMEM)
+    return 7;
+  void *p = zone->realloc(zone, NULL, 16);
+  void *zero = zone->realloc(zone, p, 0);
+  if (!zero || zero == p || malloc_zone_from_ptr(p) ||
+      malloc_zone_from_ptr(zero) != zone)
+    return 8;
+  zone->free(zone, zero);
+  malloc_destroy_zone(zone);
+  return 0;
+}
+
 int test_fcvt() {
   char *buf;
   int dec, sign;
@@ -6961,9 +8987,52 @@ struct {
 #endif
     FUNC_DEF(test_qsort),
     FUNC_DEF(test_vsnprintf),
+    FUNC_DEF(test_variadic_callback_snapshot),
+    FUNC_DEF(test_uuid_c_values),
+    FUNC_DEF(test_named_semaphore_reopen),
+    FUNC_DEF(test_semaphore_lifecycle_and_unlink),
+    FUNC_DEF(test_semaphore_error_boundaries),
+    FUNC_DEF(test_semaphore_counter_limits),
+    FUNC_DEF(test_dispatch_semaphore_independent_limit),
+    FUNC_DEF(test_semaphore_waiter_cleanup),
+    FUNC_DEF(test_nsuuid_values),
+    FUNC_DEF(test_cfuuid_byte_abi),
+    FUNC_DEF(test_cf_copy_description_ownership),
+    FUNC_DEF(test_cfuuid_string_and_reference_lifetimes),
+    FUNC_DEF(test_cfuuid_constants),
+    FUNC_DEF(test_cfuuid_historical_parser),
+    FUNC_DEF(test_cfdictionary_callback_lifecycle),
+    FUNC_DEF(test_cfdictionary_replaces_equal_key),
+    FUNC_DEF(test_cfdictionary_create_and_copy_callbacks),
+    FUNC_DEF(test_cfdictionary_apply_function),
+    FUNC_DEF(test_cfdictionary_presence_and_collision),
+    FUNC_DEF(test_cfdictionary_contains_value_callbacks),
+    FUNC_DEF(test_cfdata_copy_and_empty_range),
+    FUNC_DEF(test_cflocale_copy_lifetime),
+    FUNC_DEF(test_cfurl_copy_scheme),
+    FUNC_DEF(test_cfurl_port_number),
+    FUNC_DEF(test_cfurl_host_name),
+    FUNC_DEF(test_cfurl_create_bytes),
+    FUNC_DEF(test_cfurl_directory_path),
+    FUNC_DEF(test_cfurl_escaped_path),
+    FUNC_DEF(test_cfurl_query_and_fragment),
+    FUNC_DEF(test_cfurl_legacy_percent_decode),
+    FUNC_DEF(test_cfdata_no_copy_deallocator),
+    FUNC_DEF(test_cfdata_equality_and_dictionary_keys),
+    FUNC_DEF(test_cfdata_mutable_copy_and_length),
+    FUNC_DEF(test_cfdata_replace_and_delete),
+    FUNC_DEF(test_cfarray_custom_callbacks),
+    FUNC_DEF(test_cfarray_nonretaining_mutations),
+    FUNC_DEF(test_nsmutablearray_remove_multiple_matches),
+    FUNC_DEF(test_nsmutabledictionary_replacement_key_lifetime),
+    FUNC_DEF(test_cfuuid_cf_collection_interop),
+    FUNC_DEF(test_cfstring_character_creation),
     FUNC_DEF(test_sscanf),
     FUNC_DEF(test_swscanf),
     FUNC_DEF(test_realloc),
+    FUNC_DEF(test_allocation_failure_contracts),
+    FUNC_DEF(test_allocation_zero_and_resize_contracts),
+    FUNC_DEF(test_allocation_errno_is_thread_local),
     FUNC_DEF(test_valloc),
     FUNC_DEF(test_atof),
     FUNC_DEF(test_strtof),
@@ -6973,6 +9042,17 @@ struct {
     FUNC_DEF(test_CGAffineTransform),
     FUNC_DEF(test_strncpy),
     FUNC_DEF(test_strncat),
+    FUNC_DEF(test_bounded_string_extensions),
+    FUNC_DEF(test_binary_substring_extensions),
+    FUNC_DEF(test_version_comparison_extensions),
+    FUNC_DEF(test_shuffle_extensions),
+    FUNC_DEF(test_reentrant_error_message_extensions),
+    FUNC_DEF(test_reentrant_error_messages_across_threads),
+    FUNC_DEF(test_end_pointer_copy_extensions),
+    FUNC_DEF(test_case_and_terminator_search_extensions),
+    FUNC_DEF(test_overlap_copy_and_explicit_wipe_extensions),
+    FUNC_DEF(test_reentrant_tokenizer_extensions),
+    FUNC_DEF(test_reverse_search_and_index_extensions),
     FUNC_DEF(test_strlcpy),
     FUNC_DEF(test_setlocale),
     FUNC_DEF(test_strtoul),
@@ -7068,6 +9148,11 @@ struct {
     FUNC_DEF(test_Block_copy_lifetime),
     FUNC_DEF(test_malloc_zone_basic),
     FUNC_DEF(test_malloc_zone_struct_dispatch),
+    FUNC_DEF(test_malloc_zone_extended_dispatch),
+    FUNC_DEF(test_malloc_zone_ownership_and_destruction),
+    FUNC_DEF(test_malloc_zone_names),
+    FUNC_DEF(test_posix_memalign_contracts),
+    FUNC_DEF(test_malloc_zone_allocation_errors),
     FUNC_DEF(test_fcvt),
     FUNC_DEF(test_tempfile),
     FUNC_DEF(test_NSSet_setWithObjects_count),

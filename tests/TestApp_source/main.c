@@ -16,12 +16,18 @@
 
 int TestApp_cli_tests_main(void);
 int TestApp_gui_tests_main(int argc, char **argv);
+int TestApp_fortify_failure_main(const char *mode);
+int TestApp_allocation_exhaustion_main(void);
 
 int main(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "--cli-tests")) {
     printf("Starting command-line automated tests (omit --cli-tests for UIKit "
            "test app).\n");
     return TestApp_cli_tests_main();
+  } else if (argc == 2 && !strncmp(argv[1], "--fortify-", 10)) {
+    return TestApp_fortify_failure_main(argv[1]);
+  } else if (argc == 2 && !strcmp(argv[1], "--allocation-exhaustion")) {
+    return TestApp_allocation_exhaustion_main();
   } else if (argc == 1) {
     printf("Running UIKit test app (pass --cli-tests for other tests).\n");
     return TestApp_gui_tests_main(argc, argv);

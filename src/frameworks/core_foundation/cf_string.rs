@@ -23,6 +23,32 @@ use crate::Environment;
 pub type CFStringRef = super::CFTypeRef;
 pub type CFMutableStringRef = CFStringRef;
 
+fn CFStringCreateWithCharacters(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    chars: ConstPtr<unichar>,
+    num_chars: CFIndex,
+) -> CFStringRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
+    let len: GuestUSize = num_chars
+        .try_into()
+        .expect("Negative CFString character count");
+    let units = if len == 0 {
+        Vec::new()
+    } else {
+        env.mem
+            .bytes_at(chars.cast(), len.checked_mul(2).unwrap())
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_le_bytes(*pair))
+            .collect()
+    };
+    // Preserve UTF-16 units (including embedded NULs and unpaired surrogates)
+    // and return a +1 object even for the empty string.
+    ns_string::from_u16_vec(env, units)
+}
+
 pub type CFStringEncoding = u32;
 pub const kCFStringEncodingMacRoman: CFStringEncoding = 0;
 pub const kCFStringEncodingASCII: CFStringEncoding = 0x600;
@@ -470,6 +496,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringCreateWithBytes(_, _, _, _, _)),
     export_c_func!(CFStringCreateWithCString(_, _, _)),
     export_c_func!(CFStringCreateWithCStringNoCopy(_, _, _, _)),
+    export_c_func!(CFStringCreateWithCharacters(_, _, _)),
     export_c_func!(CFStringCreateWithFormat(_, _, _, _)),
     export_c_func!(CFStringCreateWithFormatAndArguments(_, _, _, _)),
     export_c_func!(CFStringCreateWithSubstring(_, _, _)),

@@ -19,12 +19,12 @@ use crate::frameworks::foundation::ns_keyed_archiver::{
 };
 use crate::fs::GuestPath;
 use crate::libc::stdlib::qsort::qsort_generic;
-use crate::mem::{ConstPtr, MutPtr, MutVoidPtr, Ptr};
+use crate::mem::{ConstPtr, MutPtr, MutVoidPtr, Ptr, SafeRead};
 use crate::objc::{
     autorelease, id, msg, msg_class, msg_send, nil, objc_classes, release, retain, Class,
     ClassExports, HostObject, NSZonePtr, SEL,
 };
-use crate::Environment;
+use crate::{impl_HostObject_with_superclass, Environment};
 
 struct ObjectEnumeratorHostObject {
     /// the enumerated collection, NSArray *
@@ -40,6 +40,183 @@ pub(super) struct ArrayHostObject {
     pub(super) array: Vec<id>,
 }
 impl HostObject for ArrayHostObject {}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CFArrayCallBacks {
+    pub version: i32,
+    pub retain: GuestFunction,
+    pub release: GuestFunction,
+    pub copy_description: GuestFunction,
+    pub equal: GuestFunction,
+}
+unsafe impl SafeRead for CFArrayCallBacks {}
+
+struct CFArrayHostObject {
+    superclass: ArrayHostObject,
+    callbacks: CFArrayCallBacks,
+}
+impl_HostObject_with_superclass!(CFArrayHostObject);
+
+fn cf_array_retain(env: &mut Environment, this: id, value: id) -> id {
+    let callback = env.objc.borrow::<CFArrayHostObject>(this).callbacks.retain;
+    if callback.to_ptr().is_null() {
+        value
+    } else {
+        callback.call_from_host(env, (nil, value))
+    }
+}
+
+fn cf_array_release(env: &mut Environment, this: id, value: id) {
+    let callback = env.objc.borrow::<CFArrayHostObject>(this).callbacks.release;
+    if !callback.to_ptr().is_null() {
+        let _: () = callback.call_from_host(env, (nil, value));
+    }
+}
+
+pub fn cf_array_equal(env: &mut Environment, array: id, left: id, right: id) -> Option<bool> {
+    let callbacks = env
+        .objc
+        .get_host_object(array)
+        .and_then(|object| object.as_any().downcast_ref::<CFArrayHostObject>())
+        .map(|object| object.callbacks)?;
+    Some(
+        left == right
+            || (!callbacks.equal.to_ptr().is_null()
+                && callbacks.equal.call_from_host(env, (left, right))),
+    )
+}
+
+/// Copy CF-backed arrays while preserving their element ownership callbacks.
+pub fn cf_array_copy(env: &mut Environment, array: id, mutable: bool) -> Option<id> {
+    let callbacks = env
+        .objc
+        .get_host_object(array)
+        .and_then(|object| object.as_any().downcast_ref::<CFArrayHostObject>())
+        .map(|object| object.callbacks);
+    let plain_immutable: Class = msg_class![env; _touchHLE_NSArray_non_retaining class];
+    let plain_mutable: Class = msg_class![env; _touchHLE_NSMutableArray_non_retaining class];
+    let plain: bool = msg![env; array isKindOfClass:plain_immutable];
+    let plain = plain || msg![env; array isKindOfClass:plain_mutable];
+    if callbacks.is_none() && !plain {
+        return None;
+    }
+    let values = env.objc.borrow::<ArrayHostObject>(array).array.clone();
+    if !mutable {
+        return Some(cf_array_new_immutable(env, callbacks, values));
+    }
+    let name = if callbacks.is_some() {
+        "_touchHLE_NSMutableArray_cf_callbacks"
+    } else {
+        "_touchHLE_NSMutableArray_non_retaining"
+    };
+    let class = env.objc.get_known_class(name, &mut env.mem);
+    let result = if let Some(callbacks) = callbacks {
+        env.objc.alloc_object(
+            class,
+            Box::new(CFArrayHostObject {
+                superclass: ArrayHostObject::default(),
+                callbacks,
+            }),
+            &mut env.mem,
+        )
+    } else {
+        env.objc
+            .alloc_object(class, Box::<ArrayHostObject>::default(), &mut env.mem)
+    };
+    for value in values {
+        let value = if callbacks.is_some() {
+            cf_array_retain(env, result, value)
+        } else {
+            value
+        };
+        env.objc
+            .borrow_mut::<ArrayHostObject>(result)
+            .array
+            .push(value);
+    }
+    Some(result)
+}
+
+pub fn cf_array_new_immutable(
+    env: &mut Environment,
+    callbacks: Option<CFArrayCallBacks>,
+    values: Vec<id>,
+) -> id {
+    if let Some(callbacks) = callbacks {
+        assert_eq!(callbacks.version, 0);
+    }
+    let name = if callbacks.is_some() {
+        "_touchHLE_NSArray_cf_callbacks"
+    } else {
+        "_touchHLE_NSArray_non_retaining"
+    };
+    let class = env.objc.get_known_class(name, &mut env.mem);
+    let array = if let Some(callbacks) = callbacks {
+        env.objc.alloc_object(
+            class,
+            Box::new(CFArrayHostObject {
+                superclass: ArrayHostObject::default(),
+                callbacks,
+            }),
+            &mut env.mem,
+        )
+    } else {
+        env.objc
+            .alloc_object(class, Box::<ArrayHostObject>::default(), &mut env.mem)
+    };
+    for value in values {
+        let value = if callbacks.is_some() {
+            cf_array_retain(env, array, value)
+        } else {
+            value
+        };
+        env.objc
+            .borrow_mut::<ArrayHostObject>(array)
+            .array
+            .push(value);
+    }
+    array
+}
+
+/// Replace a CF-backed mutable array range while respecting its callbacks.
+pub fn cf_array_replace(
+    env: &mut Environment,
+    array: id,
+    start: usize,
+    len: usize,
+    values: &[id],
+) -> bool {
+    let custom = env
+        .objc
+        .get_host_object(array)
+        .is_some_and(|object| object.as_any().is::<CFArrayHostObject>());
+    let plain_class: Class = msg_class![env; _touchHLE_NSMutableArray_non_retaining class];
+    let plain: bool = msg![env; array isKindOfClass:plain_class];
+    if !custom && !plain {
+        return false;
+    }
+    let mut inserted = Vec::with_capacity(values.len());
+    for &value in values {
+        inserted.push(if custom {
+            cf_array_retain(env, array, value)
+        } else {
+            value
+        });
+    }
+    let removed: Vec<id> = env
+        .objc
+        .borrow_mut::<ArrayHostObject>(array)
+        .array
+        .splice(start..start + len, inserted)
+        .collect();
+    if custom {
+        for value in removed {
+            cf_array_release(env, array, value);
+        }
+    }
+    true
+}
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -514,6 +691,9 @@ pub const CLASSES: ClassExports = objc_classes! {
 // necessarily Objective-C objects and won't be retained/released.
 @implementation _touchHLE_NSArray_non_retaining: _touchHLE_NSArray
 
+- (id)copyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, false).unwrap() }
+- (id)mutableCopyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, true).unwrap() }
+
 - (())dealloc {
     env.objc.dealloc_object(this, &mut env.mem)
 }
@@ -701,6 +881,10 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.borrow_mut::<ArrayHostObject>(this).array.insert(index as usize, object);
 }
 
+- (())exchangeObjectAtIndex:(NSUInteger)first withObjectAtIndex:(NSUInteger)second {
+    env.objc.borrow_mut::<ArrayHostObject>(this).array.swap(first as usize, second as usize);
+}
+
 - (())addObject:(id)object {
     retain(env, object);
     env.objc.borrow_mut::<ArrayHostObject>(this).array.push(object);
@@ -717,7 +901,8 @@ pub const CLASSES: ClassExports = objc_classes! {
         }
     }
     // TODO: runtime here is O(n^2), it could be O(n) instead
-    for i in to_remove {
+    // Remove from the end so earlier indices remain valid.
+    for i in to_remove.into_iter().rev() {
         () = msg![env; this removeObjectAtIndex:i];
     }
 }
@@ -778,9 +963,95 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
+// CFArray callbacks can manage arbitrary guest pointers, not just ObjC ids.
+@implementation _touchHLE_NSArray_cf_callbacks: _touchHLE_NSArray
+
+- (id)copyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, false).unwrap() }
+- (id)mutableCopyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, true).unwrap() }
+
+- (())dealloc {
+    let old = std::mem::take(&mut env.objc.borrow_mut::<ArrayHostObject>(this).array);
+    for object in old {
+        cf_array_release(env, this, object);
+    }
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+
+@end
+
+@implementation _touchHLE_NSMutableArray_cf_callbacks: _touchHLE_NSMutableArray
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let null = GuestFunction::null_ptr();
+    let host_object = Box::new(CFArrayHostObject {
+        superclass: ArrayHostObject::default(),
+        callbacks: CFArrayCallBacks {
+            version: 0, retain: null, release: null,
+            copy_description: null, equal: null,
+        },
+    });
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
+
+- (id)initWithCallbacks:(ConstPtr<CFArrayCallBacks>)callbacks {
+    let callbacks = env.mem.read(callbacks);
+    assert_eq!(callbacks.version, 0);
+    env.objc.borrow_mut::<CFArrayHostObject>(this).callbacks = callbacks;
+    this
+}
+
+- (id)copyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, false).unwrap() }
+- (id)mutableCopyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, true).unwrap() }
+
+- (())addObject:(id)object {
+    let object = cf_array_retain(env, this, object);
+    env.objc.borrow_mut::<ArrayHostObject>(this).array.push(object);
+}
+
+- (())insertObject:(id)object atIndex:(NSUInteger)index {
+    let object = cf_array_retain(env, this, object);
+    env.objc.borrow_mut::<ArrayHostObject>(this).array.insert(index as usize, object);
+}
+
+- (())replaceObjectAtIndex:(NSUInteger)index withObject:(id)object {
+    let object = cf_array_retain(env, this, object);
+    let old = std::mem::replace(&mut env.objc.borrow_mut::<ArrayHostObject>(this).array[index as usize], object);
+    cf_array_release(env, this, old);
+}
+
+- (())removeObjectAtIndex:(NSUInteger)index {
+    let old = env.objc.borrow_mut::<ArrayHostObject>(this).array.remove(index as usize);
+    cf_array_release(env, this, old);
+}
+
+- (())removeLastObject {
+    let old = env.objc.borrow_mut::<ArrayHostObject>(this).array.pop().unwrap();
+    cf_array_release(env, this, old);
+}
+
+- (())removeAllObjects {
+    let old = std::mem::take(&mut env.objc.borrow_mut::<ArrayHostObject>(this).array);
+    for object in old {
+        cf_array_release(env, this, object);
+    }
+}
+
+- (())dealloc {
+    let old = std::mem::take(&mut env.objc.borrow_mut::<ArrayHostObject>(this).array);
+    for object in old {
+        cf_array_release(env, this, object);
+    }
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+
+@end
+
 // Special variant for use by CFArray with NULL callbacks: objects aren't
 // necessarily Objective-C objects and won't be retained/released.
 @implementation _touchHLE_NSMutableArray_non_retaining: _touchHLE_NSMutableArray
+
+- (id)copyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, false).unwrap() }
+- (id)mutableCopyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, true).unwrap() }
 
 - (())dealloc {
     env.objc.dealloc_object(this, &mut env.mem)
@@ -788,6 +1059,18 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (())addObject:(id)object {
     env.objc.borrow_mut::<ArrayHostObject>(this).array.push(object);
+}
+
+- (())insertObject:(id)object atIndex:(NSUInteger)index {
+    env.objc.borrow_mut::<ArrayHostObject>(this).array.insert(index as usize, object);
+}
+
+- (())replaceObjectAtIndex:(NSUInteger)index withObject:(id)object {
+    env.objc.borrow_mut::<ArrayHostObject>(this).array[index as usize] = object;
+}
+
+- (())removeAllObjects {
+    env.objc.borrow_mut::<ArrayHostObject>(this).array.clear();
 }
 
 - (())removeObjectAtIndex:(NSUInteger)index {

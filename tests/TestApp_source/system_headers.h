@@ -168,8 +168,13 @@ typedef double NSTimeInterval;
 
 @interface NSData : NSObject
 + (id)dataWithContentsOfURL:(NSURL *)url;
+- (id)initWithBytes:(const void *)bytes length:(NSUInteger)length;
 - (const void *)bytes;
 - (NSUInteger)length;
+@end
+
+@interface NSMutableData : NSData
+- (void *)mutableBytes;
 @end
 
 @interface NSJSONSerialization : NSObject

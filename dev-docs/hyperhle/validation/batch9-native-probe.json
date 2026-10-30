@@ -1,0 +1,18 @@
+{
+  "host": "macOS-27.2-arm64-arm-64bit",
+  "scope": "Native macOS observation, not historical iPhone validation",
+  "parser_cases": 25,
+  "null_input_returns_null": true,
+  "constant_reused_by_create": true,
+  "constant_count_before_during_after": [
+    1152921504606846975,
+    1152921504606846975,
+    1152921504606846975
+  ],
+  "ordinary_get_same_object": true,
+  "ordinary_count_before_after_get": [
+    1,
+    1152921504606846975
+  ],
+  "promotion_after_release_not_dereferenced": true
+}

@@ -1,0 +1,18 @@
+Checking for long comment lines…
+[32mNone found.[0m
++ cargo --offline clippy -- --deny warnings
+   Compiling touchHLE_version v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/version)
+   Compiling touchHLE_dynarmic_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/cpu/dynarmic_wrapper)
+warning: touchHLE_version@0.3.0: Cargo.toml version (v0.3.0) is not a prefix of `git describe` version (v0.3.24)!
+    Checking touchHLE v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.77s
++ RUSTDOCFLAGS='--deny warnings --document-private-items'
++ cargo doc
+   Compiling touchHLE_version v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/version)
+   Compiling touchHLE_dynarmic_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/cpu/dynarmic_wrapper)
+warning: touchHLE_version@0.3.0: Cargo.toml version (v0.3.0) is not a prefix of `git describe` version (v0.3.24)!
+ Documenting touchHLE_version v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/version)
+ Documenting touchHLE_dynarmic_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/cpu/dynarmic_wrapper)
+ Documenting touchHLE v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.42s
+   Generated /Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/target/doc/touchHLE/index.html

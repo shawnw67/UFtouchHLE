@@ -1,0 +1,932 @@
+d94c48f37bb5316aa2b87692b3aa6448f1fb20d6 2026-10-28T18:46:46+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+CI: patch SDL for NDK r28 before linting Android
+a1b094c0d593cb073b89d290d1a29e85bf4a2905 2026-10-28T18:40:42+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Make MHP2G's local multiplayer work without setup
+2ecf6394bc901ab978dfa428553c22319fc69b02 2026-10-28T18:17:34+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Fix lint and formatting errors
+5e2869c99620859b740d48ce128b89f1dbe3eb1d 2026-10-28T18:10:36+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Keep the system region when a launcher language is chosen
+5f9584407d24b7f241914122b5412e9307b228e5 2026-10-28T17:57:14+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Only run the MHP2G save research hooks when asked
+0ab6d7380f5cbe3bbde99ff6f27d32456eb6525b 2026-10-28T17:47:29+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Translate the Android launcher
+a67dbc14d79f8865fb11be2b3ce66f4fdf4b5cd5 2026-10-28T17:17:03+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Fix MHP2G's phone/Lobi entrance crashes
+aa18d0a4d838d51cd77e235bb77c37a2f08757d0 2026-10-28T15:44:24+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Take a screenshot with F11
+d64ebdba30e8757fbf64f7ed6364a56ff44cf3c3 2026-10-28T15:44:24+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+WIP: local-network GameKit and LAN transport for MHP2G multiplayer
+4655bc2e8492a8c5c594db141371d7e3598f1208 2026-10-28T12:48:52+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+MHP2G: update diff report + platform comparison docs to reflect inner-layer crack and checksum-F blocker
+af98705c295c013301ce68a1ffef01d6737d4b94 2026-10-28T03:05:48+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+MHP2G: fix alert-time snapshot instrumentation (get_bytes_fallible), document game load-decrypt mechanism + checksum blocker
+5824bcfe9f7955c98c6e318e237b1f92322e9133 2026-10-28T01:25:39+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+MHP2G: crack iOS save inner-layer crypto (table+LCG), add PSP<->iOS save converter v0
+47e9bf7ca817e2237c5718861f516768c138a612 2026-10-27T17:11:58+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: disable debuggable for release builds
+0f1b7e0c9a3a35fb1b3f1c47e6c4210ce7d550fd 2026-10-27T17:04:08+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: link 16 KB page size compatible native libraries
+f25edcb5d647497b8efa279b1cad86a91d1da98c 2026-10-27T13:03:05+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Update UF app icon to Android robot holding iPhone
+4c1d3b3e9a5d73fe6d1b78f47510d94c22ae9f06 2026-10-27T12:30:49+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Switch README badges to compact flat style
+3b7eb20dc59289824b7812c00e46d17023c74f63 2026-10-27T12:22:11+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add shields.io badges to README (zh/en)
+e4a96ae2dc73f7ef017e5c2fe87e541ab986531d 2026-10-27T12:15:01+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Rename app branding from 'touchHLE UF' to UFtouchHLE
+bc3052ddd9e3205feacf8e0c80a30c4532b6a9cc 2026-10-27T11:58:17+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add English README and language navigation
+8670c9c3d175639c51c9a0b0439eeb2a4817654f 2026-10-27T11:55:45+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Rewrite README for UFtouchHLE features and usage
+8c67f2f15128a953461bc6b540be2c926f215eed 2026-10-27T11:32:32+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Fix P2G music loops and automate UFtouchHLE release drafts
+0896e605a58a9e92ae570a0aba76c2ee137efc2f 2026-10-26T23:24:51+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Move _touchHLE_NSBlock class exports to Foundation
+5c71814ba669610f47d9c647512d27971c4f557a 2026-10-26T22:58:06+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add native controller support for P2G and Vice City
+07eb925082c8e5f70d2575c40cec8e51726184bf 2026-10-26T16:30:09+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Improve P2G widescreen and lifecycle support and Vice City compatibility
+19d525bb460cb6cc7e803944644b1e7686e4fb45 2026-10-26T11:06:04+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add GTA audio comparisons, noise tracing, performance tests, P2G widescreen and iPhone 6-era device profiles
+41e4d04fae4ae1f7110a73da9a1b7ca08068db4d 2026-10-25T02:02:47+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add automatic and per-game device profile selection
+05c4a7ad5841257d0aaf104c61d4f907024b3fe3 2026-10-24T14:41:12+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Reduce CPU work when compositing OpenGL ES frames
+e78873d7ec4f8be1af37d6ad74344e3514373c32 2026-10-23T22:04:12+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Monster Hunter Portable 2nd G: play videos, 3D transform animations
+593ab901504d7b4e6068d1d607b69d1d2ad3f0a6 2026-10-23T21:37:57+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Monster Hunter Portable 2nd G and other iOS 6-era support
+b842ced5203a10fe472bd21372c7fbf9bde0c9c1 2026-10-23T12:43:02+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Grand Theft Auto: Vice City: OpenGL ES 2.0, intro movies, quitting
+71d6359723085141b71c0b4348f0880457cb15fc 2026-10-22T19:48:49+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android launcher: check for updates, and a settings button
+5278a6ce65db5f3f1b7ea764ac39d11078730ce5 2026-10-22T19:12:48+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+build-android-uf.sh: always merge native libraries again
+038f7dbdaefb2dd733af6b841af17340a4cd5147 2026-10-22T19:12:48+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android launcher: import and export saves
+fbec93af985c263720f3e9e66522a1c8cc05af19 2026-10-22T00:13:20+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Default options for Dead Rising Mobile
+e894054b614ad87acdb1d56048f1be8c1e107168 2026-10-22T00:13:20+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Support contentScaleFactor for OpenGL ES views
+3c7c1139cec731397ed2f904c8afa8765902cb3c 2026-10-22T00:13:20+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Media Player: MPMoviePlayerViewController, and Main profile H.264
+e01dfa01dc817ee91efdbf901e00de8a0efecd5e 2026-10-22T00:13:20+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Don't zero freed memory for Dead Rising
+a022f86e6a296e34d7d66565e57fb29504614ef2 2026-10-22T00:13:20+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add --device-model and --subpixel-offset options
+db21fc35254ee72f997dabe460f80253bf4da711 2026-10-22T00:13:20+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+libc: add difftime()
+a53994c4321909ee564ebe6ccae5a84453d043be 2026-10-21T19:54:35+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: build the Rust library before merging native libraries
+eba6c5d8adbf083b20b72fed68311789525212ec 2026-10-21T19:54:35+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES: don't leave errors from presenting for the app
+8f41d4abde94380b1e5d778f23ce5d53ae68f7ae 2026-10-21T13:45:36+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Fix the game being stuck after quitting it on Android
+4bf8ac1aba6bb182e7a149d6ea9093b2729b7699 2026-10-21T13:16:11+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Audio Queue: guess byte order of inconsistently described 16-bit PCM
+52d24d38b36d8aca9966672b755180d41e4f99fe 2026-10-21T13:16:11+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES: emulate OES_matrix_palette by skinning on the CPU
+b854b7e4e6c9e1a296a2bcdb5e0f98dab49ec404 2026-10-21T13:16:11+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+libc: full strerror() table, O_NOCTTY, getuid() and geteuid()
+a9751375efe1037a0f300da65cd1fbd1b1391f7d 2026-10-21T13:16:11+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+GameKit: add GKSession that never finds peers
+4964a5529c250fd3c0edeca3fa36f8041b57365f 2026-10-15T21:59:08+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Replace agent directions with notes for this fork
+c211d47d943fd24e06c75c695a8c694fba10b52f 2026-10-15T21:28:49+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Tests: format NSSet test the same with old and new clang-format
+b278163fa2feb26b4ed5ec6f388e89ff3e96d534 2026-10-15T21:03:23+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Report Chinese as zh-Hans/zh-Hant, like iPhone OS
+5d2cb6751e21cd6ba81bf6e83ddae3f3e8fedcfe 2026-10-15T21:03:23+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES: work around Android emulator driver bugs
+34e2694ca4d1331e5713129f6a65f087518a2dfc 2026-10-15T20:06:25+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+MPMoviePlayerController: actually play movies, with subtitles
+00eb12af7b03ee0a238185b79afd0bf54f3db98b 2026-10-15T19:42:13+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Tolerate messages to deallocated objects while terminating
+e5ad259e219e5f4ead1406b8ce932edda445011a 2026-10-15T19:42:13+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+StoreKit: answer product requests, and fail payments
+84735298bc71664260141d9a0ac85f78dd74fc82 2026-10-15T19:42:13+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+CFNetwork: CFHost functions that fail like without a network
+5d7f1807d38f9a8dd78d0172022597bd28b1776b 2026-10-15T19:42:13+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+More for Inotia 2: NSCalendar, NSNumberFormatter, __vsprintf_chk
+c00b53dd97f896fb89c8b4934412092bcb482726 2026-10-15T18:29:44+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+More for Inotia 2: glGetFixedv, audio input, Com2uS Hub
+fb350f14dfbfc2e00505069f7c21d69679c24a39 2026-10-15T18:29:44+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Foundation: small additions and fixes for Inotia 2
+a14ca8c282315c66e290ff3a5826b18e63bb81b5 2026-10-15T18:29:44+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Timers: support changing the fire date, and CFRunLoopRemoveTimer
+13df148659fe61ef6a27c511b9646e7a47449c30 2026-10-15T18:29:44+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Foundation: support bundles other than the main bundle
+a334aa076558ec71abf1f16cc31b888183c4496a 2026-10-15T14:35:55+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Foundation: implement +[NSSet setWithObjects:count:]
+17367a7d7f7d2620496e4ee020bdf752af263a73 2026-10-15T13:48:02+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: back twice exits the app and returns to the launcher
+cbb040432182c02cd7dfb458e32d5abeba169dd8 2026-10-15T13:34:02+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android launcher: wrap a long comment line
+c71801fc64add1a924cc2f4c0f25cdb0a9a258dc 2026-10-15T13:25:39+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: use the package name org.touchhleuf.android for UF builds
+e3d7eaf1d99d75694e92017c640a6eec432d234f 2026-10-15T13:16:30+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: replace the app picker with a native launcher
+d5387f25d7d4ac8f8a4ef488dd547f6bef09ce70 2026-10-15T13:16:30+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Compositor: resize the render target in place instead of recreating it
+d6c44f5ae3f135f348e291e5d1f9a4ac01f7e632 2026-10-15T12:32:34+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+App picker: fix crash when returning from the file manager on Android
+f0b35bee5d421d0c58a008d3fda417f33d45954d 2026-10-15T12:32:11+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: fix GL crash after resuming from the background
+f1c93e6b4861bae4ecc397ba4f8203b7fc163462 2026-10-15T12:32:11+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: fix crash in OpenAL when resuming from the background
+689cdccf8ed41159189c81059ec2952978383a00 2026-10-15T06:28:37+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+App picker: say where the log is if touchHLE crashed last time
+84ad1ebae043046c777603071ce9eb60f115fde9 2026-10-15T06:14:53+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES overlays: only on the main thread; don't redraw stale frames
+1a378eb286f496dcd853e734aff1a7cb076999e7 2026-10-15T05:59:25+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES overlays: don't skip presenting other OpenGL ES layers on top
+37a91cb48e6e67be58284bcf85a048902a05cd9f 2026-10-15T05:57:52+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES overlays: draw the virtual cursor only once, on top
+d4755e49ac4dccbff3b5f7039dec686671e18c6c 2026-10-15T05:56:21+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES overlays: redraw them in time, also when the app unset its context
+d9038b532704e627f4843001ed8a1f2c799f884e 2026-10-15T05:53:31+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES games with UIKit views on top: draw the views over the frame instead of reading it back
+bc31f596dce66b2b319df50d008f8d790bb1911d 2026-10-15T05:31:39+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Ignore repeated going-into-the-background events while paused
+c958c89259a4f2bbea2ef6df1f34b84308c8e22b 2026-10-15T05:24:53+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Fix crashes in the app picker on Android: file manager button, returning from background
+42b6504e89c4d3730dfc921406a4bd4aea1d9fcf 2026-10-15T05:14:45+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add a unit test for detecting quarter-turn layer rotations
+3f2304605f04e6c20d11dbb3ec22d2e108dbb536 2026-10-15T05:11:55+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Ignore hidden and transparent layers when looking for a full-screen OpenGL ES layer
+058ace8c5ab8271fa09c0f1da350484612be455d 2026-10-15T05:10:15+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Present OpenGL ES directly when the full-screen layer is rotated by quarter turns
+23c86828ebeaafbd9c9aea278a129d71f68c761b 2026-10-15T05:01:09+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Fix a broken intra-doc link
+9dfc24f5a6a1e1c5256e2ccee361bf4586da0082 2026-10-15T04:55:34+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add a script to run the integration tests with Apple's toolchain on macOS
+2a2f8df6cafcab67735bc39b475610b8b17c1fd1 2026-10-15T04:52:25+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Document what --print-fps counts for the compositor
+1b397224c9e63afcb73941014fbbab171f482afc 2026-10-15T04:50:47+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+perf: don't reload OpenGL function pointers on every context switch
+01bc3bb96efc04cc0b5f1a0ada46b44bb6186f12 2026-10-15T04:45:54+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+OpenGL ES games: reuse the presentation texture, and support sharp filtering
+71ce32295974cf9005131bc1fbc638368c4f526a 2026-10-15T03:12:57+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: keep the foreground service until touchHLE has quit
+1287969a825cf1ebc0e3a03df466192c08b0f276 2026-10-15T03:03:09+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Collapse identical consecutive log lines after a few repeats
+ad8c2083a98631769b13d64610f429b538125355 2026-10-15T02:56:41+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Don't crash on OpenGL ES errors in the compositor, log them instead
+6473ad781685de7294730aab8800d23bbb2d3cc8 2026-10-15T02:54:47+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: never let the 60Hz display mode preference crash startup
+7a0474aec2d058801f5e22d9c179b3c7ae80cb2e 2026-10-15T02:54:29+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: run a foreground service so touchHLE is less likely to be killed in the background
+ec137fcbd01cc593d4b225e3047deae9a0bcc253 2026-10-15T02:52:30+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: keep the screen on by default
+f706a41e8ec61ab59295fd85d085df7e9188d182 2026-10-15T02:51:11+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: use sharp filtering by default
+1e5e282e9178a9ca546a3b4b00855b8bac4f5a81 2026-10-15T02:49:27+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Treat touches just outside the app's screen as touches on its edge
+fa93b893de4c9139b7d480531f1e65296fbf9c3a 2026-10-15T02:34:03+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+perf: skip compositing frames that would be identical to the last one
+362afbd2f00123831655194bee22d2ea8662912f 2026-10-15T02:22:15+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+perf: use the fast hasher for class and selector name lookups
+5da97af23bbc18b7bd572ecfaaa45061977098f8 2026-10-15T02:19:02+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: prefer a 60Hz display mode
+86da87efd5f2bb34b7f2cafed6834cc8542c48f5 2026-10-15T02:18:14+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Make background/crash problems easier to diagnose; avoid needless activity restarts on Android
+0bae2668a3b73fd3b58f25de4f9a15d9236dc70a 2026-10-15T02:12:36+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add an "hq" filter mode that scales up CPU-drawn graphics with Scale2x
+8cb22b767e45a030a59cef96e374cf00013d0e8b 2026-10-15T01:53:42+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Free textures of deallocated layers; reuse texture storage when size is unchanged
+b046ed41a0b6ad15d2833d252dc4d87f89b3c8a0 2026-10-15T01:46:03+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Show apps' localized names in the app picker and window title
+7a66c080269613147e1e3c7d79240d14b439ab9b 2026-10-15T01:41:16+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+perf: use the gamma lookup table when reading image pixels too
+dd105e2e17b123722cadb34f9b2e14f2002c8882 2026-10-15T01:40:13+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+perf: cache fonts loaded by CGContextSelectFont
+ebdae134d75ba0f0bfe70e608ab0e178fa1522f9 2026-10-15T01:39:00+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+NSString getBytes:...: only use lossy conversion if lossless fails
+320fba8c9c6d9e09f9267a86afee01729d70c060 2026-10-15T01:37:14+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Don't clear UIView-backed layers twice per redraw
+b0176186a71f60b9ce5c999ce4d628bdd3fc05e2 2026-10-15T01:35:15+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: require pressing back twice to go to the background
+8b30ed20766a0a4037246e956a7fb25dfa28a959 2026-10-15T01:34:36+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+--print-fps: count only frames the compositor actually draws
+ba17a9147128afb06fab52c71921a334c1ecffe4 2026-10-15T01:33:35+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add --keep-screen-on, with a quick options switch
+a34ee82ce6182da52d4f47d9058eda570679c942 2026-10-15T01:31:32+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+App picker: remember the quick options between launches
+2e330f28b32a44d088a4b0f887d71c7b38537c4a 2026-10-15T01:29:42+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+perf: fill whole rows at once when clearing; avoid flat_map in pixel conversion
+2fd28ce04550e31bd31a469905788354c80c0cf9 2026-10-15T01:24:35+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+perf: use a fast hasher for the Objective-C runtime's hot maps
+683c95f349768549c7bb317b9aa6eae31b06c1da 2026-10-15T01:20:24+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+App picker: add aspect ratio and filter choices to the quick options
+a97b6403b4a02368e1c3eb51b9ae750be593a3d6 2026-10-15T01:17:56+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Add --aspect= and --filter= options for scaling on large screens
+65c6057a8a7d17430ccdc4cada2a7aa3a181db6a 2026-10-15T01:10:10+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Send applicationDidEnterBackground:/applicationWillEnterForeground: when pausing
+a6724e3a8ae94c339a07045289b70535a5febd12 2026-10-15T01:08:37+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: back button/gesture moves touchHLE to the background instead of quitting
+1eadc5a09158469076aeb4af3026028c5119be68 2026-10-15T01:08:12+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Don't draw while minimized/in the background; don't panic on make-current failure
+20924b9af969ee3c9d68896fc57892290d415bdd 2026-10-15T01:07:31+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+perf: speed up CGContext fills and per-pixel drawing
+61ebfd1e1d78a5b6f7d33560a3217d270276c1ff 2026-10-14T22:25:29+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Fix game name in comment: it's Inotia 1, not Inotia 2
+a7a8ec18deab405690a734222de536c449da7f77 2026-10-14T22:20:33+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: open the file manager reliably
+2785a8db97dce607b1f9ca8aeaa9f18b99c32d1c 2026-10-14T22:17:33+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+App picker: don't exit after opening the file manager on Android
+ab03e20fd33b6904a1e2344658a9c8aa15281dc3 2026-10-14T22:09:33+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+App picker: new look and Chinese UI, add Simplified Chinese font
+926904cd08f0bc1a5dd137ccd55b0d5cd0d1c9b3 2026-10-14T21:50:48+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Pause the app in the background instead of terminating it
+80c67fa3e234306da7ee01245324b1a9addfa2fa 2026-10-14T21:41:55+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: sign release APKs with a fixed key from repository secrets
+9501b04783ad39f955d89c06922bb55e86729eb6 2026-10-14T21:06:22+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Android: allow 180° rotation and use the full screen on cutout displays
+e57b23e10e8ad0f766b146e910f6448f32001644 2026-10-14T20:31:45+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Fix red/blue swap in layer backing stores; rebrand fork builds as "UF"
+be1737832300d85708a44aa2613eda442bc69b47 2026-10-14T19:45:52+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+CI: build from this fork instead of upstream, allow manual runs
+2a8e67186c68e153702ea4c931fdb4c3511f742b 2026-10-14T19:36:34+08:00 Wesley <wesley@WesleydeMacBook-Air.local>
+Make Inotia 2 (com.com2us.feanor2) playable
+ca1de89c578e79746f33c1332e28efd106c334ba 2026-10-13T18:23:37+01:00 ZyroX <79484310+okzyrox@users.noreply.github.com>
+Fix NSMutableArray test on macOS
+28d2384614593df53ae0b9059356678746a39df2 2026-10-12T22:57:41+01:00 ZyroX <79484310+okzyrox@users.noreply.github.com>
+Add NSMutableArray removeObjectsInArray
+37b8a0b6ed22bd090ac3178ff1166f6e69de36b6 2026-10-10T22:27:41+01:00 ZyroX <79484310+okzyrox@users.noreply.github.com>
+Implement localizedCaseInsensitiveCompare
+d34530b52174e8a4f1fe43178cc4fb0c99506f9f 2026-10-02T19:03:26-04:00 mcd-3 <matthew.carvalho.dagenais@gmail.com>
+Add NSMutableArray initWithObjects
+865aed549df72976740911b43f54c0ae368678d3 2026-10-04T21:57:15+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement wcsftime() for C locale
+266913be3b1c211bd2f2609fc7755ac400cff4ac 2026-10-04T22:16:39+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix issue with insufficient space writes in strftime()
+10c413266e02f899bd6a1af4ddf4185f611e7338 2026-10-04T21:56:51+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle unsupported '#' in strftime()
+1b83a45ae67f7cf2605dfeff0d4be0f2e73e7945 2026-10-01T16:34:10+01:00 ZyroX <79484310+okzyrox@users.noreply.github.com>
+Stub NSDateFormatter setTimeZone
+aaeb22ad3119c51a45b96a9b5f67d4f866b0037f 2026-10-04T12:48:34+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CC_MD5_Init/CC_MD5_Update/CC_MD5_Final without side effects
+b36b33b3c6f0243c0ebd8aad38f35f080f7de790 2026-10-04T12:47:41+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for freeifaddrs()
+7ba10517d1598d5a8fd4405b919000987031310e 2026-05-22T22:30:08+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement tmpfile()
+8eb3418b3343bc1e3d1a330b55cb1d708a015721 2026-10-01T14:59:28+02:00 hikari_no_yume <hikari@noyu.me>
+Prepare for 0.3.0 release
+b432f552d8a754c0274da5156f030ca3ac4d0218 2026-09-29T23:30:26+02:00 alborrajo <alvarolopezborr@gmail.com>
+Added CoD Zombies and RE Degeneration to the Changelog
+c8e936c86c75e2dad4c049a98eccf19089736a36 2026-09-29T23:20:50+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Update CHANGELOG
+4c49e83a000c2d32d9a852dedc81819d0d9c8986 2026-09-29T20:08:06+02:00 hikari_no_yume <hikari@noyu.me>
+Update directions for coding agents
+570af14c80ddc75f2c2f2fcd81df639bfdd17297 2026-09-25T19:12:01+02:00 ciciplusplus <ciciplusplus@gmail.com>
+UIApplication setNetworkActivityIndicatorVisible: method stub
+9c66f7464366fe00eaccd7367eccab79cc345c64 2026-09-25T19:10:52+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSMutableURLRequest setCachePolicy: method stub
+a0b17f99552070ddeef2400ec070cf46e0e38040 2026-09-25T19:10:15+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSInvocation target method
+6d267ab2e8ab54beb0c26440f9a077aebd3fcf7e 2026-09-19T12:41:07+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CTTelephonyNetworkInfo class
+b88a2a3b39d1ff2902629172b75862628cc0604b 2026-09-19T15:59:11+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix NSBundle loadNibNamed:owner:options: method
+2adcb16dc12a74ec8f2d6d257bd38ea4c80086ba 2026-09-19T12:35:13+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Account for NULL pixels in glTexSubImage2D()
+ee9556cf07386fd3e2bdd01050578ba8197bef6d 2026-09-19T12:37:22+02:00 ciciplusplus <ciciplusplus@gmail.com>
+AudioQueueSetProperty() stub
+fe39a76eb252752e5ce497d0cc72f5ea380c8ab5 2026-09-19T12:34:42+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement _NSGetExecutablePath()
+99dfa077939d5affde69226f9c186050e9599e4e 2026-09-19T12:16:46+02:00 ciciplusplus <ciciplusplus@gmail.com>
+MPMoviePlayerController setInitialPlaybackTime: stub
+774f49be8f827facfd00f662ad58f3d1452ab64e 2026-09-19T15:44:48+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement writev()
+4b69415dc409a4d897a5ed00dafc179a1026ba29 2026-09-19T12:41:55+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stubs for CFHTTPMessage and related functions
+8fa1d64cc71028d93721d9a9d794c95c47af5783 2026-09-19T12:35:51+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Reduce empty components and references to the current directory in NSString stringByStandardizingPath method
+c22b49f70c5a9694b4eb53a124da205d2846ff84 2026-09-19T12:34:23+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Support %llx, %llX, %llu in sscanf family
+110d57bcf8a72c33dfb103c0f30cf2d37e994d4a 2026-09-19T12:36:57+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Define kCLLocationAccuracyBest constant
+1c919c62a20bf050e1bd19af5452c80656371161 2026-09-19T12:20:29+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement class_getMethodImplementation() for guest methods
+57340400d6c8ae1386bd478fcc11c3cd8f1c4076 2026-09-19T12:19:14+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Support class_replaceMethod() for adding a new guest method
+e1456d4f6aff67aa6f6a32207cca6722d0a632ec 2026-09-19T12:36:41+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Define kCFCoreFoundationVersionNumber constant assuming iPhoneOS 2.1
+f233bc78a384717626a2556b0fef3ea14b6f557a 2026-09-19T17:31:59+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add TODO about cleaning Library/Caches
+6d4ebddd1c2d3343b4b46c4318c41b2df210fd60 2026-07-28T19:30:54-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Add NSCachesDirectory
+9052ea399c63e733be41262309ace2ff6dcc7f94 2026-09-14T23:17:52+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add default options for NFS Hot Pursuit
+04aedf133e18a6dc9eb14637f6e33fc2116117d8 2026-09-14T01:09:31+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Workaround for Android_JNI_GetPowerInfo crash
+ba5552480ff034563be82f74765aa29c710b7464 2026-09-13T21:04:58+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add default options for Dead Space
+d565fc72219e0eb46dde2acd37603dd98dd5f6db 2026-09-13T21:18:20+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement wcstol()
+8b37a45f9f6c7e6a55eb0487c524a68200214422 2026-09-13T20:44:05+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix "Dead space" black screen by seeding first device orientation change
+1ded1b1b32f84629e8402e151fba7c46ef441cdf 2026-09-13T21:55:34+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Make [UIDevice currentDevice] truly static
+07607d5a54db6bae277e984f54085b9b7dab7452 2026-09-13T20:43:51+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement UIDevice generation of device orientation notifications
+6994047f51ec43fd7e249db0f4202d5aeb5b344a 2026-09-12T00:44:13+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement fcvt()
+2af01bb8c79e7202edd0a9196a462358541b1c30 2026-09-12T00:43:51+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement class_replaceMethod() for guest method implementations
+1c2e26f222a2d29f5596bc14a96dd9af3c95310d 2026-09-12T13:06:43-04:00 mcd-3 <matthew.carvalho.dagenais@gmail.com>
+Fix format in ui_local_notification
+a7d9c2026945303aba9bc57f0dfe808e5e628249 2026-07-08T00:09:33-04:00 mcd-3 <matthew.carvalho.dagenais@gmail.com>
+Add setApplicationIconBadgeNumber stub
+8be25cc25151b3de44f8f7cd101a668e45d13a63 2026-09-10T00:47:23+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Remove wrong comment
+8e04cd6cb6de405d3c787ab6f6b92e72b00597b6 2026-09-10T00:27:53+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix for semaphore_destroy() signature
+092a68fa70d6dfcd7462b0f1db9bdfabe32ce20a 2026-09-09T22:48:21+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix build
+54490e5765bc588a47b456d9ebf58fab648082b1 2026-07-28T18:47:52-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Add NSLocaleLanguageCode
+331903de883405a8597036e4ed5ce8333f1604c9 2026-07-26T12:57:20-07:00 Misty De Meo <mistydemeo@gmail.com>
+NSDictionary: add setDictionary
+91f1590587d6330b9a7c20e8987e80143e311e55 2026-07-27T22:49:11-04:00 mcd-3 <matthew.carvalho.dagenais@gmail.com>
+Add initWithURL: to NSURLRequest
+f666045f18d2937c65ba3bcb90047aa77296ec87 2025-03-21T13:22:19-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Add proper support for GDB multithreading
+c9ad123f6e260282fa753ea34ccd1115e372338f 2026-06-11T00:34:30+02:00 alborrajo <alvarolopezborr@gmail.com>
+Increase UIImage cache size
+26e8f9dd79ee5815585e456375bdb8f876a0b26d 2024-09-29T21:07:36+02:00 alborrajo <alvarolopezborr@gmail.com>
+Default settings for Silent Hill: The Escape
+3fac3f5f51c32e83e4b9117fe4228f25d98e49c4 2024-09-27T16:23:01+02:00 alborrajo <alvarolopezborr@gmail.com>
+UIControl cancelTrackingWithEvent: default implementation
+558eced3abe74c45b2da67c7ba93259b90c82c59 2024-09-25T22:14:02+02:00 alborrajo <alvarolopezborr@gmail.com>
+UIPageControl stub
+d553fe92d4c751027ba5ea34f66f94474f789e6d 2024-09-25T22:14:14+02:00 alborrajo <alvarolopezborr@gmail.com>
+UIScrollView stubs
+6e209ff089921ba872676a960a2810fa200658ea 2024-09-25T22:13:39+02:00 alborrajo <alvarolopezborr@gmail.com>
+Stub UILabel setBaselineAdjustment:value
+6892ea2c5834ae1d468f58d2166b6ad950746348 2024-09-25T22:14:22+02:00 alborrajo <alvarolopezborr@gmail.com>
+UIButton setAdjustsImageWhenDisabled stub
+da6b281520966575c222234ba078c373f622830b 2026-07-22T21:06:12-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Fix new failing clippy lints
+d9a27f27c344d3c7b0c867550703b7287e4b3117 2026-07-15T10:33:12-06:00 apexad <1437332+apexad@users.noreply.github.com>
+Change Icon.png/icon.png failsafe to actually check file system
+39e32055dcf5126a3cc1554d889405927751e4ba 2026-07-01T21:39:12-04:00 mcd-3 <matthew.carvalho.dagenais@gmail.com>
+Substitute AdWhirl classes
+0f2c163005d7511030be57b70396f4910bbc6d1a 2026-06-23T16:56:58-04:00 mcd-3 <matthew.carvalho.dagenais@gmail.com>
+Add UIControl contentVerticalAlignment property
+bcbaaee28596d05666d72653fe2575a4358c5aee 2026-06-25T17:23:00+02:00 hikari_no_yume <hikari@noyu.me>
+Add directions for coding agents
+648a1b97902c62e15dba9953b59c33ecff92ad78 2026-06-24T13:12:31+02:00 hikari_no_yume <hikari@noyu.me>
+Update dynarmic submodule to e0f6bd9d0b48ed6e536672c0c9abbe87961be861
+11f429c5cef7fd784ae54fff18523ffdee1bcead 2026-06-23T20:32:02+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Pin macOS runner version to fix the osx build
+6bce411972d286ca565629b0dbc5ff54f43759e1 2026-06-22T23:28:11+04:00 zazatree <z88qo@protonmail.com>
+Implement NSGarbageCollector
+d4c2ccfc58657f9359dfdaa09498d6b28b6029bc 2026-05-21T15:54:15-06:00 apexad <1437332+apexad@users.noreply.github.com>
+Add stdlib sranddev function
+2eb5df9a34b28963bbb1ef4cca8db57417098a19 2026-06-22T22:10:05+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Relax check for invalid UTF-8 bytes in NSString formatting helper
+d6b4ba2f2e3522e1677fd2b427515baa03d01c2e 2026-06-22T20:52:05+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CFURLCreateWithString()
+5f2f9f8c0d81643b32de7c7c5eafca94433e9991 2026-06-22T20:51:24+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement getsockname() for UDP socket case
+cf96919920834d4b6935e111cd52a7419d21c4da 2026-06-21T23:58:21+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle unknown socket in bind(), listen() and connect()
+994e247653f04095bc01ee74e7934ca2348c97ed 2026-06-21T17:35:53+04:00 zazatree <z88qo@protonmail.com>
+Implement UIWindow screen and setScreen:
+ee06ee5ef5db93da84603f303a4d1c798e26af7b 2026-06-21T17:01:13+04:00 zazatree <z88qo@protonmail.com>
+Implement UIScreen screens
+e7790a835399a4de7335b61b2cb85ad129527637 2026-05-31T13:24:33-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Update libz dylib to newest release
+4b002a7294678463ea526c26d531632b4910b231 2025-12-10T19:51:07+01:00 alborrajo <alvarolopezborr@gmail.com>
+Migrate NSAutoreleasePool state to thread local state
+79c62ad0c41c41b3ee07cca2efe0b87c0ccc4c63 2025-12-10T19:47:02+01:00 alborrajo <alvarolopezborr@gmail.com>
+Migrate CATransaction state to thread local state
+08e7785333969b5cb8db2fe2f4a58132d59be5fc 2024-09-28T00:47:23+02:00 alborrajo <alvarolopezborr@gmail.com>
+Implementation of UIView animations
+878206fbd9d7ddeec1aa287f5c81057bb52f584a 2025-11-26T18:40:53+01:00 alborrajo <alvarolopezborr@gmail.com>
+Add tests for CATransaction and implicit animations
+4ff67b9fff654f9fcddaf67b862bd4cb0889f92b 2025-11-26T18:40:25+01:00 alborrajo <alvarolopezborr@gmail.com>
+Implement CALayer implicit animations
+4002a4b0f3ea8f73f37d2407fc65668adafe3d1d 2026-06-21T00:46:13+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Prevent a crash in handle_audio_queue()
+1462a333efa06b6a31d4762bdeb6d167e9751831 2026-06-20T00:49:00+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement NSMutableCharacterSet with some methods
+8a9cafeddc4081f76a31c76ec099e35c6a2f05fb 2025-04-12T23:12:50+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add sscanf() %s max_length support
+c6f73adf03c880773b160a1333cda51b6099c31a 2026-06-21T00:51:17+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Do not call `+initialize` on `+load` call during class initialization
+b77693d264c16d6529d6cbeb818a31b0585d677f 2026-06-20T17:02:01+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Call class `+load` methods as part of initialization
+658a9c54a2928f9ea61fd93f22cc90554980f86d 2026-06-20T17:01:14+02:00 ciciplusplus <ciciplusplus@gmail.com>
+ObjC module helpers to probe for unimplemented and fake classes
+51ea2637a00fca7014a83c2afc1be4a41ca86953 2026-06-20T21:31:01+02:00 hikari_no_yume <hikari@noyu.me>
+Fix editing mistake in changelog
+c85511606c7718bcb15020bdc93c841b718e5427 2026-06-20T21:29:53+02:00 hikari_no_yume <hikari@noyu.me>
+Changelog additions and tweaks
+707da818eeadfcff052dc83a36aaf52e89abbf87 2026-06-14T16:16:25+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add custom built libxml2 dylib
+63458b2f2506469b30cc2fbd02d0038eb82c615d 2026-06-20T17:04:53+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stubs for NSObject willChangeValueForKey: and didChangeValueForKey: methods
+1cba11a50661ac957ff0ceb971e7d246cf752c23 2026-06-20T17:02:18+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSString rangeOfCharacterFromSet: method
+e5efc49076be26d02494424a5f2dddc0eb21189c 2025-04-12T23:14:09+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Tolerate glMatrixMode(gl21::MODELVIEW_MATRIX) call
+a16297335f6bc25189f46f238e2486e2b3366f53 2026-06-19T20:08:51+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Support for loading localized `strings` as a standard format
+3f30a46b665d8f90214e98590ec311d99407f175 2026-06-19T00:43:12+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CFStringGetFileSystemRepresentation()
+25ba55016dbefb13acc4f5413b76563bbbef3b68 2026-06-18T23:15:46+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CFDataCreateWithBytesNoCopy()
+8222caef1c91787230ab9fdc077dd8eee0a59f41 2026-06-18T20:02:54+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Allow for AVAudioPlayer subclasses in AVAudioPlayer helper
+1d4f655ff9d81944a701277dbe4f2d50230349f1 2026-06-18T22:52:22+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSError localizedDescription and localizedFailureReason methods
+a5298d5aa59f17300cc38c7a64180da8c14bee3b 2026-06-18T22:51:15+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Return stub error on AVAudioPlayer initWithData:error: fail
+2a12f5962b1af387979a287db33804a89019ccb7 2026-06-18T20:01:35+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSConditionLock implementation
+2590848309be6dd20f68ea0501b1d1e4e45605df 2026-06-14T22:46:41+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CGContextSetShouldSmoothFonts()
+0351ec8582f094403b612dd9e0362b6516a7ad9a 2026-06-14T22:46:26+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGContextShowGlyphsAtPositions()
+5d7413070f05300c7841c218da1c2c138cdc49a0 2026-06-14T22:31:16+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Pin a windows runner to fix the win build
+f64e0814662bbc2de21375ae8f514d9a41dce278 2026-06-14T20:56:04+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement rand_r()
+37a9d988477158424411076d20f344beb2c71ebb 2026-06-14T20:54:46+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement NSSet setWithArray: class method
+4fea35eb1d8f3e6f1390cd8d21bac203afdaf62c 2026-06-14T20:39:08+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGFontGetGlyphBBoxes()
+8aaaae73b7cccb2399d1601b505e64d405872ca7 2026-06-14T17:06:45+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGFontGetNumberOfGlyphs()
+6ac7b4d0d2dffe310234bce046b3349644147331 2026-06-14T17:06:11+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Support kCGBlendModeCopy blend mode for premultiplied case
+bbf6ebb0285fa00e746e132177d72e3748caeb0a 2026-06-14T16:45:15+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Define kCFBundleExecutableKey constant
+f38015664f9855b44f456926a3864cdd8b8eead7 2026-06-14T16:23:35+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for NSLocale autoupdatingCurrentLocale
+f02bc1bf2bdd1a98b98a3c4366cab85304879a4a 2026-06-14T16:12:03+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement NSString stringWithContentsOfURL:encoding:error: class method
+fc5b56b9677e8746652eb02b437ba87a2107bca2 2026-06-10T23:32:41+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Default options for Palm Heroes
+8c879e207e17f836c854755520532cf83d6ed217 2026-06-08T23:44:35+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement glob()
+426b6cbba5c1a59c0da8542b1afdacec85d549a3 2026-06-09T14:07:32-06:00 apexad <1437332+apexad@users.noreply.github.com>
+Implement [NSData data]
+16a24fafe4e38f460e92b1580c6a7f5d80c8ba0a 2026-06-08T23:44:03+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement fnmatch()
+afae2fe064bb0ffd233c4a5a671f4af8caa741f2 2026-06-08T23:52:16+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement wcstoul() for C type locale and ASCII strings
+d20c3c5ee44c1211b6e6d4c27bd3f84660210c76 2026-06-01T17:00:32-06:00 apexad <1437332+apexad@users.noreply.github.com>
+Apply spore origins hack to critter crunch too
+b3182a9972a097b6b36033a4214b5d69a1e6b9ea 2026-02-02T19:00:26-07:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Refactor font draw method
+d9719fbd11b03986a3ef6853d93e377a8d3c58dc 2026-05-11T15:54:34-06:00 apexad <1437332+apexad@users.noreply.github.com>
+Reduce excessive logs and improve OpenAL Errors
+a0d8e696d4f15efc70a0ac2e1ace6456c3ad3fc2 2026-06-08T01:18:29+02:00 hikari_no_yume <hikari@noyu.me>
+Add a temporary #[allow(unused)] to make clippy happy
+e854299b482dcf9a14b48952679f6f60f36e7ca5 2025-12-10T19:50:23+01:00 alborrajo <alvarolopezborr@gmail.com>
+Migrate NSRunLoop state to thread local state
+c45bac580df0cb5b545e2024329fc04a86c95b78 2026-06-08T01:15:35+02:00 hikari_no_yume <hikari@noyu.me>
+Fix format.sh on systems where /bin/sh does not have [[
+e6674d3eebd693c2053f9488c2b50295de24caa6 2026-06-08T01:15:02+02:00 hikari_no_yume <hikari@noyu.me>
+rustfmt src/frameworks.rs
+02d68f0b34eac64142dc917696f657194d1a2909 2025-12-10T19:45:28+01:00 alborrajo <alvarolopezborr@gmail.com>
+Add thread local state
+54d0ebeb7e99f7833edec75bf2f3ee17f4261e18 2026-06-05T23:50:33+02:00 hikari_no_yume <hikari@noyu.me>
+Tweak SQLite3 license acknowledgement
+dcd93c7f0e66a4387d5a4b05288805bb14dcdb97 2026-05-31T15:42:08-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Add custom built SQLite dylib
+24b0cd727b42df31ac2482676d8f65363f701177 2026-06-04T21:14:50+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Allow kCGTextFillStroke in CGContextSetTextDrawingMode()
+6d20964e68875d9ae44082e7a860e1986703fb26 2026-06-04T21:10:15+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CGContextSetGrayStrokeColor()
+15187009aedbc028e0c941fc8648d995d38756dd 2026-06-04T21:07:48+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CGContextSetFillColorSpace()
+87c4d5c7897ad07842e781b737e81a5986d618c8 2026-06-03T23:53:54+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGFontCopyTableForTag()
+deba1cb5a2fe5afaf7665c68470e198440c4cc7e 2026-06-03T23:23:18+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle Value::Real in unarchive_key() of NSKeyedUnarchiver
+f30e3d30104352b966fb5c213ea12489e69a3537 2026-06-03T23:22:29+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Relax panic to error for flushing a GuestFile::IpaBundleFile
+0b266ca939c96520b02c1b050cc1d1b42f221983 2026-06-03T23:21:05+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for UIDevice isGeneratingDeviceOrientationNotifications method
+5736b30680ecbf360c7d572782b7831d216ca170 2026-06-03T23:20:30+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement alSource{Play,Pause,Stop,Rewind}v() functions
+4ceda396ee765a9b96d8859bc72d175fc42800b9 2026-05-26T18:40:05-06:00 apexad <1437332+apexad@users.noreply.github.com>
+fstat and stat log_once for Warning: mostly unimplemented
+98de7d8a13345bb7945f7f03d6fe1b5381e01118 2026-06-02T22:01:19+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for NSTimeZone abbreviation method
+ea1d034732bb3e2b101ec719891ddbc5d0b8843b 2026-06-02T21:59:50+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Account for nil first object in NSArray arrayWithObjects: class method
+4a950ccf4de04c991023efe9343874589a7340f6 2026-06-02T01:30:57-04:00 mcd-3 <matthew.carvalho.dagenais@gmail.com>
+Add AIFF audio type
+bea3eaed6b977588b82b26f5c41383120f0e8ea1 2026-05-31T13:30:16-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Bump symphonia to latest 0.6.0 release
+fe4d19bf35601a2d7957024c87b9aef3b3d3bb81 2026-05-28T21:58:14+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGContextSetTextMatrix()
+4213cb3e661bac141465bc46698299ad914c080a 2026-05-31T23:20:43+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Game-specific hack for Mirror's Edge audio loading
+3cc4b133044b54a7d60297913afe4e0fb97bceeb 2026-05-31T23:09:10+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for class_getProperty(), [UIScreen scale] case
+ce3b4f2ab6455d7a0976d0cba2e660a2ef4b8030 2026-05-27T22:35:55+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CFStringCreateWithCStringNoCopy()
+04de88501958c79178681d53e51ea2cab602c018 2026-05-25T23:07:36+04:00 zazatree <z88qo@protonmail.com>
+Implement NSScanner scanLocation and setScanLocation:
+9496a80cda475ea5d9cb63bca19bd3e3893fbbb5 2026-05-28T00:11:25+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CFStringGetBytes()
+e2801ffbfe658648cd9c623396534506515ef263 2026-05-31T12:50:10+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CGContextSetShadowWithColor()
+e05daa62aa94757d451aa13cff5f01db884f6854 2026-05-31T12:49:44+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CGContextSetRGBStrokeColor()
+ee5f6af9788178dbeda4daebfd3356abeb890d27 2026-04-26T00:44:26+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Print warning instead of panicking on non-standard context attributes in alcCreateContext()
+def095586177a40180c0cc602789f90d2b7450de 2026-05-31T11:07:23+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement __srget()
+266c4f4796c500cbbbf79ea49b0368493fb6efb6 2026-05-28T00:17:38+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle nil data in NSString initWithData:encoding: method
+a39e7614237a055e64279f924ee63f76019dd5be 2026-05-25T00:31:54+04:00 zazatree <z88qo@protonmail.com>
+Implement NSTimeZone copyWithZone:
+e7d53a316a60111409c77fe4562da7a32a797dff 2026-05-28T22:10:21+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGImageCreateWithImageInRect()
+c406338373ff6d47adfebbff381362a28c729227 2026-05-30T19:56:58+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGRectIntersection()
+9874448e1f157f288679cc743c6010c3ee1fb2a0 2026-05-30T19:18:36+02:00 ciciplusplus <ciciplusplus@gmail.com>
+UIFont's font sizes class methods
+56d10faf01b59512f9885e5d9e335ab09dbae892 2026-05-30T15:51:43+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Shorten test comment to fix Windows build ¯\_(ツ)_/¯
+a6d738685e2672fed810d7007db2864262a8c7b4 2026-05-30T14:54:39+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add test case for kCGBlendModeScreen with mid-tone colors
+3524c08f592a86767d3b71da863c1c75238fd676 2026-05-30T12:43:49+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add a test case to catch regression with kCGBlendModeNormal
+f4bccd3de02aa3bba4823e8bad71509de1791610 2026-05-30T11:58:22+02:00 ciciplusplus <ciciplusplus@gmail.com>
+kCGBlendModeScreen, kCGBlendModeDarken and kCGBlendModeLighten for premultiplied alpha cases
+afe9c1fb1ff5c58acac846a0d24e5fbc96a93bc8 2026-05-29T23:23:20+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGContextSetBlendMode() with kCGBlendModeNormal and kCGBlendModeMultiply for premultiplied alpha cases
+c5dce3c9196c250aa34536c345f92b901b09c847 2026-05-16T16:55:20-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Fix AudioStreamBasicDescription PartialEq
+c94b479f7d42f568353734fd28f32ef4368ee467 2025-09-02T00:05:30-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Add -[NSCharacterSet controlCharacterSet]
+dd71d2f408f3cfe4790b32432c7505e94566ff54 2026-05-27T09:59:34-06:00 apexad <1437332+apexad@users.noreply.github.com>
+Fix icon_path to use CFBundleIconFile/CFBundleIconFiles/Icon.png
+006023175c73362e8a10058b7ae023b169d0cf60 2026-05-28T21:28:40+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CGContextSetTextDrawingMode()
+15abd6ff1d50366e382ca092487c84813e2eed78 2026-05-28T21:15:10+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CGContextSetAllowsAntialiasing()
+35d00fbd4237db518737b3cc46d9b0deac70bcf9 2026-05-26T20:19:18-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Add NSValue number/initWithUnsignedInteger
+d6d9c9e8a69dd402c7a8bb29914a15a921fbfd0a 2026-05-16T22:28:37-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Add encoding/decoding for boolean NSValue
+e12f0ae40227ab58edd1e9c3595017313cba9b67 2026-05-28T21:11:57+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSError errorWithDomain:code:userInfo: class method
+dadbbfd02e27dbe6cd1428a40d919fab14519e34 2026-05-16T11:16:00-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Add llround(f)
+e58b72499421add6afc68d639e41063128f200f0 2026-05-28T00:04:27+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for CFStringGetCharactersPtr()
+878d115e73cc86c6bb7c7fa90897546a1339e2c1 2026-05-27T23:54:05+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Define GL_ALPHA_TEST_REF as a FloatSpecial param
+fb0f24b0a9fe2385203049fad02b9ed1f650686a 2026-05-27T23:53:38+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Refactor GetFloatv() type conversion assert for clarity
+8470daa6c971683d42c3ae86de27eddada6f7768 2026-05-27T23:17:17+02:00 ciciplusplus <ciciplusplus@gmail.com>
+GetBooleanv() type conversion for Float and Int param types
+6451394d5ee10f7ec698363824a287f5d7c8271d 2026-05-27T22:38:03+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CFStringCreateWithSubstring()
+027e83228f66bd765e3618008f7c351366423644 2026-05-26T23:39:44+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement valloc()
+c00e11c12d30ba22432a99aa0a71f726e9a19fa0 2026-05-26T19:37:22-06:00 apexad <1437332+apexad@users.noreply.github.com>
+fix font scale fn to use a scale_factor
+5fab3de42a911204aba3d87d1a284f6811462d14 2026-05-27T00:24:31-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Remove the malloc_zone_size call from tests
+d67eb91472dcc51c7c3f3ba51b307129418ad21e 2026-05-26T22:26:45+04:00 zazatree <z88qo@protonmail.com>
+Implement NSUserDefaults dictionaryForKey:
+b7f945d8170fab47bdffb7e7b9483d9f78a1d65d 2026-05-26T20:04:31+04:00 zazatree <z88qo@protonmail.com>
+Implement CFBundleGetInfoDictionary()
+fea483647f1c9ae174b02a7899a93b7230770a54 2026-05-26T15:26:22+04:00 zazatree <z88qo@protonmail.com>
+Stub for UIApplication setStatusBarStyle:animated:
+ffbb901b344e8dfc525a206dce8084557ca0d81f 2026-05-11T17:39:13-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Implement core malloc zones functionality
+d649c50db6f258c02cc112315fd39639477e3c86 2026-05-13T16:11:25-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Partially handle O_EXCL for file opening
+e87bcb1a83f66a6b7e5e070de30524400ae51a6d 2026-05-26T22:25:25+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGFontGetGlyphAdvances() and CGFontGetItalicAngle()
+8edd92a42a4e9ecc312b25e480e2097054a3a487 2026-05-25T23:44:05+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGFontGetFontBBox()
+5562cc7e3322a56178cc344e603df96a1d873016 2026-05-25T23:57:39+02:00 hikari_no_yume <hikari@noyu.me>
+Changelog update and a tiny options text tweak
+6bb7de34b671e08a43a43731da28a10abc90fb6f 2026-05-24T18:08:11-04:00 mcd-3 <matthew.carvalho.dagenais@gmail.com>
+Add upsidedown portrait mode support
+f7e381fa5b7965defb5cc0fb24697134afbf6fcf 2026-05-25T22:24:17+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add integration tests about text color and affine transformations (but no text matrix yet!)
+c2297d1ca92df2748113ff77f1f7d08eaf064ea8 2026-05-17T22:03:29+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Additional CGFont functions related to the font metrics
+e2213098be7112e9fd4e5beacd99bcebef921e96 2026-05-24T23:11:38+04:00 zazatree <z88qo@protonmail.com>
+Add Message UI framework with canSendMail stub
+f07eaebb6ceca26e6c06ac4a546ff0cedcb2a64c 2026-05-24T23:26:19+04:00 zazatree <z88qo@protonmail.com>
+Add UIPasteboard class stub
+ab84c443e268364cda3b3ccfd41f5e5c13d2a043 2026-05-24T21:55:37+04:00 zazatree <z88qo@protonmail.com>
+Fix build
+cd2deaecfa561a49bef16ac1d14557a3aa57964c 2026-05-19T23:36:18+04:00 zazatree <z88qo@protonmail.com>
+Implement CMMotionManager isAccelerometerAvailable
+c1f358c8a0c56c61f82de9097532f9005cad135c 2026-05-21T00:26:13+04:00 zazatree <z88qo@protonmail.com>
+Stub for UITextField setMinimumFontSize:
+1fcd06a67c0785b99b01e27c1cd2e37318b6d505 2026-05-23T23:31:46+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGDataProviderCreateWithFilename()
+211af56d636a57ff92ba10791f797a5c0561d91c 2026-05-23T22:25:09+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSThread sleepUntilDate: class method
+7414afbaf391218b069c86505887d4c71dce5595 2026-05-23T22:48:20+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix NSDate timeIntervalSinceNow method
+eb7eb7308ed10b924fe59734263787c14b957c45 2026-05-23T21:32:43+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle nil name in NSNotificationCenter addObserver:selector:name:object:
+40ab5aae95db6d909e31f0a202e6d19b35655680 2025-07-27T00:46:12+02:00 ciciplusplus <ciciplusplus@gmail.com>
+CGImageCreate() for the case of XRGB in 32 little endian
+1326da1c3c7c58062077fe9d2f1fbbd663cdbda1 2026-05-22T22:29:48+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSString getFileSystemRepresentation:maxLength: method
+923fdfae98722e9a26ec8b820237df8ddfe87c0f 2026-05-02T23:38:29+04:00 zazatree <z88qo@protonmail.com>
+Add stubs for MPMediaPlaylist,  MPMediaItemCollection, and MPMediaEntity
+3b7ef57327645cc62e81311c9ff87b1fa8d76ebb 2026-05-11T15:56:04-06:00 apexad <1437332+apexad@users.noreply.github.com>
+Default options for Galaxy On Fire
+66820ad28efc47e8bc07c8b971fbfcd01bc1dbee 2026-05-19T23:59:11+04:00 zazatree <z88qo@protonmail.com>
+Implement NSDate copyWithZone:
+38d09d40e83a39ed04d1b761d26a5f076dfbca97 2026-05-16T18:06:03+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Basic implementation for CGFont/CGGlyph rendering
+1dd2ade0a567184d6c09a33bf656c7107ca89c55 2026-05-17T15:18:19+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSData initWithContentsOfURL: for file URL case with absolute path
+5f8c33d2be435739431556c9cc4dc54a67e68dff 2026-05-16T00:02:16+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix build
+bc76d6e4c9fab6914ca94493ced93922bb6d0ba4 2026-05-13T16:06:07+01:00 JCR64 <36492797+JCR64@users.noreply.github.com>
+Stub for gethostent()
+b2beb6f9f7a2a8a0c38f49866056f63d76789b6a 2026-05-15T23:12:56+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for mprotect()
+4e8a662afe005321a4295d35e16955d321c6cb2e 2026-03-02T19:05:39Z ciciplusplus <ciciplusplus@gmail.com>
+Account for string values in UIDeviceFamily array.
+debbd4fb70ac5a3805a5645d674b64db63690355 2026-05-02T01:54:53+04:00 zazatree <z88qo@protonmail.com>
+Add .DS_Store to .gitignore
+41e10d438f885b68dab4506a057d4279e2f2403e 2026-05-13T11:22:54-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Improve vm_allocate flag naming
+ba9f424da38a5cccd602f33484fe6b1dce064b55 2026-05-12T00:47:50+02:00 ciciplusplus <ciciplusplus@gmail.com>
+AVAudioPlayer duration method
+798e2728e30a10dd7fec0c6f870d11d5309a5bca 2026-05-14T19:55:04+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement AVAudioPlayer initWithData:error: method
+eaf8a517b032a40618d2e73c3bfb963ca11c8af0 2026-05-12T00:45:46+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSString lengthOfBytesUsingEncoding: method for C string friendly encodings, ASCII case
+0557f9662c50739aeb4a0f1ce0c04c821078e786 2026-05-12T12:39:34-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Stub fstatfs implementation
+15bc1e76529ecec8f197e8f987229c805c570f03 2026-05-14T18:49:09+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Rename tableName to table_name to follow Rust naming conventions
+3a8a776cc3857723584cf6a47b3635eaf2236304 2026-05-14T18:41:13+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Gracefully handle absence of localization table in NSBundle localizedStringForKey:value:table: method
+ca79430819af80c3b3c97d60dd4606c2dd786a74 2026-05-14T17:53:19+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stubish implementation for NSTimeZone systemTimeZone and defaultTimeZone class methods.
+61bbfdff1ddee7cdb92f3f0d7fe9132bdb3bd160 2026-05-12T00:44:24+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Some stubs for UIViewController
+c71131d89274baf20f2a5a8c1f0ae7537e303681 2026-05-13T23:52:06+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Some cleanup for host semaphore functions
+fe0151b4ea8b52daadd3f99d821560d3b41ade47 2026-05-14T01:13:07+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Basic support for CFUUID using uuid crate
+472e69badda01882d30b5d579f00c0b285301ab7 2026-05-13T23:00:46+02:00 ciciplusplus <ciciplusplus@gmail.com>
+sscanf() for %hhd and %hd cases
+9c9cc968067d1e6639cdd38d3eed7d6af9f241e2 2026-05-12T00:45:30+02:00 ciciplusplus <ciciplusplus@gmail.com>
+sscanf() for %hhu and %hu cases
+7eafe61b4b380233809365820fab5c44e658dee3 2026-05-12T21:29:43-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Stub vm_purgable_control implementation
+65b32c08cf94331454a745ad0121a5876157d77c 2026-05-12T01:02:33+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle case of using select() as usleep()
+b515d1ca576fbaab67bb3d85c7650cc07f587fda 2026-05-12T00:43:53+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle invalid number of file descriptors in select()
+6fedd041651aa6430bece1f7daf6819945e9ad95 2026-05-12T00:38:52+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Various stubs related to UILocalNotification
+64b97ff73a58c0d13655b7b3eee873545608cc3a 2026-05-11T20:18:23+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CGRectIntegral()
+73f0cd3a2306c86d863451e67cf8b60a69493901 2026-05-07T14:57:04-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Fix buffer type used in fgetc
+04200fc64b9d22433b16fd11f43e2d0fa63028a3 2026-05-10T22:57:53-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Setup dynamic heap allocator growth
+3c5850585ba55615b17a58c58331b6d6f52d4a9d 2026-05-09T13:25:05-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Implement vm_* functions ontop of new vm allocator
+0a4fa0ba966b3210fa74901721683f77ed0860e5 2026-04-12T13:23:26-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Remove symlinks from android build.
+d3a0e7d99ab86cee6a63cb52a542fec0a926b3a1 2026-05-10T11:16:59+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix issue with retaining an IBFilesOwner substitute
+1f6fb7c6528df391bcad97e96413a484e942cd30 2026-05-06T00:35:18+01:00 JCR64 <36492797+JCR64@users.noreply.github.com>
+Fix UIDevice setOrientation to run on the parent stack
+44cf9bcb6cecce356520cc1e0b92a3b8e4891f8e 2026-02-22T21:34:28-07:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Implement a virtual memory allocator
+8b5a342bd07215809410c2fd6f82bc2b9675e9f2 2025-08-27T16:50:10-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Send +initialize to classes
+2a8a7162d02482bb3a87c8be8a7098e9c664e82f 2026-05-05T00:11:26+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement stdio locking functions
+f886c577758f596b2a77ed599a9e1a3597540cb7 2026-05-04T13:15:22-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Remove edits to SDLActivity.java
+6a146e281f0c143d6ba902a32e84cc61ee4f9ed1 2026-05-03T18:13:51+04:00 zazatree <z88qo@protonmail.com>
+Stub for GKLeaderboard class
+75433482c27b91c5bd782930ee639b4b16c2df41 2026-05-02T14:52:17+01:00 JCR64 <36492797+JCR64@users.noreply.github.com>
+Implement truncate()
+77a6e3cce65d7020d88c71542b3daf1cb480b7d4 2026-05-03T22:44:49+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Default options for NEX
+3df8df2784285db20f29c555be6b1e3b91902adf 2026-05-03T22:44:34+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for NSIndexPath class
+73b5ee1b0e39cdeeb5c99779698d1762dec0732a 2026-05-03T16:36:17+04:00 zazatree <z88qo@protonmail.com>
+Implement class_getInstanceSize
+53e7b9f593b8eda4fa24bea8b58d3ac4ce377659 2026-05-02T17:45:04-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Modernize plugin and repository management
+98e9e60105961cbaa72f469ff1cddfaf2cf51f26 2026-05-03T20:11:06+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Default options for Samurai: Way of the warrior
+4c55adc562e0e5509e670f4c1b77407a361e1f55 2026-05-03T18:20:44+02:00 ciciplusplus <ciciplusplus@gmail.com>
+%Z identifier for strftime() with a default time zone
+9bbf636d7e3043aabb1455efee129e9f9753f0aa 2026-02-14T21:39:01+01:00 ciciplusplus <ciciplusplus@gmail.com>
+%I, %p, %a, %b, %Y, %S identifiers for strftime()
+ad5ce73bbfc8b3a68f889c56aea34f9a7cacf605 2026-05-03T14:42:30+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Skip setting view controller for nil view in dealloc of UIViewController
+dab7ac0ff4b09089fbcb2872d4779079dfd9021c 2026-01-10T13:09:55+01:00 alborrajo <alvarolopezborr@gmail.com>
+Default options for Pandemonium
+f8892d0ac02c9b1bbf5069206a0f21228ad58085 2026-01-10T19:29:36+01:00 alborrajo <alvarolopezborr@gmail.com>
+Default options for COD Zombies
+1bd22431020b903a8fda7314b4a99bb0c1bda203 2024-03-10T16:30:08+01:00 alborrajo <alvarolopezborr@gmail.com>
+Default options for Resident Evil Degeneration
+124665d7eda989d8a12a1219fb289cc99ea8afd1 2026-05-03T00:01:16+02:00 alborrajo <alvarolopezborr@gmail.com>
+Set the UIViewController's view viewController property to nil before releasing the view when deallocating
+4db38e5c225a87f5c19edbed9b54245359c8ec7f 2026-05-02T19:18:47+04:00 zazatree <z88qo@protonmail.com>
+Stub for AVAudioSession setActive:error: method
+b23bb4f400a75679e6d9d13c2aefa7cca556ea8a 2026-05-01T23:24:31+04:00 zazatree <z88qo@protonmail.com>
+Stub for UIApplication applicationSupportsShakeToEdit property
+2bd5734bcefe7e2109f477c0fa9161cece1ba107 2026-05-02T00:08:39+04:00 zazatree <z88qo@protonmail.com>
+Update CHANGELOG (remove username mentioned twice)
+1c81baad806a57a8a43086ee61ed3655e188525a 2026-05-01T22:34:27+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Default options for Tiki Towers
+aa4e22ca6ffa5a3adfcf1f967956c1facc853e27 2026-05-01T22:33:24+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle nil context in UIImage drawAtPoint: method
+f2c2a22b28514cc179d8fadd393abfa1a815e83f 2026-05-01T21:56:54+02:00 ciciplusplus <ciciplusplus@gmail.com>
+OSAtomicCompareAndSwapPtr() implementation
+da127056a8b8c0ca38991bab685d0cf0ad480203 2026-05-01T21:56:41+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement OSMemoryBarrier() stub
+4f645af2e8b549adcc1691ae7b8b3735f1cfdc1d 2026-05-01T21:25:26+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement CFBundleCopyExecutableURL()
+30e934ea92c9f9fb57dc7a2ef57a2e61402b3269 2026-03-27T20:17:51+01:00 ciciplusplus <ciciplusplus@gmail.com>
+rint() implementation
+7a6207a9a6bc919cb298e3917f290f7f99b6e907 2026-04-30T23:22:40+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Gracefully handle AudioQueuePrime() errors even if number of prepared frames needs to be returned
+0ae5744a2c6c0061f9ac0f895d4924d2639a0caf 2025-11-29T23:04:55+05:30 RMZeroFour <ritobroto04@gmail.com>
+Implement pthread_key_delete and co.
+90fbdcdf2a029875664c12ef1776edb15ef40c88 2026-04-30T23:03:15+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for shm_open()
+23eb186d777c8b3d877f89104ec8239e429c9101 2026-05-01T15:53:26+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Skip entries which do not have integer name paths in sysctl()
+2512dc091fcb4d8f2937ad02aba2e67e16897259 2026-05-01T15:47:04+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement stub for "kern.proc.all" in sysctl()
+3288af26da4e240d01377ca38256395d6bdde483 2026-04-30T22:53:01+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Refactor sysctl() integer path name definitions and handling.
+94dab1c24a81b194d09b9eb9391da2a86d975d2b 2025-08-06T01:14:42-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Add full implementation for selectors in run loops
+01efe096b1a647ba3dcbe9c05d7eb4fb715ed281 2026-04-25T23:38:18+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSXMLParser handle nil in initWithData: method
+4c35ca42f9984333910b95969e3141a9209b25a4 2025-08-12T23:55:34+01:00 ciciplusplus <ciciplusplus@gmail.com>
+NSURLConnection sendSynchronousRequest:returningResponse:error: method stub
+e89337ba33700e988ad211423f9999cb61a09d53 2025-08-12T23:55:05+01:00 ciciplusplus <ciciplusplus@gmail.com>
+NSMutableURLRequest setURL: and addValue:forHTTPHeaderField: methods
+cf1ade8a5689a9cb39fc0f46892a30e180fe130e 2026-04-28T23:20:42+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Relax rewind callback assert
+bb1c79dd077f8fb28b41f70835fe6af88e5547b7 2025-08-12T23:13:27+01:00 ciciplusplus <ciciplusplus@gmail.com>
+Naive implementation of CGDataProviderCreateSequential()
+c327f53de687a30b12cec2cd2f7b11fad16aa5d5 2026-04-28T13:05:51-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Fix pthread_cond_broadcast log
+bc151eab8c5dfddfb9359db9e486a5dffef07136 2026-04-28T13:10:34-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Also log ThreadBlock in dump_all_regs
+531b7639014c478a842fcdc81a6b94f1d44e1a64 2025-08-13T00:00:30+01:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement class_getSuperclass(), objc_getClass() and object_getClass()
+217238b5bb9e9b6f4f27a0d5ea4dff9c629dff68 2026-04-25T23:07:44+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Define kCFAllocatorNull
+92674bfd49af5b47ee564acb14716b91b0911f78 2026-04-25T20:28:54+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Update CHANGELOG
+f4fc6f6542a5f653047eeaee562232f3ee617cad 2026-04-25T01:12:56+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement UIDevice userInterfaceIdiom method
+bb93edee8fcbb98e800627a73dd16eaefb662475 2026-04-25T00:22:24+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix Windows build.
+a000b175148f2c012e2cea55e701955ff8a0a896 2026-04-25T00:13:38+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix build and lints
+252d66236115a1ebac1847470690009a4d83c7ed 2026-04-24T23:16:44+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement AVAudioSession shared instance singleton
+587089b82a7c4352bf5a2bf0c15cfc329b910450 2026-04-22T01:04:22+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Add test about round-trip for coding/encoding an NSDictionary containing an NSArray of NSStrings.
+d80c7539f5fbc12c8b8972f5d862a2659e4a7586 2026-04-22T00:37:08+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Refactor NSDictionary and NSMutableDictionary coding/encoding methods
+4718a99b0138509a4cb15dc10cb98678d2fc80bc 2026-04-22T00:19:12+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Refactor NSArray and NSMutableArray coding/encoding methods
+47c4a13490fcc548b1a3f273496d916643c7aa5d 2026-04-21T22:12:45+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSString encodeWithCoder: implementation
+703a838f9d0a9419165ae2a489420e6ec0349f8e 2026-02-24T23:46:09Z ciciplusplus <ciciplusplus@gmail.com>
+Implement encodeWithCoder: for various classes
+a25430d5b34fab6aa5b9b54d9ea43dbf0d1db06d 2026-04-06T21:48:41+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSKeyedArchiver encodeInt:forKey: method
+1f1b63accfa2dce85a4dc99c43cbcd5b011ffbd0 2026-04-20T15:26:57-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Remove RET_FLAG check for zero stack on dyld call workaround
+c8861c106cec4c395114be91059e0a4a88430ece 2026-02-07T18:08:22+01:00 ciciplusplus <ciciplusplus@gmail.com>
+Support %ls in printf-like functions
+a499492e6c35857759e9f401308e6aed1c19e6dd 2026-02-07T18:08:39+01:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for GKLocalPlayer localPlayer class method
+de7a31b652fdddbf4d4eeb22bf9aa48102ba887e 2026-04-19T23:39:55+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement ftello() and fseeko()
+98e1660b25738039e830f7247b02c6d35ee33501 2025-06-07T11:51:07+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement strspn() and strpbrk()
+cda15f2b098ec0dd3598dcca95258888ee4e85da 2026-04-19T15:22:22+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement Extended Audio File Services atop of Audio File Services.
+27b9473081cbc5355d63db50c278dbd05a6bc6cf 2026-04-19T13:29:09+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Define NSLocaleIdentifier and handle it in NSLocale methods
+81abfe3ff8e024d903153b4f1273873e4d73f6b8 2026-04-19T00:43:32+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Refactor used_arguments with Option-valued argument slots.
+e8f9b5b9d00a88a363e7a2c4a38d00d61ba7ee3d 2026-04-19T00:23:36+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Refactor argument types parsing to parse signature only once
+ded2f8cc13a1e259a6f3b6eaae009d2e72ddd021 2026-04-19T00:09:21+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Unify pointer cases in NSInvocation
+c055f5fca7e5e58471cdcda5f0cda3376cdb67fd 2026-04-18T17:39:29+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle case of pointer to an int in NSInvocation
+4656cffd30541d47ee1ec0af73468c535fa0938a 2026-04-18T15:11:33+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Retain all args and copy C Strings in retainArguments of NSInvocation
+8c23b0276c36c0bb6556174baba5d8be9b0887f6 2026-03-01T16:28:26Z ciciplusplus <ciciplusplus@gmail.com>
+NSMethodSignature and NSInvocation implementations.
+58182bacc1ea379d9a0c39ad5294a59f145ed72a 2026-04-18T14:31:58+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Replaced yore with encoding_rs for Windows-1252 encoding
+e72a59d39c9ce4dca5e43b91bbbe30440e123497 2026-04-04T13:44:48+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement max_width for %[set] in sscanf()
+902580681c9bc57ae450b2f679d00e6bc2a14eb5 2026-04-04T12:24:11+02:00 ciciplusplus <ciciplusplus@gmail.com>
+UIView contentScaleFactor property stub
+523ac7465627297bfa557273ba222a3f9deffeb7 2026-04-04T12:21:44+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSMutableSet setWithCapacity: class method
+5c6989745da1673ea4a074797db9847cdd0ca788 2026-04-17T23:36:47+02:00 ciciplusplus <ciciplusplus@gmail.com>
+CADisplayLink paused property implementation
+4bd09bf531dbcf1f523e1f6ca10cfd0f4a970c3a 2026-04-17T23:22:17+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix CADisplayLink implementation.
+8826dc2fbd3f3ed29da741435de6fc1ac7db6110 2025-08-17T22:59:22+01:00 ciciplusplus <ciciplusplus@gmail.com>
+Add support for AudioServicesCreateSystemSoundID and playback
+e35f26686b12b79d8d50966b8216f0db798ac012 2025-02-12T19:46:40+01:00 ciciplusplus <ciciplusplus@gmail.com>
+div() implementation
+506d109e2971ba98aff2bba399bb9611f77973fe 2026-04-15T23:03:56+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement pthread_cond_timedwait()
+ece124070e008d5ac0cca44cf98dfc2e8ff6fad5 2026-04-14T20:29:13+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Replace Caf packet reader with Symphonia.
+96737dadaed7e8846e22a653d082a1a4ffa7508c 2026-04-13T23:18:58+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Update symphonia crate to 0.6.0-alpha.1
+4abbe5ab100de7e33e92071e063ea94238fa945d 2026-04-11T17:09:26+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Simplify gitignore
+3b1f966da77f88c9a171a3bdcc7b376e1ae08ece 2026-04-14T22:44:49+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for kAudioFilePropertyPacketTableInfo in AudioFileGetProperty()
+71859b72390fade7a7edffa21e73c82a36f62e6e 2026-04-14T22:21:47+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Trivial AudioQueueEnqueueBufferWithParameters() implementation
+30023a4af1b2777e1e2ee47775f4f02d7536a9dd 2026-04-14T20:50:00+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Enable --zero-stack-after-guest-to-host-call=... to fix BIA
+5bdc90d34a3092ff5d318df1a3e4d03608f05772 2026-04-12T23:13:08+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Introduce --zero-stack-after-guest-to-host-call=... cli option
+eafaceb2f2445123405e3622f30454862eb86db3 2026-04-05T17:24:13-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Migrate gradle files from groovy to kotlin dsl
+6c6c46c7814bdf199cabd4cc9d8eddcf3d318d22 2026-04-06T20:47:47+02:00 ciciplusplus <ciciplusplus@gmail.com>
+More stubs for Core Location
+be463d21ef0bc1687e52f558fc6fd47195dffa45 2026-04-05T21:50:22+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Enable support for %g in sscanf-like functions
+682a9c096ab2c89552d2b582ab95f599402ef386 2026-04-06T22:39:41+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix already_archived of NSKeyedArchiver
+00180d826360daf4174d51a24890da6e924b0205 2026-04-06T09:25:56-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Ignore *.o files in TestApp.app directory
+ad97c2feb85aaf6b35a9e3581efaa5b55cef09ea 2026-04-05T17:32:39+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Implement strerror() for currently defined errnos and correct perror()
+3035639fe38d0971055e7b366734abc28c690056 2026-04-05T00:51:36+02:00 ciciplusplus <ciciplusplus@gmail.com>
+CFStringNormalize() for ASCII strings
+0669edd1f96e11c3a337143efb51d12f270596f7 2026-04-04T22:34:32+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub implementation for kCFAllocatorSystemDefault allocator
+29a03c3d6e9edcaf1143c6ea2de81b53f61ccb5e 2026-01-26T20:36:21+01:00 alborrajo <alvarolopezborr@gmail.com>
+Default options for Ace Combat Xi
+95ebd2216d47090d94b5d7b865ffd1bea878af20 2026-01-19T23:38:06+01:00 alborrajo <alvarolopezborr@gmail.com>
+Implement task_info with mock values
+84e9e0a9937186902b03bd32ae976ee78b0fcb47 2026-04-04T20:28:38+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Credit proper version of SDL crate
+d7a7fd2b6e3a2ee8ffb0a5db72059d27284c7796 2025-06-15T14:24:35-06:00 Alexander Cieslewicz <alexander.cieslewicz@gmail.com>
+Implement scrollRangeToVisible for UITextView
+b0d88936cd5a8858794cdc7a58fd3cfd09e213dc 2026-01-19T23:34:41+01:00 alborrajo <alvarolopezborr@gmail.com>
+Handle statically allocated pthread_cond_t
+0eb73ebb7529254112d87756d40c234a2c3b652e 2026-04-04T15:30:58+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fix test_cond_var test case for broadcast
+61c504905bf32097639090768c121ab56ec90437 2026-04-04T14:28:06+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Update CHANGELOG
+ab4e381e17c287eee3cae22011773a92ae9bd765 2026-04-01T09:49:29-04:00 abnormalmaps <abnormalmaps@gmail.com>
+Fix new clippy lints
+15a67a92021ec9178f15c417ca6f334fc0485f14 2026-03-31T19:37:10+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Print accelerometer notice only on the delegate changes.
+8035412d8ef092c4a58f6cd54f293af49f4893ab 2026-03-31T19:35:21+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Reduce spammy log for NSThread isCancelled
+2282bb0545b6fece1c865ec31e825fe10aa8a605 2026-03-30T22:57:50+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Fixes for 2 issues with touchHLE's Mach-O linker:
+c4bce0f9eda170272208863172136db072341d9f 2026-03-29T21:46:20+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Stub for madvise()
+c5c075e4ba2e77baf2d8e10e1d75ef2cfa55bb8a 2026-03-29T21:31:25+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSThread isMainThread class method
+c9a5a6525d5ff7760e182e3ab7a9dbb2abcb2e64 2026-03-29T21:30:28+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSThread setName: method stub
+f94b7b1ba1cd016ff36f03f5f2271388df339297 2026-03-29T21:30:10+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Refactor mmap module to sys/mman
+5d37847a98bbd0594d422e800e26e9c5dd8c3d2e 2026-03-29T19:24:24+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Default options for Zombieville
+6bb0c45c826b65028eb14b3d16c0cf641c8c23a5 2026-03-29T19:04:40+02:00 ciciplusplus <ciciplusplus@gmail.com>
+NSNumber stringValue method
+48752a3b2849b03ad1eb68fce91f48132d4bf696 2026-03-29T19:03:45+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Handle cases of hh and h length modifiers for integers
+43186e370c0529ec27d480829e8ceb27eef615d7 2026-03-29T19:02:25+02:00 ciciplusplus <ciciplusplus@gmail.com>
+Refactor test_vsnprintf to return monotonically decreasing numbers starting from -1 on failures

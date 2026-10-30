@@ -1,0 +1,18 @@
+{
+  "platform": "macOS-27.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "after_insert": {
+    "retain": 1,
+    "release": 0
+  },
+  "after_replace": {
+    "retain": 2,
+    "release": 1
+  },
+  "after_release": {
+    "retain": 2,
+    "release": 2
+  },
+  "original_key_preserved": false,
+  "replacement_key_stored": true
+}

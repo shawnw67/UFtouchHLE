@@ -45,6 +45,7 @@ pub mod sys;
 pub mod sysctl;
 pub mod time;
 pub mod unistd;
+pub mod uuid;
 pub mod wchar;
 
 pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
@@ -118,6 +119,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         sysctl::FUNCTIONS,
         time::FUNCTIONS,
         unistd::FUNCTIONS,
+        uuid::FUNCTIONS,
         wchar::FUNCTIONS,
     ],
 };

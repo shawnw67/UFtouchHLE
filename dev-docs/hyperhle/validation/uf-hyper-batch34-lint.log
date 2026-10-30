@@ -1,0 +1,39 @@
+Checking for long comment lines…
+[32mNone found.[0m
++ cargo --offline clippy -- --deny warnings
+   Compiling touchHLE_pvrt_decompress_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/image/pvrt_decompress_wrapper)
+   Compiling touchHLE_version v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/version)
+   Compiling touchHLE_stb_image_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/image/stb_image_wrapper)
+   Compiling touchHLE_openal_soft_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/audio/openal_soft_wrapper)
+   Compiling touchHLE_gl_bindings v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/gles/gl_bindings)
+   Compiling touchHLE_dynarmic_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/cpu/dynarmic_wrapper)
+   Compiling touchHLE v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE)
+warning: touchHLE_version@0.3.0: Cargo.toml version (v0.3.0) is not a prefix of `git describe` version (v0.3.24)!
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 18.43s
++ RUSTDOCFLAGS='--deny warnings --document-private-items'
++ cargo doc
+ Documenting symphonia-metadata v0.6.0
+   Compiling touchHLE_stb_image_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/image/stb_image_wrapper)
+   Compiling touchHLE_dynarmic_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/cpu/dynarmic_wrapper)
+   Compiling touchHLE_pvrt_decompress_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/image/pvrt_decompress_wrapper)
+   Compiling touchHLE_version v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/version)
+   Compiling touchHLE_openal_soft_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/audio/openal_soft_wrapper)
+   Compiling touchHLE_gl_bindings v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/gles/gl_bindings)
+   Compiling touchHLE v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE)
+warning: touchHLE_version@0.3.0: Cargo.toml version (v0.3.0) is not a prefix of `git describe` version (v0.3.24)!
+ Documenting touchHLE_version v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/version)
+ Documenting touchHLE_stb_image_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/image/stb_image_wrapper)
+ Documenting touchHLE_pvrt_decompress_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/image/pvrt_decompress_wrapper)
+ Documenting touchHLE_gl_bindings v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/gles/gl_bindings)
+ Documenting touchHLE_openal_soft_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/audio/openal_soft_wrapper)
+ Documenting touchHLE_dynarmic_wrapper v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/src/cpu/dynarmic_wrapper)
+ Documenting symphonia-common v0.6.0
+ Documenting symphonia-format-riff v0.6.0
+ Documenting symphonia-format-isomp4 v0.6.0
+ Documenting symphonia-format-caf v0.6.0
+ Documenting symphonia-codec-aac v0.6.0
+ Documenting symphonia-codec-alac v0.6.0
+ Documenting symphonia v0.6.0
+ Documenting touchHLE v0.3.0 (/Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 50s
+   Generated /Users/wesley/.codex/worktrees/hyperhle-integration/touchHLE/target/doc/touchHLE/index.html

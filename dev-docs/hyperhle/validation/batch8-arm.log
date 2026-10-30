@@ -1,0 +1,3 @@
+Passed 145 out of 145 tests
+PASS 3 fortified ARM guest rejection cases
+PASS ARM guest address-space exhaustion and reallocf release

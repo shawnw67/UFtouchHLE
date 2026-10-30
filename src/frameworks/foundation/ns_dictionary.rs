@@ -80,6 +80,7 @@ impl DictionaryHostObject {
             if candidate_key == key || msg![env; candidate_key isEqual:key] {
                 release(env, *existing_value);
                 *existing_value = value;
+                release(env, key);
                 return;
             }
         }
@@ -119,6 +120,7 @@ impl DictionaryHostObject {
 // Right now they are here because we're too tied to
 // NSDictionary internals, but separation could be cleaner?
 #[repr(C, packed)]
+#[derive(Clone, Copy)]
 pub struct CFDictionaryKeyCallBacks {
     pub version: CFIndex,         // version
     pub retain: GuestFunction,    // const void *(*retain)(CFAllocatorRef, const void *value)
@@ -130,6 +132,7 @@ pub struct CFDictionaryKeyCallBacks {
 unsafe impl SafeRead for CFDictionaryKeyCallBacks {}
 
 #[repr(C, packed)]
+#[derive(Clone, Copy)]
 pub struct CFDictionaryValueCallBacks {
     pub version: CFIndex,         // version
     pub retain: GuestFunction,    // const void *(*retain)(CFAllocatorRef, const void *value)
@@ -181,17 +184,28 @@ impl Default for CFDictionaryHostObject {
 }
 // TODO: Unify implementations of NSDictionary and CFDictionary
 impl CFDictionaryHostObject {
+    fn release_all(&mut self, env: &mut Environment) {
+        let entries = std::mem::take(&mut self.superclass.map);
+        self.superclass.count = 0;
+        for (key, value) in entries.into_values().flatten() {
+            self.release_key(env, key);
+            self.release_value(env, value);
+        }
+    }
+
     fn lookup(&self, env: &mut Environment, key: id) -> id {
+        self.lookup_option(env, key).unwrap_or(nil)
+    }
+
+    fn lookup_option(&self, env: &mut Environment, key: id) -> Option<id> {
         let hash = self.hash(env, key);
-        let Some(collisions) = self.superclass.map.get(&hash) else {
-            return nil;
-        };
+        let collisions = self.superclass.map.get(&hash)?;
         for &(candidate_key, value) in collisions {
             if self.equal_keys(env, candidate_key, key) {
-                return value;
+                return Some(value);
             }
         }
-        nil
+        None
     }
     fn insert(&mut self, env: &mut Environment, key: id, value: id) {
         let hash = self.hash(env, key);
@@ -202,7 +216,6 @@ impl CFDictionaryHostObject {
             e.insert(vec![(key, value)]);
             return;
         };
-        // remove if present (count will be decremented if necessary)
         self.remove(env, key);
         self.superclass
             .map
@@ -280,6 +293,134 @@ impl CFDictionaryHostObject {
             value_release_func.call_from_host(env, (nil, value))
         }
     }
+}
+
+/// Distinguish a present NULL CF value from an absent key.
+pub fn cf_lookup(env: &mut Environment, dict: id, key: id) -> Option<id> {
+    let is_cf_dict = env
+        .objc
+        .get_host_object(dict)
+        .is_some_and(|object| object.as_any().is::<CFDictionaryHostObject>());
+    if is_cf_dict {
+        let host_obj: CFDictionaryHostObject = std::mem::take(env.objc.borrow_mut(dict));
+        let result = host_obj.lookup_option(env, key);
+        *env.objc.borrow_mut(dict) = host_obj;
+        result
+    } else {
+        let value: id = msg![env; dict objectForKey:key];
+        (value != nil).then_some(value)
+    }
+}
+
+pub fn cf_count_values(env: &mut Environment, dict: id, value: id, first_only: bool) -> CFIndex {
+    let is_cf_dict = env
+        .objc
+        .get_host_object(dict)
+        .is_some_and(|object| object.as_any().is::<CFDictionaryHostObject>());
+    if is_cf_dict {
+        let host_obj: CFDictionaryHostObject = std::mem::take(env.objc.borrow_mut(dict));
+        let equal = host_obj.value_callbacks.equal;
+        let mut count = 0;
+        for &(_, candidate) in host_obj.superclass.map.values().flatten() {
+            if candidate == value
+                || (!equal.to_ptr().is_null() && equal.call_from_host(env, (candidate, value)))
+            {
+                count += 1;
+                if first_only {
+                    break;
+                }
+            }
+        }
+        *env.objc.borrow_mut(dict) = host_obj;
+        count
+    } else {
+        let keys: id = msg![env; dict allKeys];
+        let count: NSUInteger = msg![env; keys count];
+        let mut matches = 0;
+        for index in 0..count {
+            let key: id = msg![env; keys objectAtIndex:index];
+            let candidate: id = msg![env; dict objectForKey:key];
+            if candidate == value || msg![env; candidate isEqual:value] {
+                matches += 1;
+                if first_only {
+                    break;
+                }
+            }
+        }
+        matches
+    }
+}
+
+pub fn cf_dictionary_entries(env: &Environment, dict: id) -> Option<Vec<(id, id)>> {
+    let host = env
+        .objc
+        .get_host_object(dict)?
+        .as_any()
+        .downcast_ref::<CFDictionaryHostObject>()?;
+    Some(host.superclass.map.values().flatten().copied().collect())
+}
+
+fn cf_dictionary_from_entries(
+    env: &mut Environment,
+    mutable: bool,
+    keys: Option<CFDictionaryKeyCallBacks>,
+    values: Option<CFDictionaryValueCallBacks>,
+    entries: &[(id, id)],
+) -> id {
+    let mut host = CFDictionaryHostObject::default();
+    if let Some(keys) = keys {
+        let version = keys.version;
+        assert_eq!(version, 0);
+        host.key_callbacks = keys;
+    }
+    if let Some(values) = values {
+        let version = values.version;
+        assert_eq!(version, 0);
+        host.value_callbacks = values;
+    }
+    for &(key, value) in entries {
+        host.insert(env, key, value);
+    }
+    let name = if mutable {
+        "_touchHLE_NSMutableDictionary_non_retaining"
+    } else {
+        "_touchHLE_NSDictionary_cf"
+    };
+    let class = env.objc.get_known_class(name, &mut env.mem);
+    env.objc.alloc_object(class, Box::new(host), &mut env.mem)
+}
+
+pub fn cf_dictionary_create(
+    env: &mut Environment,
+    keys: ConstPtr<CFDictionaryKeyCallBacks>,
+    values: ConstPtr<CFDictionaryValueCallBacks>,
+    entries: &[(id, id)],
+) -> id {
+    let keys = (!keys.is_null()).then(|| env.mem.read(keys));
+    let values = (!values.is_null()).then(|| env.mem.read(values));
+    cf_dictionary_from_entries(env, false, keys, values, entries)
+}
+
+fn cf_dictionary_copy(env: &mut Environment, dict: id, mutable: bool) -> id {
+    let host = env.objc.borrow::<CFDictionaryHostObject>(dict);
+    let keys = host.key_callbacks;
+    let values = host.value_callbacks;
+    let entries: Vec<_> = host.superclass.map.values().flatten().copied().collect();
+    cf_dictionary_from_entries(env, mutable, Some(keys), Some(values), &entries)
+}
+
+fn cf_dictionary_all_keys(env: &mut Environment, dict: id) -> id {
+    let host = env.objc.borrow::<CFDictionaryHostObject>(dict);
+    let keys: Vec<id> = host
+        .superclass
+        .map
+        .values()
+        .flatten()
+        .map(|&(key, _)| key)
+        .collect();
+    let array: id = msg_class![env; _touchHLE_NSArray_non_retaining alloc];
+    env.objc.borrow_mut::<ArrayHostObject>(array).array = keys;
+    autorelease(env, array)
 }
 
 /// Helper to enable sharing `dictionaryWithObjectsAndKeys:` and
@@ -931,6 +1072,27 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
+@implementation _touchHLE_NSDictionary_cf: _touchHLE_NSDictionary
+
+- (())dealloc {
+    let mut host: CFDictionaryHostObject = std::mem::take(env.objc.borrow_mut(this));
+    host.release_all(env);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+
+- (id)objectForKey:(id)key {
+    let host: CFDictionaryHostObject = std::mem::take(env.objc.borrow_mut(this));
+    let result = host.lookup(env, key);
+    *env.objc.borrow_mut(this) = host;
+    result
+}
+
+- (id)allKeys { cf_dictionary_all_keys(env, this) }
+- (id)copyWithZone:(NSZonePtr)_zone { cf_dictionary_copy(env, this, false) }
+- (id)mutableCopyWithZone:(NSZonePtr)_zone { cf_dictionary_copy(env, this, true) }
+
+@end
+
 // Special variant for use by CFDictionary with NULL callbacks: objects aren't
 // necessarily Objective-C objects and won't be retained/released.
 // TODO: refactor with lookup/insert methods to use callbacks
@@ -945,15 +1107,19 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)initWithKeyCallbacks:(ConstPtr<CFDictionaryKeyCallBacks>)key_callbacks
          andValueCallbacks:(ConstPtr<CFDictionaryValueCallBacks>)value_callbacks {
     if !key_callbacks.is_null() {
-        assert!(!value_callbacks.is_null());
         let host_object = env.objc.borrow_mut::<CFDictionaryHostObject>(this);
         host_object.key_callbacks = env.mem.read(key_callbacks);
+    }
+    if !value_callbacks.is_null() {
+        let host_object = env.objc.borrow_mut::<CFDictionaryHostObject>(this);
         host_object.value_callbacks = env.mem.read(value_callbacks);
-    };
+    }
     this
 }
 
 - (())dealloc {
+    let mut host_object: CFDictionaryHostObject = std::mem::take(env.objc.borrow_mut(this));
+    host_object.release_all(env);
     env.objc.dealloc_object(this, &mut env.mem)
 }
 
@@ -964,10 +1130,10 @@ pub const CLASSES: ClassExports = objc_classes! {
     todo!();
 }
 - (id)copyWithZone:(NSZonePtr)_zone {
-    todo!();
+    cf_dictionary_copy(env, this, false)
 }
 - (id)mutableCopyWithZone:(NSZonePtr)_zone {
-    todo!();
+    cf_dictionary_copy(env, this, true)
 }
 
 - (id)objectForKey:(id)key {
@@ -996,14 +1162,14 @@ pub const CLASSES: ClassExports = objc_classes! {
     *env.objc.borrow_mut(this) = host_obj;
 }
 
-- (id)allKeys {
-    let host_obj: DictionaryHostObject = std::mem::take(env.objc.borrow_mut(this));
-    let keys: Vec<id> = host_obj.map.values().flatten().map(|&(key, _value)| key).collect();
-    *env.objc.borrow_mut(this) = host_obj;
+- (())removeAllObjects {
+    let mut host_object: CFDictionaryHostObject = std::mem::take(env.objc.borrow_mut(this));
+    host_object.release_all(env);
+    *env.objc.borrow_mut(this) = host_object;
+}
 
-    let array: id = msg_class![env; _touchHLE_NSArray_non_retaining alloc];
-    env.objc.borrow_mut::<ArrayHostObject>(array).array = keys;
-    array
+- (id)allKeys {
+    cf_dictionary_all_keys(env, this)
 }
 
 @end

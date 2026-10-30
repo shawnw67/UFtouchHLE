@@ -458,10 +458,12 @@ impl<T: Copy + Default + Eq + Ord + SafeRead + Debug> GenericChar<T> {
         loop {
             let c = env.mem.read(src + i);
 
-            match i.cmp(&(size - 1)) {
-                Ordering::Less => env.mem.write(dst + i, c),
-                Ordering::Equal => env.mem.write(dst + i, Self::null()),
-                _ => {}
+            if size > 0 {
+                match i.cmp(&(size - 1)) {
+                    Ordering::Less => env.mem.write(dst + i, c),
+                    Ordering::Equal => env.mem.write(dst + i, Self::null()),
+                    _ => {}
+                }
             }
 
             if c == Self::null() {

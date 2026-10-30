@@ -771,6 +771,8 @@ impl Environment {
                 Some(std::fs::File::create(&env.options.dumping_file).map_err(|e| e.to_string())?);
         }
 
+        // errno must already have storage when a guest allocation fails.
+        libc::errno::initialize_thread(&mut env, 0);
         env.set_up_initial_env_vars();
         dyld::Dyld::do_late_linking(&mut env);
 
@@ -903,6 +905,8 @@ impl Environment {
         }
 
         env.cpu.set_cpsr(cpu::Cpu::CPSR_USER_MODE);
+
+        libc::errno::initialize_thread(&mut env, 0);
 
         // GDB server setup would be done here, but there's no need for it.
 
@@ -1156,6 +1160,7 @@ impl Environment {
                     );
                     let return_value: mem::MutVoidPtr =
                         start_routine.call_from_host(env, (user_data,));
+                    libc::errno::destroy_thread(env, env.current_thread);
                     let curr_thread = &mut env.threads[env.current_thread];
                     curr_thread.return_value = Some(return_value);
                     curr_thread.state = ThreadState::Dead;
@@ -1180,6 +1185,7 @@ impl Environment {
         });
 
         let new_thread_id = self.threads.len() - 1;
+        libc::errno::initialize_thread(self, new_thread_id);
 
         log_dbg!("Created new thread {} with stack {:#x}–{:#x}, will execute function {:?} with data {:?}", new_thread_id, stack_alloc.to_bits(), (stack_high_addr - 1), start_routine, user_data);
 
@@ -1302,21 +1308,25 @@ impl Environment {
     }
 
     /// Unlock a semaphore (increments value of a semaphore).
-    pub fn sem_increment(&mut self, sem: MutPtr<sem_t>) {
+    pub fn sem_increment(&mut self, sem: MutPtr<sem_t>) -> Result<(), i32> {
         let host_sem_rc: &mut _ = self
             .libc_state
             .semaphore
             .open_semaphores
             .get_mut(&sem)
-            .unwrap();
+            .ok_or(crate::libc::errno::EINVAL)?;
         let mut host_sem = (*host_sem_rc).borrow_mut();
 
+        if host_sem.value == host_sem.max_value {
+            return Err(crate::libc::errno::EOVERFLOW);
+        }
         host_sem.value += 1;
         log_dbg!(
             "sem_increment: semaphore {:?} is now {}",
             sem,
             host_sem.value
         );
+        Ok(())
     }
 
     /// Blocks the current thread until the thread given finishes, writing its
@@ -1846,7 +1856,7 @@ impl Environment {
                                 host_sem.value
                             );
                             host_sem.value -= 1;
-                            host_sem.waiting.remove(&self.current_thread);
+                            host_sem.waiting.remove(&thread_id);
                             self.threads[thread_id].blocked_by = ThreadBlock::NotBlocked;
                             return thread_id;
                         }
