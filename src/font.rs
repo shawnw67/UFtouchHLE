@@ -112,10 +112,14 @@ impl Font {
         }
     }
 
-    /// Use font sizes as they are, without the adjustment for substituting
-    /// Helvetica (see [Self::from_resource_file]).
-    pub fn without_size_adjustment(mut self) -> Font {
-        self.scale_factor = 1.0;
+    /// Makes font sizes mean the size of the em square, like Core Text does,
+    /// instead of rusttype's pixel height (ascent - descent). For fonts with
+    /// large line spacing, like Noto Sans CJK (1.448 em), the latter makes
+    /// glyphs much smaller than the glyph advances and bounds Core Text
+    /// reports, which are based on the em size.
+    pub fn with_em_size(mut self) -> Font {
+        let metrics = self.font.v_metrics_unscaled();
+        self.scale_factor = (metrics.ascent - metrics.descent) / self.units_per_em() as f32;
         self
     }
 
