@@ -111,6 +111,9 @@ public class LauncherActivity extends Activity {
     private static final String MHP2G_BUNDLE_ID = "jp.co.capcom.mhp2gjp";
     /// Monster Hunter Freedom Unite, P2G's Western release (same engine).
     private static final String MHFU_BUNDLE_ID = "jp.co.capcom.mhp2gwd";
+    /// The folders (in PSP/SAVEDATA) of the PSP saves that can be imported
+    /// into either game: MHP2G, and Freedom Unite in North America and Europe.
+    private static final String[] PSP_SAVE_FOLDERS = {"ULJM05500", "ULUS10391", "ULES01213"};
     /// Where touchHLE keeps each app's data (see src/paths.rs), in a folder
     /// named after the app's bundle identifier.
     private static final String SANDBOX_DIR = "touchHLE_sandbox";
@@ -1156,6 +1159,8 @@ public class LauncherActivity extends Activity {
         } else if (MHFU_BUNDLE_ID.equals(app.bundleId)) {
             items.add(getString(R.string.menu_p2g_layout));
             actions.add(() -> showP2GViewOptions(app));
+            items.add(getString(R.string.menu_import_psp_save));
+            actions.add(() -> confirmImportPspSave(app));
         }
     }
 
@@ -2096,7 +2101,7 @@ public class LauncherActivity extends Activity {
             .show();
     }
 
-    // ---- PSP saves (Monster Hunter Portable 2nd G) ----
+    // ---- PSP saves (Monster Hunter Portable 2nd G, Freedom Unite) ----
 
     private void confirmImportPspSave(final App app) {
         new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
@@ -2134,17 +2139,20 @@ public class LauncherActivity extends Activity {
             .show();
     }
 
-    /// Finds MHP2NDG.BIN and PARAM.SFO in a chosen folder (or in its
-    /// ULJM05500 subfolder, e.g. if PSP/SAVEDATA was chosen) or among chosen
-    /// files. Returns {save, PARAM.SFO or null}.
+    /// Finds MHP2NDG.BIN and PARAM.SFO in a chosen folder (or in one of its
+    /// subfolders named like a PSP save, e.g. if PSP/SAVEDATA was chosen) or
+    /// among chosen files. Returns {save, PARAM.SFO or null}.
     private Uri[] findPspSave(Uri tree, List<Uri> files) {
         Uri[] found = new Uri[2];
         if (tree != null) {
             String folder = DocumentsContract.getTreeDocumentId(tree);
             if (findChild(tree, folder, "MHP2NDG.BIN") == null) {
-                String subfolder = findChild(tree, folder, "ULJM05500");
-                if (subfolder != null) {
-                    folder = subfolder;
+                for (String name : PSP_SAVE_FOLDERS) {
+                    String subfolder = findChild(tree, folder, name);
+                    if (subfolder != null) {
+                        folder = subfolder;
+                        break;
+                    }
                 }
             }
             found[0] = documentUri(tree, findChild(tree, folder, "MHP2NDG.BIN"));
