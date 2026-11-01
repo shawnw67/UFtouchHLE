@@ -264,4 +264,5 @@ com.rockstargames.gta3vc: --device-model=iPhone4,1 --retina --system-version=7.0
 jp.co.capcom.mhp2gjp: --system-version=7.0 --allow-network-access --gamekit-auto
 
 # Monster Hunter Freedom Unite (P2G's Western release, same engine)
-jp.co.capcom.mhp2gwd: --system-version=7.0
+# Its local multiplayer works over the LAN like P2G's.
+jp.co.capcom.mhp2gwd: --system-version=7.0 --allow-network-access --gamekit-auto
