@@ -16,6 +16,8 @@
 //!   `endecrypter game.bin key.bin PARAM.SFO`, run on a copy of the
 //!   PARAM.SFO from `MHP2G_PSP_SAVE_DIR`.
 //! - `MHP2G_IOS_SAVE`: an iOS savedata.dat written by the game.
+//! - `MHP2G_MHFU_SAVE_DIR`: a save directory (MHP2NDG.BIN, PARAM.SFO) of
+//!   Monster Hunter Freedom Unite for the PSP (ULUS10391 or ULES01213).
 //!
 //! Run with `cargo test -p mhp2g_save -- --nocapture`.
 
@@ -64,6 +66,28 @@ fn psp_save_from_a_psp() {
     assert!(again == file, "file differs");
     assert_eq!(file_hash(&sfo), original_hash);
     sfo.check_params_hashes().unwrap();
+}
+
+#[test]
+fn psp_freedom_unite_save() {
+    let Some(dir) = env_path("MHP2G_MHFU_SAVE_DIR") else {
+        return;
+    };
+    let file = read(dir.join(SAVE_FILE_NAME));
+    let sfo = Sfo::parse(read(dir.join(SFO_FILE_NAME))).unwrap();
+    let save = mhp2g_save::load(&file, Some(sfo.params().unwrap())).unwrap();
+    assert_eq!(
+        (save.platform, save.format),
+        (Platform::Psp, Format::PspFile)
+    );
+    // The hash of these saves is made with the iOS salt.
+    assert!(game::hash_ok(&save.plain, Platform::Ios));
+
+    let import = mhp2g_save::import_psp(&file, Some(&sfo.0), None).unwrap();
+    eprintln!("characters: {:?}", import.characters);
+    assert!(!import.characters.is_empty());
+    let ios = mhp2g_save::load(&import.file, None).unwrap();
+    assert_eq!((ios.platform, ios.format), (Platform::Ios, Format::IosFile));
 }
 
 #[test]
