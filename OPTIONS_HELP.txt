@@ -436,7 +436,8 @@ Other options:
         join a compatible room found on the LAN, or else host one (named by
         --gamekit-room, or "UFtouchHLE") and advertise it. Requires
         --allow-network-access. An explicit host, join or discover option
-        overrides it. On by default for Monster Hunter Portable 2nd G.
+        overrides it. On by default for Monster Hunter Portable 2nd G and
+        Monster Hunter Freedom Unite.
     --gamekit-discovery-bind=IP:PORT
         Discovery browser UDP bind (default 0.0.0.0:42019).
     --gamekit-broadcast=IP:PORT

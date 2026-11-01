@@ -7,7 +7,9 @@
  * any later version. See COPYING.
  */
 //! Reading, writing and converting Monster Hunter Portable 2nd G saves of
-//! the PSP (ULJM-05500) and iOS versions. See README.md.
+//! the PSP (ULJM-05500) and iOS versions. PSP saves of Monster Hunter
+//! Freedom Unite (ULUS-10391, ULES-01213), the same game, can be read too.
+//! See README.md.
 //!
 //! Both platforms keep the same plaintext ([game]), protected by the same
 //! game layer apart from the salt of its hash. On top of that, iOS uses
@@ -71,9 +73,19 @@ pub enum Format {
 pub struct Save {
     pub platform: Platform,
     pub format: Format,
-    /// 0x16A100 bytes, with a valid hash.
+    /// 0x16A100 bytes, with a valid hash. (That of a Freedom Unite save from
+    /// the PSP is made with the salt of [Platform::Ios].)
     pub plain: Vec<u8>,
 }
+
+/// The PSP games whose saves can be read: the game key of each, and the
+/// platform whose salt its save hash uses. All of them share the game layer.
+/// Freedom Unite (the Western release of MHP2G) hashes its saves with the
+/// iOS salt.
+const PSP_GAMES: [(&[u8; 16], Platform); 2] = [
+    (&psp::MHP2G_JP_KEY, Platform::Psp),
+    (&psp::MHFU_KEY, Platform::Ios),
+];
 
 /// Identify and decrypt a save of either platform. `psp_params` is
 /// `SAVEDATA_PARAMS[0]` from the save's `PARAM.SFO`, if there is one.
@@ -104,10 +116,14 @@ pub fn load(raw: &[u8], psp_params: Option<u8>) -> Result<Save, Error> {
             None => vec![psp::MHP2G_PARAMS, 0x21],
         };
         for p in params {
-            let inner = psp::decrypt_file(raw, p, &psp::MHP2G_JP_KEY)?;
-            let plain = game::decrypt(&inner);
-            if game::hash_ok(&plain, Platform::Psp) {
-                return found(Platform::Psp, Format::PspFile, plain);
+            // A wrong key doesn't make this fail, it just gives garbage that
+            // the hash check rejects.
+            for (key, salt_of) in PSP_GAMES {
+                let inner = psp::decrypt_file(raw, p, key)?;
+                let plain = game::decrypt(&inner);
+                if game::hash_ok(&plain, salt_of) {
+                    return found(Platform::Psp, Format::PspFile, plain);
+                }
             }
         }
         errors.push("PSP: decrypted, but the SHA-1 doesn't match".to_string());
@@ -330,6 +346,31 @@ mod tests {
             (Platform::Psp, Format::Plaintext)
         );
         assert_eq!(save.plain[..SEED_OFF], psp[..SEED_OFF]);
+    }
+
+    #[test]
+    fn load_freedom_unite() {
+        // Another game key, and the iOS salt in the hash.
+        let mut plain = synthetic_plain(Platform::Psp);
+        game::seal(&mut plain, Platform::Ios, 1);
+        let sfo = psp::Sfo::parse(psp::tests::synthetic_sfo()).unwrap();
+        let params = sfo.params().unwrap();
+        let (file, _) =
+            psp::encrypt_file(&game::encrypt(&plain), params, &psp::MHFU_KEY, [0xAB; 16]).unwrap();
+        let save = load(&file, Some(params)).unwrap();
+        assert_eq!(
+            (save.platform, save.format),
+            (Platform::Psp, Format::PspFile)
+        );
+        assert_eq!(save.plain, plain);
+        assert_eq!(load(&file, None).unwrap().plain, plain);
+
+        // It imports like a save of the Japanese game.
+        let import = import_psp(&file, Some(&sfo.0), None).unwrap();
+        assert_eq!(import.characters, ["テスト"]);
+        let save = load(&import.file, None).unwrap();
+        assert_eq!(save.format, Format::IosFile);
+        assert_eq!(save.plain[HEADER_LEN..SLOT_OFF], plain[HEADER_LEN..SLOT_OFF]);
     }
 
     #[test]

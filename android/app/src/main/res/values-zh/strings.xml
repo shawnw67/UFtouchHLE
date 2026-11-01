@@ -156,7 +156,7 @@
     <string name="import_save_failed">导入存档失败（%1$s时）：%2$s\n原来的存档在 touchHLE 文件夹的 %3$s 里。</string>
     <string name="menu_import_psp_save">导入 PSP 存档</string>
     <string name="import_psp_save_title">把 PSP 存档导入「%1$s」？</string>
-    <string name="import_psp_save_message">请选择 PSP 存档文件夹 ULJM05500（在 PSP/SAVEDATA 里，PPSSPP 放在它的 memstick 文件夹中），或者其中的 MHP2NDG.BIN 和 PARAM.SFO 文件。存档会被转换成这个版本的格式。现有存档会先备份到 touchHLE 文件夹的 %1$s。\n\n导入前请先退出这个游戏。</string>
+    <string name="import_psp_save_message">请选择 PSP 存档文件夹 ULJM05500、ULUS10391 或 ULES01213（在 PSP/SAVEDATA 里，PPSSPP 放在它的 memstick 文件夹中），或者其中的 MHP2NDG.BIN 和 PARAM.SFO 文件。存档会被转换成这个版本的格式。现有存档会先备份到 touchHLE 文件夹的 %1$s。\n\n导入前请先退出这个游戏。</string>
     <string name="choose_folder">选择文件夹</string>
     <string name="choose_files">选择文件</string>
     <string name="psp_save_not_found">所选文件夹里没有 MHP2NDG.BIN。</string>

@@ -114,8 +114,8 @@ fn CTFontCreateWithName(
         .is_some_and(|language| language.starts_with("zh"));
     let (main, fallback) = if chinese { (sc, ja) } else { (ja, sc) };
     let cg_fonts = [
-        from_font(env, main.without_size_adjustment()),
-        from_font(env, fallback.without_size_adjustment()),
+        from_font(env, main.with_em_size()),
+        from_font(env, fallback.with_em_size()),
     ];
     let host_object = Box::new(CTFontHostObject { cg_fonts, size });
     let class = env.objc.get_known_class("_touchHLE_CTFont", &mut env.mem);
@@ -126,15 +126,23 @@ fn CTFontGetSize(env: &mut Environment, font: CTFontRef) -> CGFloat {
     font_and_size(env, font).1
 }
 
+/// Noto Sans CJK has much taller line metrics (ascent 1.16 em, descent
+/// 0.288 em) than Hiragino Kaku Gothic ProN, the Japanese system font that
+/// apps are designed around. Apps position text using these metrics, so
+/// report values close to Hiragino's (found by comparing with the real
+/// thing) to avoid shifting the text.
+const ASCENT_EM: CGFloat = 0.88;
+const DESCENT_EM: CGFloat = 0.12;
+
 fn CTFontGetAscent(env: &mut Environment, font: CTFontRef) -> CGFloat {
-    let (font, size) = font_and_size(env, font);
-    font.ascent(size)
+    let (_, size) = font_and_size(env, font);
+    ASCENT_EM * size
 }
 
 fn CTFontGetDescent(env: &mut Environment, font: CTFontRef) -> CGFloat {
-    let (font, size) = font_and_size(env, font);
+    let (_, size) = font_and_size(env, font);
     // Core Text's descent is positive.
-    -font.descent(size)
+    DESCENT_EM * size
 }
 
 fn CTFontGetGlyphsForCharacters(
