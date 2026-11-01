@@ -170,7 +170,7 @@
     <string name="import_save_failed">Couldn’t import the saves (while %1$s): %2$s\nThe old saves are in %3$s in the touchHLE folder.</string>
     <string name="menu_import_psp_save">Import a PSP save</string>
     <string name="import_psp_save_title">Import a PSP save into “%1$s”?</string>
-    <string name="import_psp_save_message">Choose the PSP save folder ULJM05500 (in PSP/SAVEDATA; PPSSPP keeps it in its memstick folder), or the files MHP2NDG.BIN and PARAM.SFO in it. The save is converted for this version of the game. The current save is first backed up to %1$s in the touchHLE folder.\n\nQuit this game before importing.</string>
+    <string name="import_psp_save_message">Choose the PSP save folder ULJM05500, ULUS10391 or ULES01213 (in PSP/SAVEDATA; PPSSPP keeps it in its memstick folder), or the files MHP2NDG.BIN and PARAM.SFO in it. The save is converted for this version of the game. The current save is first backed up to %1$s in the touchHLE folder.\n\nQuit this game before importing.</string>
     <string name="choose_folder">Choose folder</string>
     <string name="choose_files">Choose files</string>
     <string name="psp_save_not_found">There’s no MHP2NDG.BIN in the chosen folder.</string>
