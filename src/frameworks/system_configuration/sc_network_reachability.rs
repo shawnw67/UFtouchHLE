@@ -33,6 +33,8 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 struct SCNetworkReachabilityHostObject {
     address: Option<SocketAddrV4>,
+    /// Created from a host name rather than an address.
+    named: bool,
 }
 impl HostObject for SCNetworkReachabilityHostObject {}
 
@@ -57,9 +59,20 @@ fn SCNetworkReachabilityCreateWithName(
     let isa = env
         .objc
         .get_known_class("_touchHLE_SCNetworkReachability", &mut env.mem);
+    if env.options.network_trace {
+        let name = env.mem.cstr_at_utf8(name).ok().map(str::to_owned);
+        crate::network_trace::record(
+            env,
+            "reachability_name",
+            serde_json::json!({ "name": name }),
+        );
+    }
     let res = env.objc.alloc_object(
         isa,
-        Box::new(SCNetworkReachabilityHostObject { address: None }), // TODO
+        Box::new(SCNetworkReachabilityHostObject {
+            address: None,
+            named: true,
+        }),
         &mut env.mem,
     );
     log!(
@@ -95,6 +108,7 @@ fn SCNetworkReachabilityCreateWithAddress(
         isa,
         Box::new(SCNetworkReachabilityHostObject {
             address: Some(address_val.to_sockaddr_v4()),
+            named: false,
         }),
         &mut env.mem,
     );
@@ -139,12 +153,16 @@ fn SCNetworkReachabilityGetFlags(
             .get_known_class("_touchHLE_SCNetworkReachability", &mut env.mem)
     );
     let host_object = env.objc.borrow::<SCNetworkReachabilityHostObject>(target);
-    let local_default = host_object
-        .address
-        .is_some_and(|addr| addr.ip().is_unspecified());
-    // MHP2G queries the default route before it calls GameKit. Keep the old
-    // behavior unless the local backend is explicitly enabled, and report an
-    // actual OS route snapshot rather than treating configuration as success.
+    let local_default = host_object.named
+        || host_object
+            .address
+            .is_some_and(|addr| addr.ip().is_unspecified());
+    // MHP2G queries the default route before it calls GameKit, and MHFU does
+    // the same with a host name (www.capcom.co.jp). A name can't be resolved
+    // without sending packets, so it is answered like the default route. Keep
+    // the old behavior unless the local backend is explicitly enabled, and
+    // report an actual OS route snapshot rather than treating configuration as
+    // success.
     if local_default {
         if let Some(reachable) = crate::frameworks::game_kit::local_route(env) {
             let out_flags = if reachable {
