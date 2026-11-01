@@ -257,8 +257,10 @@ fn playback_time(env: &mut Environment, player: id) -> Option<Duration> {
     }
 }
 
-/// Fit a video frame to the layer's aspect ratio by adding black bars, like
-/// `AVLayerVideoGravityResizeAspect` (the layer stretches its contents).
+/// Fit a video frame to the layer's aspect ratio by adding transparent bars,
+/// like `AVLayerVideoGravityResizeAspect` (the layer stretches its contents).
+/// The bars are transparent like those of a real `AVPlayerLayer`, so whatever
+/// is behind the layer (e.g. a decorative border) shows through.
 fn letterbox(pixels: Vec<u8>, width: u32, height: u32, bounds: CGRect) -> (Vec<u8>, u32, u32) {
     let (layer_width, layer_height) = (bounds.size.width, bounds.size.height);
     if layer_width <= 0.0 || layer_height <= 0.0 || width == 0 || height == 0 {
@@ -274,7 +276,7 @@ fn letterbox(pixels: Vec<u8>, width: u32, height: u32, bounds: CGRect) -> (Vec<u
     } else {
         ((height as f32 * layer_aspect).round() as u32, height)
     };
-    let mut out = [0u8, 0, 0, 255].repeat((new_width * new_height) as usize);
+    let mut out = [0u8, 0, 0, 0].repeat((new_width * new_height) as usize);
     let (x0, y0) = ((new_width - width) / 2, (new_height - height) / 2);
     for y in 0..height {
         let src = (y * width * 4) as usize;
