@@ -11,7 +11,6 @@
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::core_foundation::time::CFTimeInterval;
 use crate::frameworks::foundation::ns_run_loop::run_run_loop_single_iteration;
-use crate::frameworks::foundation::ns_string;
 use crate::objc::{id, msg, msg_class};
 use crate::Environment;
 
@@ -32,13 +31,9 @@ fn CFRunLoopRunInMode(
     seconds: CFTimeInterval,
     _return_something: bool,
 ) -> i32 {
-    let default_mode = ns_string::get_static_str(env, kCFRunLoopDefaultMode);
-    let common_modes = ns_string::get_static_str(env, kCFRunLoopCommonModes);
-    // TODO: handle other modes
-    assert!(
-        msg![env; mode isEqualToString:default_mode]
-            || msg![env; mode isEqualToString:common_modes]
-    );
+    // The underlying NSRunLoop currently keeps one shared set of sources and
+    // timers. Treat custom modes like the default until modes are separated.
+    assert!(!mode.is_null());
     let current_run_loop = CFRunLoopGetCurrent(env);
     if seconds == 0.0 {
         run_run_loop_single_iteration(env, current_run_loop);

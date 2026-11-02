@@ -12,6 +12,7 @@
 #include <CoreFoundation/CFDictionary.h>
 #include <CoreFoundation/CFLocale.h>
 #include <CoreFoundation/CFNumber.h>
+#include <CoreFoundation/CFRunLoop.h>
 #include <CoreFoundation/CFString.h>
 #include <CoreFoundation/CFURL.h>
 #include <CoreFoundation/CFUUID.h>
@@ -82,6 +83,29 @@ int test_OSSpinLock_contention(void) {
     return -3;
   OSSpinLockUnlock(&spin_lock_test_lock);
   return sem_destroy(&spin_lock_test_ready);
+}
+
+static void custom_mode_timer_callback(CFRunLoopTimerRef timer, void *info) {
+  (void)timer;
+  *(int *)info += 1;
+}
+
+int test_CFRunLoop_custom_mode(void) {
+  int fired = 0;
+  CFRunLoopTimerContext context = {0, &fired, NULL, NULL, NULL};
+  CFRunLoopTimerRef timer =
+      CFRunLoopTimerCreate(NULL, CFAbsoluteTimeGetCurrent() - 1, 0, 0, 0,
+                           custom_mode_timer_callback, &context);
+  if (!timer)
+    return -1;
+  CFStringRef mode = CFStringCreateWithCString(NULL, "PodroidCustomMode",
+                                               kCFStringEncodingUTF8);
+  CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, mode);
+  int valid = CFRunLoopTimerIsValid(timer);
+  CFRunLoopTimerInvalidate(timer);
+  CFRelease(timer);
+  CFRelease(mode);
+  return valid ? 0 : -2;
 }
 
 // Declare test functions from other files.
@@ -9022,6 +9046,7 @@ struct {
     FUNC_DEF(test_vsnprintf),
     FUNC_DEF(test_variadic_callback_snapshot),
     FUNC_DEF(test_uuid_c_values),
+    FUNC_DEF(test_CFRunLoop_custom_mode),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
