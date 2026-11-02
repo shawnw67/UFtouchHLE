@@ -108,6 +108,34 @@ int test_CFRunLoop_custom_mode(void) {
   return valid ? 0 : -2;
 }
 
+static void *custom_mode_loop_worker(void *result) {
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  int fired = 0;
+  CFRunLoopTimerContext context = {0, &fired, NULL, NULL, NULL};
+  CFRunLoopTimerRef timer =
+      CFRunLoopTimerCreate(NULL, CFAbsoluteTimeGetCurrent() - 1, 0, 0, 0,
+                           custom_mode_timer_callback, &context);
+  CFStringRef mode = CFStringCreateWithCString(NULL, "PodroidCustomMode",
+                                               kCFStringEncodingUTF8);
+  CFRunLoopAddTimer(CFRunLoopGetCurrent(), timer, mode);
+  CFRunLoopRunInMode(mode, 0, false);
+  *(int *)result = fired;
+  CFRunLoopTimerInvalidate(timer);
+  CFRelease(timer);
+  CFRelease(mode);
+  [pool drain];
+  return NULL;
+}
+
+int test_CFRunLoop_custom_mode_timer(void) {
+  pthread_t worker;
+  int fired = 0;
+  if (pthread_create(&worker, NULL, custom_mode_loop_worker, &fired) ||
+      pthread_join(worker, NULL))
+    return -1;
+  return fired == 1 ? 0 : -2;
+}
+
 // Declare test functions from other files.
 
 int test_AutoreleasePool(void);    // AutoReleasePoolTest.m
@@ -9047,6 +9075,7 @@ struct {
     FUNC_DEF(test_variadic_callback_snapshot),
     FUNC_DEF(test_uuid_c_values),
     FUNC_DEF(test_CFRunLoop_custom_mode),
+    FUNC_DEF(test_CFRunLoop_custom_mode_timer),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),

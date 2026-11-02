@@ -11,7 +11,7 @@
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::core_foundation::time::CFTimeInterval;
 use crate::frameworks::foundation::ns_run_loop::run_run_loop_single_iteration;
-use crate::objc::{id, msg, msg_class};
+use crate::objc::{id, msg, msg_class, release, retain};
 use crate::Environment;
 
 pub type CFRunLoopRef = super::CFTypeRef;
@@ -23,6 +23,25 @@ fn CFRunLoopGetCurrent(env: &mut Environment) -> CFRunLoopRef {
 
 pub fn CFRunLoopGetMain(env: &mut Environment) -> CFRunLoopRef {
     msg_class![env; NSRunLoop mainRunLoop]
+}
+
+fn CFRunLoopRetain(env: &mut Environment, run_loop: CFRunLoopRef) -> CFRunLoopRef {
+    if run_loop.is_null() {
+        run_loop
+    } else {
+        retain(env, run_loop)
+    }
+}
+
+fn CFRunLoopRelease(env: &mut Environment, run_loop: CFRunLoopRef) {
+    if !run_loop.is_null() {
+        release(env, run_loop);
+    }
+}
+
+fn CFRunLoopRun(env: &mut Environment) {
+    let run_loop = CFRunLoopGetCurrent(env);
+    () = msg![env; run_loop run];
 }
 
 fn CFRunLoopRunInMode(
@@ -61,5 +80,8 @@ pub const CONSTANTS: ConstantExports = &[
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFRunLoopGetCurrent()),
     export_c_func!(CFRunLoopGetMain()),
+    export_c_func!(CFRunLoopRetain(_)),
+    export_c_func!(CFRunLoopRelease(_)),
+    export_c_func!(CFRunLoopRun()),
     export_c_func!(CFRunLoopRunInMode(_, _, _)),
 ];

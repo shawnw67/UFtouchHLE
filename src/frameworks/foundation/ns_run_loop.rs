@@ -97,6 +97,18 @@ pub const CLASSES: ClassExports = objc_classes! {
     this
 }
 
+- (bool)runMode:(NSRunLoopMode)mode beforeDate:(id)limit_date {
+    assert!(!mode.is_null());
+    let limit = if limit_date == nil {
+        None
+    } else {
+        Some(msg![env; limit_date timeIntervalSince1970])
+    };
+    run_run_loop(env, this, /* single_iteration: */ true, limit);
+    // Modes are not yet tracked separately, so source availability is unknown.
+    true
+}
+
 - (())addTimer:(id)timer // NSTimer*
        forMode:(NSRunLoopMode)mode {
     // Modes share the same timer list until run loop modes are implemented.
