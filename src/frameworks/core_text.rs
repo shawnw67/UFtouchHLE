@@ -49,7 +49,7 @@ const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
 
-@implementation _touchHLE_CTFont: NSObject
+@implementation _Podroid_CTFont: NSObject
 
 - (())dealloc {
     let cg_fonts = env.objc.borrow::<CTFontHostObject>(this).cg_fonts;
@@ -118,7 +118,7 @@ fn CTFontCreateWithName(
         from_font(env, fallback.with_em_size()),
     ];
     let host_object = Box::new(CTFontHostObject { cg_fonts, size });
-    let class = env.objc.get_known_class("_touchHLE_CTFont", &mut env.mem);
+    let class = env.objc.get_known_class("_Podroid_CTFont", &mut env.mem);
     env.objc.alloc_object(class, host_object, &mut env.mem)
 }
 

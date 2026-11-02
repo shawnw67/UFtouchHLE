@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
-use touchHLE::transport::{Config, Delivery, Event, PlayerId, Role, Transport};
+use Podroid::transport::{Config, Delivery, Event, PlayerId, Role, Transport};
 
 fn id(value: &str) -> Result<PlayerId, uuid::Error> {
     uuid::Uuid::parse_str(value).map(|v| PlayerId(*v.as_bytes()))

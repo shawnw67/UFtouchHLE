@@ -68,10 +68,10 @@ The Android package ID is `org.podroid.android`. This is a separate installation
 Common subdirectories:
 
 ```text
-touchHLE_apps/          Game files
-touchHLE_sandbox/       Game sandboxes and saves
-touchHLE_save_exports/  Saves exported to the app's own directory
-touchHLE_save_backups/  Existing saves backed up before import
+Podroid_apps/          Game files
+Podroid_sandbox/       Game sandboxes and saves
+Podroid_save_exports/  Saves exported to the app's own directory
+Podroid_save_backups/  Existing saves backed up before import
 ```
 
 Recent Android versions may restrict file manager access to `Android/data`. Prefer the launcher's import/export functions. UF uses a different package ID from upstream, so saves need to be transferred separately.
@@ -80,7 +80,7 @@ Recent Android versions may restrict file manager access to `Android/data`. Pref
 
 ### Windows / macOS
 
-Open the app from the release package. Place `.ipa` files or `.app` bundles in `touchHLE_apps` to run them through the built-in app picker. On Windows, extract the entire ZIP and retain the bundled fonts, libraries, and configuration files.
+Open the app from the release package. Place `.ipa` files or `.app` bundles in `Podroid_apps` to run them through the built-in app picker. On Windows, extract the entire ZIP and retain the bundled fonts, libraries, and configuration files.
 
 You can also supply a game path from a terminal:
 
@@ -100,9 +100,9 @@ See [OPTIONS_HELP.txt](OPTIONS_HELP.txt) for options and the [build documentatio
 
 On Android, long-press a game and select **导出存档** (Export saves) to create a ZIP. Import the same game on the destination device, long-press it, select **导入存档** (Import saves), and choose that ZIP.
 
-Existing saves are moved to `touchHLE_save_backups` before import. Use the same game version and Bundle ID where possible; saves from different regions or versions may not be compatible. Save ZIPs do not contain the game itself.
+Existing saves are moved to `Podroid_save_backups` before import. Use the same game version and Bundle ID where possible; saves from different regions or versions may not be compatible. Save ZIPs do not contain the game itself.
 
-On desktop, game data is stored in `touchHLE_sandbox`. Exit the game and back up the original directory before transferring files manually.
+On desktop, game data is stored in `Podroid_sandbox`. Exit the game and back up the original directory before transferring files manually.
 
 ## Device profiles and display settings
 
@@ -120,7 +120,7 @@ Android settings offer **自动** (Automatic) selection or a fixed global profil
 
 These are emulated screen configurations. Actual rendering dimensions may differ, and games that do not support a particular screen use compatible dimensions. Higher resolutions increase rendering cost and cannot add textures that are absent from the IPA.
 
-Game defaults in `touchHLE_default_options.txt` and custom arguments in `touchHLE_options.txt` still apply. The launcher's device profile selection also contributes to the final configuration. Check the `Device:` line in the startup log to confirm the selected device.
+Game defaults in `Podroid_default_options.txt` and custom arguments in `Podroid_options.txt` still apply. The launcher's device profile selection also contributes to the final configuration. Check the `Device:` line in the startup log to confirm the selected device.
 
 For P2G, long-press the game and open **画面与按键布局** (Display and control layout) to select the expanded view. It increases the field of view on wider screens while keeping the touch control area centered. Return to the default layout if you encounter display or input problems.
 
@@ -157,7 +157,7 @@ Open an issue in [this repository](https://github.com/shawnw67/Podroid/issues) a
 
 - Podroid version, device model, and OS version.
 - Game name, version, Bundle ID, device profile, and display layout.
-- Steps to reproduce and `touchHLE_log.txt`; include `touchHLE_log_previous.txt` if relevant.
+- Steps to reproduce and `Podroid_log.txt`; include `Podroid_log_previous.txt` if relevant.
 - Screenshots for display issues, or the controller model and Bluetooth/USB connection type for input issues.
 
 The Android launcher can display and share logs. Vice City also has performance and audio comparison tools in its long-press menu.
@@ -196,7 +196,7 @@ This fork includes AI-assisted code. Upstream touchHLE does not accept AI-genera
 
 touchHLE © 2023–2026 touchHLE project contributors. This fork retains upstream and dependency copyright and license notices.
 
-touchHLE's own source code is licensed under the **Mozilla Public License 2.0**. Due to dependency license compatibility requirements, distributed binaries are licensed under the **GNU GPL v3 or later**. Bundled libraries and fonts have their own terms; see [touchHLE_dylibs](touchHLE_dylibs/) and [touchHLE_fonts](touchHLE_fonts/). Dependency copyright information is available in the app's settings or through `--copyright`.
+touchHLE's own source code is licensed under the **Mozilla Public License 2.0**. Due to dependency license compatibility requirements, distributed binaries are licensed under the **GNU GPL v3 or later**. Bundled libraries and fonts have their own terms; see [Podroid_dylibs](Podroid_dylibs/) and [Podroid_fonts](Podroid_fonts/). Dependency copyright information is available in the app's settings or through `--copyright`.
 
 Thanks to [upstream touchHLE and its contributors](https://github.com/touchHLE/touchHLE/graphs/contributors), dynarmic, SDL, OpenAL Soft, Symphonia, the Rust ecosystem, all other open-source dependencies, and everyone who helps test the fork and report issues.
 

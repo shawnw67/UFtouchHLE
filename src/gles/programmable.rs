@@ -129,8 +129,8 @@ pub fn emulate_shadow_samplers(source: &[u8]) -> Vec<u8> {
         return source.into_owned().into_bytes();
     }
     let mut output = String::from(
-        "#define touchHLE_shadow2D(s, c) step((c).z, texture2D(s, (c).xy).r)\n\
-         #define touchHLE_shadow2DProj(s, c) step((c).z / (c).w, texture2DProj(s, c).r)\n",
+        "#define Podroid_shadow2D(s, c) step((c).z, texture2D(s, (c).xy).r)\n\
+         #define Podroid_shadow2DProj(s, c) step((c).z / (c).w, texture2DProj(s, c).r)\n",
     );
     // Preserve newlines for useful compiler line numbers.
     for line in source.lines() {
@@ -144,8 +144,8 @@ pub fn emulate_shadow_samplers(source: &[u8]) -> Vec<u8> {
         output.push_str(
             &line
                 .replace("sampler2DShadow", "sampler2D")
-                .replace("shadow2DProjEXT", "touchHLE_shadow2DProj")
-                .replace("shadow2DEXT", "touchHLE_shadow2D"),
+                .replace("shadow2DProjEXT", "Podroid_shadow2DProj")
+                .replace("shadow2DEXT", "Podroid_shadow2D"),
         );
         output.push('\n');
     }
@@ -219,7 +219,7 @@ mod tests {
         assert!(!result.contains("GL_EXT_shadow_samplers"));
         assert!(!result.contains("sampler2DShadow"));
         assert!(result.contains("uniform sampler2D s;"));
-        assert!(result.contains("vec4(touchHLE_shadow2DProj(s, c))"));
+        assert!(result.contains("vec4(Podroid_shadow2DProj(s, c))"));
         // Shaders without shadow samplers are unchanged.
         assert_eq!(
             super::emulate_shadow_samplers(b"void main() {}"),

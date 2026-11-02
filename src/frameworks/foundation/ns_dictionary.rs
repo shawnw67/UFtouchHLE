@@ -35,7 +35,7 @@ use std::collections::HashMap;
 /// Alias for the return type of the `hash` method of the `NSObject` protocol.
 type Hash = NSUInteger;
 
-/// Belongs to _touchHLE_NSDictionary, also used by _touchHLE_NSSet
+/// Belongs to _Podroid_NSDictionary, also used by _Podroid_NSSet
 #[derive(Debug, Default)]
 pub(super) struct DictionaryHostObject {
     /// Since we need custom hashing and custom equality, and these both need a
@@ -382,9 +382,9 @@ fn cf_dictionary_from_entries(
         host.insert(env, key, value);
     }
     let name = if mutable {
-        "_touchHLE_NSMutableDictionary_non_retaining"
+        "_Podroid_NSMutableDictionary_non_retaining"
     } else {
-        "_touchHLE_NSDictionary_cf"
+        "_Podroid_NSDictionary_cf"
     };
     let class = env.objc.get_known_class(name, &mut env.mem);
     env.objc.alloc_object(class, Box::new(host), &mut env.mem)
@@ -418,7 +418,7 @@ fn cf_dictionary_all_keys(env: &mut Environment, dict: id) -> id {
         .flatten()
         .map(|&(key, _)| key)
         .collect();
-    let array: id = msg_class![env; _touchHLE_NSArray_non_retaining alloc];
+    let array: id = msg_class![env; _Podroid_NSArray_non_retaining alloc];
     env.objc.borrow_mut::<ArrayHostObject>(array).array = keys;
     autorelease(env, array)
 }
@@ -525,7 +525,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // - (id)objectForKey:(id)
 // - (NSEnumerator*)keyEnumerator
 // We can pick whichever subclass we want for the various alloc methods.
-// For the time being, that will always be _touchHLE_NSDictionary.
+// For the time being, that will always be _Podroid_NSDictionary.
 @implementation NSDictionary: NSObject
 
 
@@ -533,7 +533,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // NSDictionary might be subclassed by something which needs allocWithZone:
     // to have the normal behaviour. Unimplemented: call superclass alloc then.
     assert!(this == env.objc.get_known_class("NSDictionary", &mut env.mem));
-    msg_class![env; _touchHLE_NSDictionary allocWithZone:zone]
+    msg_class![env; _Podroid_NSDictionary allocWithZone:zone]
 }
 
 + (id)dictionary {
@@ -737,7 +737,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // NSDictionary might be subclassed by something which needs allocWithZone:
     // to have the normal behaviour. Unimplemented: call superclass alloc then.
     assert!(this == env.objc.get_known_class("NSMutableDictionary", &mut env.mem));
-    msg_class![env; _touchHLE_NSMutableDictionary allocWithZone:zone]
+    msg_class![env; _Podroid_NSMutableDictionary allocWithZone:zone]
 }
 
 + (id)dictionaryWithCapacity:(NSUInteger)capacity {
@@ -791,7 +791,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Our private subclass that is the single implementation of NSDictionary for
 // the time being.
-@implementation _touchHLE_NSDictionary: NSDictionary
+@implementation _Podroid_NSDictionary: NSDictionary
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::<DictionaryHostObject>::default();
@@ -887,7 +887,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Our private subclass that is the single implementation of
 // NSMutableDictionary for the time being.
-@implementation _touchHLE_NSMutableDictionary: NSMutableDictionary
+@implementation _Podroid_NSMutableDictionary: NSMutableDictionary
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::<DictionaryHostObject>::default();
@@ -1072,7 +1072,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
-@implementation _touchHLE_NSDictionary_cf: _touchHLE_NSDictionary
+@implementation _Podroid_NSDictionary_cf: _Podroid_NSDictionary
 
 - (())dealloc {
     let mut host: CFDictionaryHostObject = std::mem::take(env.objc.borrow_mut(this));
@@ -1096,7 +1096,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // Special variant for use by CFDictionary with NULL callbacks: objects aren't
 // necessarily Objective-C objects and won't be retained/released.
 // TODO: refactor with lookup/insert methods to use callbacks
-@implementation _touchHLE_NSMutableDictionary_non_retaining: _touchHLE_NSMutableDictionary
+@implementation _Podroid_NSMutableDictionary_non_retaining: _Podroid_NSMutableDictionary
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::<CFDictionaryHostObject>::default();
@@ -1144,7 +1144,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (id)valueForKey:(id)_key {
-    panic!("Unexpected call to valueForKey: for _touchHLE_NSMutableDictionary_non_retaining object {this:?}");
+    panic!("Unexpected call to valueForKey: for _Podroid_NSMutableDictionary_non_retaining object {this:?}");
 }
 
 - (())setObject:(id)object
@@ -1250,7 +1250,7 @@ fn build_description(env: &mut Environment, dict: id) -> id {
 fn init_with_coder_inner(env: &mut Environment, dict: id, coder: id) -> id {
     let class: Class = msg![env; coder class];
     let keyed_unarch_class: Class = msg_class![env; NSKeyedUnarchiver class];
-    let nib_archive_class: Class = msg_class![env; _touchHLE_NIBArchiveDecoder class];
+    let nib_archive_class: Class = msg_class![env; _Podroid_NIBArchiveDecoder class];
     // It seems that every NSDictionary item in an NSKeyedArchiver plist looks
     // like:
     // {

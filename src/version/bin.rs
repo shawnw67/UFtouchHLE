@@ -6,8 +6,8 @@ pub fn main() {
     let mut args = std::env::args();
     let _ = args.next().unwrap(); // skip argv[0]
     match (args.next(), args.next()) {
-        (Some(x), None) if x == "--branding" => println!("{}", touchHLE_version::branding()),
-        (None, _) => println!("{}", touchHLE_version::VERSION),
+        (Some(x), None) if x == "--branding" => println!("{}", Podroid_version::branding()),
+        (None, _) => println!("{}", Podroid_version::VERSION),
         _ => panic!(),
     }
 }

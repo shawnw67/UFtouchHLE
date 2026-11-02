@@ -26,7 +26,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // SCNetworkReachabilityRef is not explicitly stated to be CFType-based type,
 // but the result of "Create" or "Copy" functions here is expected to be
 // released with CFRelease().
-@implementation _touchHLE_SCNetworkReachability: NSObject
+@implementation _Podroid_SCNetworkReachability: NSObject
 @end
 
 };
@@ -38,7 +38,7 @@ struct SCNetworkReachabilityHostObject {
 }
 impl HostObject for SCNetworkReachabilityHostObject {}
 
-// See comment for `_touchHLE_SCNetworkReachability` class
+// See comment for `_Podroid_SCNetworkReachability` class
 type SCNetworkReachabilityRef = CFTypeRef;
 
 fn SCNetworkReachabilityCreateWithName(
@@ -58,7 +58,7 @@ fn SCNetworkReachabilityCreateWithName(
     }
     let isa = env
         .objc
-        .get_known_class("_touchHLE_SCNetworkReachability", &mut env.mem);
+        .get_known_class("_Podroid_SCNetworkReachability", &mut env.mem);
     if env.options.network_trace {
         let name = env.mem.cstr_at_utf8(name).ok().map(str::to_owned);
         crate::network_trace::record(
@@ -93,7 +93,7 @@ fn SCNetworkReachabilityCreateWithAddress(
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
     let isa = env
         .objc
-        .get_known_class("_touchHLE_SCNetworkReachability", &mut env.mem);
+        .get_known_class("_Podroid_SCNetworkReachability", &mut env.mem);
     let address_val = env.mem.read(address);
     if env.options.network_trace {
         crate::network_trace::record(
@@ -150,7 +150,7 @@ fn SCNetworkReachabilityGetFlags(
     assert_eq!(
         target_class,
         env.objc
-            .get_known_class("_touchHLE_SCNetworkReachability", &mut env.mem)
+            .get_known_class("_Podroid_SCNetworkReachability", &mut env.mem)
     );
     let host_object = env.objc.borrow::<SCNetworkReachabilityHostObject>(target);
     let local_default = host_object.named
@@ -235,7 +235,7 @@ fn SCNetworkReachabilitySetCallback(
     assert_eq!(
         target_class,
         env.objc
-            .get_known_class("_touchHLE_SCNetworkReachability", &mut env.mem)
+            .get_known_class("_Podroid_SCNetworkReachability", &mut env.mem)
     );
     log!(
         "TODO: SCNetworkReachabilitySetCallback({:?}, {:?}, {:?}) -> FALSE",

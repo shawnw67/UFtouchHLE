@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-package org.touchhle.android;
+package org.podroid.android;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -25,7 +25,7 @@ import java.nio.charset.StandardCharsets;
 final class Library {
     private Library() {}
 
-    static final String DIR = "touchHLE_library";
+    static final String DIR = "Podroid_library";
     private static final String PREFS = "library";
 
     static final int STATUS_NOT_STARTED = 0;

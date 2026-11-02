@@ -33,7 +33,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
 
-@implementation _touchHLE_CGFont: NSObject
+@implementation _Podroid_CGFont: NSObject
 @end
 
 };
@@ -47,7 +47,7 @@ fn CGFontCreateWithDataProvider(env: &mut Environment, provider: CGDataProviderR
 /// Create a new (retained) `CGFont` wrapping a host font.
 pub(crate) fn from_font(env: &mut Environment, font: Font) -> CGFontRef {
     let host_obj = Box::new(CGFontHostObject { font });
-    let class = env.objc.get_known_class("_touchHLE_CGFont", &mut env.mem);
+    let class = env.objc.get_known_class("_Podroid_CGFont", &mut env.mem);
     env.objc.alloc_object(class, host_obj, &mut env.mem)
 }
 

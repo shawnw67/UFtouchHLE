@@ -1,11 +1,12 @@
 /target
 /vendor/boost
-/touchHLE_sandbox
-/touchHLE_apps
-touchHLE_log.txt
-touchHLE_log_previous.txt
-touchHLE_wallpaper.*
-touchHLE_quick_options.txt
+/Podroid_sandbox
+/Podroid_apps/*
+!/Podroid_apps/README.txt
+Podroid_log.txt
+Podroid_log_previous.txt
+Podroid_wallpaper.*
+Podroid_quick_options.txt
 
 # Android
 
@@ -29,4 +30,15 @@ android/build
 # Default developer dump file
 
 DUMP.txt
+/Podroid_UF_*.apk
+
+# Preserve ignored legacy user data.
+/touchHLE_apps
+/touchHLE_sandbox
+
+# Legacy local files
+touchHLE_log.txt
+touchHLE_log_previous.txt
+touchHLE_wallpaper.*
+touchHLE_quick_options.txt
 /touchHLE_UF_*.apk

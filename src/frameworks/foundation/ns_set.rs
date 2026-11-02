@@ -16,7 +16,7 @@ use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, retain, ClassExports, HostObject, NSZonePtr,
 };
 
-/// Belongs to _touchHLE_NSSet
+/// Belongs to _Podroid_NSSet
 #[derive(Debug, Default)]
 struct SetHostObject {
     dict: DictionaryHostObject,
@@ -32,14 +32,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 // - (id)member:(id)object;
 // - (NSEnumerator*)objectEnumerator;
 // We can pick whichever subclass we want for the various alloc methods.
-// For the time being, that will always be _touchHLE_NSSet.
+// For the time being, that will always be _Podroid_NSSet.
 @implementation NSSet: NSObject
 
 + (id)allocWithZone:(NSZonePtr)zone {
     // NSSet might be subclassed by something which needs allocWithZone:
     // to have the normal behaviour. Unimplemented: call superclass alloc then.
     assert!(this == env.objc.get_known_class("NSSet", &mut env.mem));
-    msg_class![env; _touchHLE_NSSet allocWithZone:zone]
+    msg_class![env; _Podroid_NSSet allocWithZone:zone]
 }
 
 + (id)set {
@@ -105,7 +105,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // NSSet might be subclassed by something which needs allocWithZone:
     // to have the normal behaviour. Unimplemented: call superclass alloc then.
     assert!(this == env.objc.get_known_class("NSMutableSet", &mut env.mem));
-    msg_class![env; _touchHLE_NSMutableSet allocWithZone:zone]
+    msg_class![env; _Podroid_NSMutableSet allocWithZone:zone]
 }
 
 + (id)setWithObjects:(id)first_obj, ...args {
@@ -130,7 +130,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Our private subclass that is the single implementation of NSSet for the
 // time being.
-@implementation _touchHLE_NSSet: NSSet
+@implementation _Podroid_NSSet: NSSet
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(SetHostObject {
@@ -216,7 +216,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Our private subclass that is the single implementation of NSMutableSet for
 // the time being.
-@implementation _touchHLE_NSMutableSet: NSMutableSet
+@implementation _Podroid_NSMutableSet: NSMutableSet
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(SetHostObject {
@@ -343,8 +343,8 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 };
 
-/// Helper method shared between `initWithObjects:` of `_touchHLE_NSSet` and
-/// `_touchHLE_NSMutableSet`
+/// Helper method shared between `initWithObjects:` of `_Podroid_NSSet` and
+/// `_Podroid_NSMutableSet`
 fn set_from_objects(env: &mut Environment, first_obj: id, args: DotDotDot) -> DictionaryHostObject {
     let null: id = msg_class![env; NSNull null];
 
@@ -361,8 +361,8 @@ fn set_from_objects(env: &mut Environment, first_obj: id, args: DotDotDot) -> Di
     dict
 }
 
-/// Helper method shared between `initWithObjects:count:` of `_touchHLE_NSSet`
-/// and `_touchHLE_NSMutableSet`
+/// Helper method shared between `initWithObjects:count:` of `_Podroid_NSSet`
+/// and `_Podroid_NSMutableSet`
 fn set_from_c_array(
     env: &mut Environment,
     objects: ConstPtr<id>,
@@ -378,8 +378,8 @@ fn set_from_c_array(
     dict
 }
 
-/// Helper method shared between `initWithArray:` of `_touchHLE_NSSet` and
-/// `_touchHLE_NSMutableSet`
+/// Helper method shared between `initWithArray:` of `_Podroid_NSSet` and
+/// `_Podroid_NSMutableSet`
 fn set_from_array(env: &mut Environment, array: id) -> DictionaryHostObject {
     let null: id = msg_class![env; NSNull null];
 

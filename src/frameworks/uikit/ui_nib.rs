@@ -332,7 +332,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 /// Takes a [GuestPathBuf] where a nib file is located and deserializes it.
 /// Returns an empty [Err] if the file couldn't be loaded or an [Ok] wrapping
-/// an instance of NSCoder (NSKeyedUnarchiver or _touchHLE_NIBArchiveDecoder
+/// an instance of NSCoder (NSKeyedUnarchiver or _Podroid_NIBArchiveDecoder
 /// depending on the NIB file format).
 /// The unarchiver should later be manually [release]d
 fn load_nib_file(env: &mut Environment, ui_nib: id, path: GuestPathBuf) -> Result<id, ()> {
@@ -357,8 +357,8 @@ fn load_nib_file(env: &mut Environment, ui_nib: id, path: GuestPathBuf) -> Resul
     assert!(len >= 10);
     let bytes: ConstVoidPtr = msg![env; ns_data bytes];
     let unarchiver = if env.mem.bytes_at(bytes.cast(), 10) == b"NIBArchive" {
-        let decoder: id = msg_class![env; _touchHLE_NIBArchiveDecoder alloc];
-        msg![env; decoder _touchHLE_initForReadingWithData:ns_data]
+        let decoder: id = msg_class![env; _Podroid_NIBArchiveDecoder alloc];
+        msg![env; decoder _Podroid_initForReadingWithData:ns_data]
     } else {
         let unarchiver = msg_class![env; NSKeyedUnarchiver alloc];
         msg![env; unarchiver initForReadingWithData:ns_data]

@@ -93,7 +93,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     if let Some(bundle) = env.framework_state.foundation.ns_bundle.main_bundle {
         bundle
     } else {
-        let new = msg_class![env; _touchHLE_NSBundle_Static alloc];
+        let new = msg_class![env; _Podroid_NSBundle_Static alloc];
         env.framework_state.foundation.ns_bundle.main_bundle = Some(new);
         new
    }
@@ -442,7 +442,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // Private static implementation of NSBundle, used for the main bundle
 // allocation. This is needed because some apps (e.g. Ovenbreak)
 // attempts to release it.
-@implementation _touchHLE_NSBundle_Static: NSBundle
+@implementation _Podroid_NSBundle_Static: NSBundle
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let bundle_path = env.bundle.bundle_path().as_str().to_string();

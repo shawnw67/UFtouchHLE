@@ -11,7 +11,7 @@ use crate::gles::gles11_raw::types::*;
 use crate::gles::programmable::Programmable;
 use crate::mem::{ConstPtr, ConstVoidPtr, GuestUSize, Mem, MutPtr};
 use crate::Environment;
-use touchHLE_gl_bindings::gles20;
+use Podroid_gl_bindings::gles20;
 
 fn with_program<U: Default>(
     env: &mut Environment,

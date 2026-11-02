@@ -70,7 +70,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     if let Some(device) = env.framework_state.uikit.ui_device.current_device {
         device
     } else {
-        let new = msg_class![env; _touchHLE_UIDevice_Static alloc];
+        let new = msg_class![env; _Podroid_UIDevice_Static alloc];
         env.framework_state.uikit.ui_device.current_device = Some(new);
         new
     }
@@ -184,7 +184,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @end
 
 // Private static implementation of UIDevice, used for the current device
-@implementation _touchHLE_UIDevice_Static: UIDevice
+@implementation _Podroid_UIDevice_Static: UIDevice
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     env.objc.alloc_static_object(

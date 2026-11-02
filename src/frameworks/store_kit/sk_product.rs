@@ -140,7 +140,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // The answer comes asynchronously, like it would from the App Store.
     // Keep the request alive until then.
     retain(env, this);
-    let sel = env.objc.lookup_selector("_touchHLE_respond").unwrap();
+    let sel = env.objc.lookup_selector("_Podroid_respond").unwrap();
     () = msg![env; this performSelector:sel withObject:nil afterDelay:0.0f64];
 }
 
@@ -148,7 +148,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.borrow_mut::<SKProductsRequestHostObject>(this).cancelled = true;
 }
 
-- (())_touchHLE_respond {
+- (())_Podroid_respond {
     let &SKProductsRequestHostObject {
         product_identifiers,
         delegate,

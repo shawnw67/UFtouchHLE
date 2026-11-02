@@ -479,7 +479,7 @@ impl GLESContext for GLES1OnGL2Context {
                 window.gl_get_proc_address(&native_name)
             });
             if cfg!(target_os = "android") && self.state.programmable {
-                touchHLE_gl_bindings::gles20::load_with(|name| window.gl_get_proc_address(name));
+                Podroid_gl_bindings::gles20::load_with(|name| window.gl_get_proc_address(name));
             }
             self.is_loaded = true;
         }
@@ -1046,7 +1046,7 @@ impl GLES for GLES1OnGL2<'_> {
     }
     unsafe fn DepthRangef(&mut self, near: GLclampf, far: GLclampf) {
         if cfg!(target_os = "android") && self.state.programmable {
-            touchHLE_gl_bindings::gles20::DepthRangef(near, far)
+            Podroid_gl_bindings::gles20::DepthRangef(near, far)
         } else {
             gl21::DepthRange(near.into(), far.into())
         }
@@ -1563,7 +1563,7 @@ impl GLES for GLES1OnGL2<'_> {
     }
     unsafe fn ClearDepthf(&mut self, depth: GLclampf) {
         if cfg!(target_os = "android") && self.state.programmable {
-            touchHLE_gl_bindings::gles20::ClearDepthf(depth)
+            Podroid_gl_bindings::gles20::ClearDepthf(depth)
         } else {
             gl21::ClearDepth(depth.into())
         }

@@ -292,7 +292,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @end
 
 // The full-screen view shown while a movie plays, see [Playback].
-@implementation _touchHLE_MoviePlayerView: UIView
+@implementation _Podroid_MoviePlayerView: UIView
 
 - (())touchesEnded:(id)_touches withEvent:(id)_event {
     log!("Movie skipped by tapping");
@@ -387,7 +387,7 @@ fn start_playback(env: &mut Environment, player: id) -> bool {
     log!("Playing movie {:?}", path);
 
     let bounds: CGRect = msg![env; window bounds];
-    let view: id = msg_class![env; _touchHLE_MoviePlayerView alloc];
+    let view: id = msg_class![env; _Podroid_MoviePlayerView alloc];
     let view: id = msg![env; view initWithFrame:bounds];
     let black: id = msg_class![env; UIColor blackColor];
     () = msg![env; view setBackgroundColor:black];

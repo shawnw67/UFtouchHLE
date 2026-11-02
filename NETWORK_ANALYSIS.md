@@ -21,7 +21,7 @@
 
 ## 2. 分析样本与复现方式
 
-本地样本：`touchHLE_apps/p2g.ipa`，主程序 `Payload/MHP2G.app/MHP2G`。
+本地样本：`Podroid_apps/p2g.ipa`，主程序 `Payload/MHP2G.app/MHP2G`。
 
 | 字段 | 实际结果 |
 | --- | --- |
@@ -41,12 +41,12 @@
 
 ```sh
 mkdir -p target/network-analysis
-python3 dev-scripts/analyze-mhp2g-network.py touchHLE_apps/p2g.ipa \
+python3 dev-scripts/analyze-mhp2g-network.py Podroid_apps/p2g.ipa \
   > target/network-analysis/p2g.json
 
 # 可选：用 macOS llvm 工具提供可核对的静态指令证据。
-unzip -oqj touchHLE_apps/p2g.ipa Payload/MHP2G.app/MHP2G -d target/network-analysis
-python3 dev-scripts/analyze-mhp2g-network.py touchHLE_apps/p2g.ipa \
+unzip -oqj Podroid_apps/p2g.ipa Payload/MHP2G.app/MHP2G -d target/network-analysis
+python3 dev-scripts/analyze-mhp2g-network.py Podroid_apps/p2g.ipa \
   --disassemble target/network-analysis/MHP2G \
   > target/network-analysis/p2g.json
 xcrun nm -um target/network-analysis/MHP2G

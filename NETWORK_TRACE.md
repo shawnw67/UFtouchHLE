@@ -9,20 +9,20 @@
 ```sh
 CMAKE_POLICY_VERSION_MINIMUM=3.5 cargo build --release
 mkdir -p target/network-trace
-target/release/touchHLE touchHLE_apps/p2g.ipa \
+target/release/Podroid Podroid_apps/p2g.ipa \
   --network-trace --network-trace-limit=50000 \
   > target/network-trace/p2g-offline.log 2>&1
 ```
 
 需要对比允许联网时的实际路径，在另一次运行追加 `--allow-network-access`，并另存日志。当前 Reachability 的 link-local 快捷分支只返回固定 flags，不能证明真实 Wi-Fi、互联网或游戏服务连通。
 
-Android 可在应用数据目录的 `touchHLE_options.txt` 中，为现有同名条目追加以下参数（保留原有机型等选项，避免重复条目）：
+Android 可在应用数据目录的 `Podroid_options.txt` 中，为现有同名条目追加以下参数（保留原有机型等选项，避免重复条目）：
 
 ```text
 jp.co.capcom.mhp2gjp: --network-trace --network-trace-limit=50000
 ```
 
-使用启动器已有的日志导出功能取得 `touchHLE_log.txt`。日志也走现有控制台 / Android 日志输出路径，不新增日志文件或上传。重复启动前保存上一份日志，避免覆盖。诊断结束删除这两个选项，或使用 `--network-trace=off`；`--network-trace=on` 等价于无值开关。limit 必须为正整数，默认 50000。
+使用启动器已有的日志导出功能取得 `Podroid_log.txt`。日志也走现有控制台 / Android 日志输出路径，不新增日志文件或上传。重复启动前保存上一份日志，避免覆盖。诊断结束删除这两个选项，或使用 `--network-trace=off`；`--network-trace=on` 等价于无值开关。limit 必须为正整数，默认 50000。
 
 复现步骤：
 

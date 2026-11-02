@@ -66,10 +66,10 @@ Podroid 包名为 `org.podroid.android`，数据目录为：
 常用子目录：
 
 ```text
-touchHLE_apps/          游戏文件
-touchHLE_sandbox/       游戏沙盒与存档
-touchHLE_save_exports/  存档导出目录（选择应用内目录导出时）
-touchHLE_save_backups/  导入前备份的旧存档
+Podroid_apps/          游戏文件
+Podroid_sandbox/       游戏沙盒与存档
+Podroid_save_exports/  存档导出目录（选择应用内目录导出时）
+Podroid_save_backups/  导入前备份的旧存档
 ```
 
 从旧版 UFtouchHLE 迁移时，请先保留旧应用：在旧版长按每款游戏并将存档导出到共享位置，然后在 Podroid 中重新导入游戏和对应存档。设置需要重新配置。确认迁移完成后再考虑卸载旧版；新旧包名不同，存档不会自动迁移。较新的 Android 系统可能限制文件管理器访问 `Android/data`，优先使用应用内导入、导出功能。
@@ -78,7 +78,7 @@ touchHLE_save_backups/  导入前备份的旧存档
 
 ### Windows / macOS
 
-打开发布包中的应用，将 `.ipa` 或 `.app` 放入 `touchHLE_apps` 目录后，通过内置游戏选择器运行。Windows 请先完整解压 ZIP，保留附带的字体、动态库和配置文件。
+打开发布包中的应用，将 `.ipa` 或 `.app` 放入 `Podroid_apps` 目录后，通过内置游戏选择器运行。Windows 请先完整解压 ZIP，保留附带的字体、动态库和配置文件。
 
 也可以在终端指定游戏路径：
 
@@ -98,9 +98,9 @@ touchHLE_save_backups/  导入前备份的旧存档
 
 Android 启动器中长按游戏，选择“导出存档”生成 ZIP。在另一台设备导入同一游戏后，长按游戏选择“导入存档”，再选择该 ZIP。
 
-导入时已有存档会先移入 `touchHLE_save_backups`。迁移时尽量使用相同游戏版本及相同 Bundle ID；不同地区或版本的存档不保证通用。存档 ZIP 不包含游戏本体。
+导入时已有存档会先移入 `Podroid_save_backups`。迁移时尽量使用相同游戏版本及相同 Bundle ID；不同地区或版本的存档不保证通用。存档 ZIP 不包含游戏本体。
 
-桌面版游戏数据保存在 `touchHLE_sandbox` 中。手动迁移前请退出游戏并备份原目录。
+桌面版游戏数据保存在 `Podroid_sandbox` 中。手动迁移前请退出游戏并备份原目录。
 
 ## 模拟机型与画面设置
 
@@ -118,7 +118,7 @@ Android 设置支持全局选择“自动”或指定机型，也可以长按游
 
 这些是模拟屏幕配置，实际游戏渲染尺寸可能不同；不支持对应屏幕的游戏会使用兼容尺寸。更高分辨率会增加渲染开销，也不会增加 IPA 中没有的纹理资源。
 
-`touchHLE_default_options.txt` 的游戏默认配置和 `touchHLE_options.txt` 的自定义参数仍然生效，启动器传入的机型选择也会参与最终配置。请以启动日志中的 `Device:` 信息为准。
+`Podroid_default_options.txt` 的游戏默认配置和 `Podroid_options.txt` 的自定义参数仍然生效，启动器传入的机型选择也会参与最终配置。请以启动日志中的 `Device:` 信息为准。
 
 P2G 的扩展视野可在长按菜单的“画面与按键布局”中选择，通过扩展视野利用更宽的屏幕，并将触控操作区保持在中间。遇到画面或操作异常时可切回默认布局。
 
@@ -155,7 +155,7 @@ P2G 的扩展视野可在长按菜单的“画面与按键布局”中选择，�
 
 - Podroid 版本、设备型号和系统版本。
 - 游戏名称、版本、Bundle ID，以及模拟机型和画面布局。
-- 复现步骤、`touchHLE_log.txt`，必要时附上 `touchHLE_log_previous.txt`。
+- 复现步骤、`Podroid_log.txt`，必要时附上 `Podroid_log_previous.txt`。
 - 画面问题附截图，手柄问题附型号及蓝牙／USB 连接方式。
 
 Android 启动器可查看、分享运行日志；罪恶都市还提供性能和声音对比测试入口。
@@ -194,7 +194,7 @@ dev-scripts/build-android-uf.sh /path/to/your.keystore
 
 touchHLE © 2023–2026 touchHLE project contributors。本分支保留上游及各依赖的版权与许可证声明。
 
-touchHLE 自身源码采用 **Mozilla Public License 2.0**；由于依赖的许可证兼容要求，发行二进制采用 **GNU GPL v3 或更高版本**。附带动态库和字体的条款分别见 [touchHLE_dylibs](touchHLE_dylibs/) 和 [touchHLE_fonts](touchHLE_fonts/)。完整依赖版权信息可在应用设置或通过 `--copyright` 参数查看。
+touchHLE 自身源码采用 **Mozilla Public License 2.0**；由于依赖的许可证兼容要求，发行二进制采用 **GNU GPL v3 或更高版本**。附带动态库和字体的条款分别见 [Podroid_dylibs](Podroid_dylibs/) 和 [Podroid_fonts](Podroid_fonts/)。完整依赖版权信息可在应用设置或通过 `--copyright` 参数查看。
 
 感谢 [上游 touchHLE 及贡献者](https://github.com/touchHLE/touchHLE/graphs/contributors)、dynarmic、SDL、OpenAL Soft、Symphonia、Rust 生态及所有相关开源项目，也感谢协助测试、反馈问题的用户。
 

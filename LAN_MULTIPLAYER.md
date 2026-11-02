@@ -13,23 +13,23 @@ CMAKE_POLICY_VERSION_MINIMUM=3.5 cargo build --release
 桌面版统一入口为 `touchHLE --multiplayer`，该参数必须放在第一个位置。查看帮助：
 
 ```sh
-target/release/touchHLE --multiplayer --help
+target/release/Podroid --multiplayer --help
 ```
 
-网络默认关闭，所有模式都必须明确提供 `--allow-network-access`。这个入口不加载 IPA、不启动 SDL 窗口、不修改 `touchHLE_options.txt`；普通游戏启动流程保持原样。本阶段选择命令行而不是新建游戏内界面或 Android 启动器页面。
+网络默认关闭，所有模式都必须明确提供 `--allow-network-access`。这个入口不加载 IPA、不启动 SDL 窗口、不修改 `Podroid_options.txt`；普通游戏启动流程保持原样。本阶段选择命令行而不是新建游戏内界面或 Android 启动器页面。
 
 ### A. 自动发现
 
 Host（也是一名玩家）运行：
 
 ```sh
-target/release/touchHLE --multiplayer host --name="雪山集会所" --allow-network-access
+target/release/Podroid --multiplayer host --name="雪山集会所" --allow-network-access
 ```
 
 另一台电脑运行：
 
 ```sh
-target/release/touchHLE --multiplayer browse --allow-network-access
+target/release/Podroid --multiplayer browse --allow-network-access
 ```
 
 输出是逐行 JSON。`rooms` 事件包含完整房间列表；每项包含 `id`、`name`、`ip`、`port`、`endpoints`、`players`、`capacity`、`protocol` 和 `joinable`。IP 从收到公告的 UDP 源地址生成，而不是相信远端声称的任意地址。一个房间从多个网络接口被发现时，合并为同一个 ID，保留多个 endpoint。
@@ -50,9 +50,9 @@ quit
 ### B. 手动 IP / VPN
 
 ```sh
-target/release/touchHLE --multiplayer join --address=192.168.1.10:42018 --allow-network-access
+target/release/Podroid --multiplayer join --address=192.168.1.10:42018 --allow-network-access
 # 已有 VPN 提供可路由的 IPv4 地址时，同一路径也可使用：
-target/release/touchHLE --multiplayer join --address=10.8.0.2:42018 --allow-network-access
+target/release/Podroid --multiplayer join --address=10.8.0.2:42018 --allow-network-access
 ```
 
 手动 join 模式**不创建 UDP 发现实例**，不依赖浏览器、广播或房间公告。也可在 browse 控制台输入 `join 192.168.1.10:42018`，此时复用同一 `connect` 函数，但已经运行的浏览器继续更新列表。
@@ -65,9 +65,9 @@ VPN 需要各端地址与 TCP 监听端口实际可达。第三阶段采用全�
 
 ```sh
 # 终端 A，Host 使用默认 TCP 42018
-target/release/touchHLE --multiplayer host --name=Local --allow-network-access
+target/release/Podroid --multiplayer host --name=Local --allow-network-access
 # 终端 B，Client 自动分配自己的 TCP 监听端口
-target/release/touchHLE --multiplayer join --address=127.0.0.1:42018 --allow-network-access
+target/release/Podroid --multiplayer join --address=127.0.0.1:42018 --allow-network-access
 ```
 
 多开 Host 时给它们不同 TCP 端口，例如 `--bind=0.0.0.0:42020`，或 `--bind=127.0.0.1:0` 让操作系统分配端口，查看 `listening.address`。每个 Host 发布不同的实际 SessionId，因此相同名字也不会覆盖别的房间。
@@ -109,7 +109,7 @@ Host 不监听公共发现端口，每个 Host 从自己的临时 UDP socket 周
 多网卡时，有限广播 `255.255.255.255` 不保证发到每张网卡。可指定网络的定向广播地址：
 
 ```sh
-target/release/touchHLE --multiplayer host --name=MultiNIC --allow-network-access \
+target/release/Podroid --multiplayer host --name=MultiNIC --allow-network-access \
   --broadcast=192.168.1.255:42019 --broadcast=192.168.50.255:42019
 ```
 

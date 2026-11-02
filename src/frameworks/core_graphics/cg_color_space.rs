@@ -19,7 +19,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // CGColorSpace seems to be a CFType-based type, but in our implementation
 // those are just Objective-C types, so we need a class for it, but its name is
 // not visible anywhere.
-@implementation _touchHLE_CGColorSpace: NSObject
+@implementation _Podroid_CGColorSpace: NSObject
 @end
 
 };
@@ -54,7 +54,7 @@ pub fn CGColorSpaceCreateWithName(env: &mut Environment, name: CFStringRef) -> C
 
     let isa = env
         .objc
-        .get_known_class("_touchHLE_CGColorSpace", &mut env.mem);
+        .get_known_class("_Podroid_CGColorSpace", &mut env.mem);
     env.objc.alloc_object(
         isa,
         Box::new(CGColorSpaceHostObject {
@@ -69,7 +69,7 @@ pub fn CGColorSpaceCreateDeviceRGB(env: &mut Environment) -> CGColorSpaceRef {
     //       on an iPhone
     let isa = env
         .objc
-        .get_known_class("_touchHLE_CGColorSpace", &mut env.mem);
+        .get_known_class("_Podroid_CGColorSpace", &mut env.mem);
     env.objc.alloc_object(
         isa,
         Box::new(CGColorSpaceHostObject {
@@ -82,7 +82,7 @@ pub fn CGColorSpaceCreateDeviceRGB(env: &mut Environment) -> CGColorSpaceRef {
 fn CGColorSpaceCreateDeviceGray(env: &mut Environment) -> CGColorSpaceRef {
     let isa = env
         .objc
-        .get_known_class("_touchHLE_CGColorSpace", &mut env.mem);
+        .get_known_class("_Podroid_CGColorSpace", &mut env.mem);
     env.objc.alloc_object(
         isa,
         Box::new(CGColorSpaceHostObject {

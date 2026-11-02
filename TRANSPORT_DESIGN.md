@@ -33,7 +33,7 @@ Host 对加入请求校验版本、兼容 tag、人数和 ID，并通过已有 H
 模块只使用 Rust 标准库和项目已有的 `uuid` 依赖。没有新增 Cargo 依赖；探针沿用已有 `serde_json`。生产改动仅在 `lib.rs` 导出模块，不创建全局实例、不修改 Framework 或模拟器主循环。
 
 ```rust,ignore
-use touchHLE::transport::{Config, Delivery, PlayerId, Role, Transport};
+use Podroid::transport::{Config, Delivery, PlayerId, Role, Transport};
 
 let local_id = PlayerId::random(); // 调用者保存并在重连时复用
 let config = Config::new(local_id, "0.0.0.0:0".parse()?, [7; 16]);

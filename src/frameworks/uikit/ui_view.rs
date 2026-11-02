@@ -49,18 +49,18 @@ use crate::Environment;
 // Internal keys used to store UIView animation parameters in the wrapped
 // CATransaction created by beginAnimations, set by the various setAnimation*
 // methods, and later read by commitAnimations.
-const touchHLE_kCATransactionAnimationId: &str = "_touchHLE_kCATransactionAnimationId";
-const touchHLE_kCATransactionAnimationContext: &str = "_touchHLE_kCATransactionAnimationContext";
-const touchHLE_kCATransactionAnimationDelay: &str = "_touchHLE_kCATransactionAnimationDelay";
-const touchHLE_kCATransactionAnimationRepeatCount: &str =
-    "_touchHLE_kCATransactionAnimationRepeatCount";
-const touchHLE_kCATransactionAnimationRepeatAutoreverses: &str =
-    "_touchHLE_kCATransactionAnimationRepeatAutoreverses";
-const touchHLE_kCATransactionAnimationDelegate: &str = "_touchHLE_kCATransactionAnimationDelegate";
-const touchHLE_kCATransactionAnimationWillStartSelector: &str =
-    "_touchHLE_kCATransactionAnimationWillStartSelector";
-const touchHLE_kCATransactionAnimationDidStopSelector: &str =
-    "_touchHLE_kCATransactionAnimationDidStopSelector";
+const Podroid_kCATransactionAnimationId: &str = "_Podroid_kCATransactionAnimationId";
+const Podroid_kCATransactionAnimationContext: &str = "_Podroid_kCATransactionAnimationContext";
+const Podroid_kCATransactionAnimationDelay: &str = "_Podroid_kCATransactionAnimationDelay";
+const Podroid_kCATransactionAnimationRepeatCount: &str =
+    "_Podroid_kCATransactionAnimationRepeatCount";
+const Podroid_kCATransactionAnimationRepeatAutoreverses: &str =
+    "_Podroid_kCATransactionAnimationRepeatAutoreverses";
+const Podroid_kCATransactionAnimationDelegate: &str = "_Podroid_kCATransactionAnimationDelegate";
+const Podroid_kCATransactionAnimationWillStartSelector: &str =
+    "_Podroid_kCATransactionAnimationWillStartSelector";
+const Podroid_kCATransactionAnimationDidStopSelector: &str =
+    "_Podroid_kCATransactionAnimationDidStopSelector";
 
 type UIViewAnimationCurve = NSInteger;
 const UIViewAnimationCurveEaseInOut: UIViewAnimationCurve = 0;
@@ -170,7 +170,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 + (())setAnimationDelay:(NSTimeInterval)delay {
     log_dbg!("[UIView setAnimationDelay:{:?}]", delay);
     let value: id = msg_class![env; NSNumber numberWithDouble:delay];
-    () = msg_class![env; CATransaction setValue:value forKey:(get_static_str(env, touchHLE_kCATransactionAnimationDelay))];
+    () = msg_class![env; CATransaction setValue:value forKey:(get_static_str(env, Podroid_kCATransactionAnimationDelay))];
 }
 
 + (())setAnimationCurve:(UIViewAnimationCurve)curve {
@@ -200,44 +200,44 @@ pub const CLASSES: ClassExports = objc_classes! {
 + (())setAnimationRepeatAutoreverses:(bool)repeat_autoreverses {
     log_dbg!("[UIView setAnimationRepeatAutoreverses:{:?}]", repeat_autoreverses);
     let value: id = msg_class![env; NSNumber numberWithBool:repeat_autoreverses];
-    () = msg_class![env; CATransaction setValue:value forKey:(get_static_str(env, touchHLE_kCATransactionAnimationRepeatAutoreverses))];
+    () = msg_class![env; CATransaction setValue:value forKey:(get_static_str(env, Podroid_kCATransactionAnimationRepeatAutoreverses))];
 }
 
 + (())setAnimationRepeatCount:(f32)repeat_count {
     log_dbg!("[UIView setAnimationRepeatCount:{:?}]", repeat_count);
     assert!(repeat_count >= 0.0);
     let value: id = msg_class![env; NSNumber numberWithFloat:repeat_count];
-    () = msg_class![env; CATransaction setValue:value forKey:(get_static_str(env, touchHLE_kCATransactionAnimationRepeatCount))];
+    () = msg_class![env; CATransaction setValue:value forKey:(get_static_str(env, Podroid_kCATransactionAnimationRepeatCount))];
 }
 
 + (())setAnimationDelegate:(id)delegate {
     log_dbg!("[UIView setAnimationDelegate:{:?}]", delegate);
     retain(env, delegate);
-    () = msg_class![env; CATransaction setValue:delegate forKey:(get_static_str(env, touchHLE_kCATransactionAnimationDelegate))];
+    () = msg_class![env; CATransaction setValue:delegate forKey:(get_static_str(env, Podroid_kCATransactionAnimationDelegate))];
 }
 
 + (())setAnimationWillStartSelector:(SEL)selector {
     let selector_str = selector.as_str(&env.mem);
     log_dbg!("[UIView setAnimationWillStartSelector:{:?} ({})]", selector, selector_str);
     let selector_nsstring = from_rust_string(env, selector_str.to_string());
-    () = msg_class![env; CATransaction setValue:selector_nsstring forKey:(get_static_str(env, touchHLE_kCATransactionAnimationWillStartSelector))];
+    () = msg_class![env; CATransaction setValue:selector_nsstring forKey:(get_static_str(env, Podroid_kCATransactionAnimationWillStartSelector))];
 }
 
 + (())setAnimationDidStopSelector:(SEL)selector {
     let selector_str = selector.as_str(&env.mem);
     log_dbg!("[UIView setAnimationDidStopSelector:{:?} ({})]", selector, selector_str);
     let selector_nsstring = from_rust_string(env, selector_str.to_string());
-    () = msg_class![env; CATransaction setValue:selector_nsstring forKey:(get_static_str(env, touchHLE_kCATransactionAnimationDidStopSelector))];
+    () = msg_class![env; CATransaction setValue:selector_nsstring forKey:(get_static_str(env, Podroid_kCATransactionAnimationDidStopSelector))];
 }
 
 + (())beginAnimations:(id)animation_id // NSString*
               context:(ConstVoidPtr)context {
     log_dbg!("[UIView beginAnimations:{:?} context:{:?}]", animation_id, context);
     () = msg_class![env; CATransaction begin];
-    () = msg_class![env; CATransaction setValue:animation_id forKey:(get_static_str(env, touchHLE_kCATransactionAnimationId))];
+    () = msg_class![env; CATransaction setValue:animation_id forKey:(get_static_str(env, Podroid_kCATransactionAnimationId))];
     if !context.is_null() {
         let context: id = msg_class![env; NSNumber numberWithUnsignedInt:(context.to_bits())];
-        () = msg_class![env; CATransaction setValue:context forKey:(get_static_str(env, touchHLE_kCATransactionAnimationContext))];
+        () = msg_class![env; CATransaction setValue:context forKey:(get_static_str(env, Podroid_kCATransactionAnimationContext))];
     }
     // Default values
     () = msg_class![env; UIView setAnimationDuration:0.2];
@@ -284,7 +284,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // TODO: What if there's interleaved UIView animations and CATransactions?
     let animations = ca_transaction::ThreadLocalState::get_current_transaction(env).unwrap().get_animations();
 
-    let delegate: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, touchHLE_kCATransactionAnimationDelegate))];
+    let delegate: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, Podroid_kCATransactionAnimationDelegate))];
     if animations.is_empty() && delegate == nil {
         log_dbg!("[UIView commitAnimations] with no animations and no delegate, skipping");
     } else {
@@ -293,23 +293,23 @@ pub const CLASSES: ClassExports = objc_classes! {
         let animation_delegate = if delegate == nil {
             nil
         } else {
-            let animation_delegate = msg_class![env; _touchHLE_UIView_AnimationDelegate new];
+            let animation_delegate = msg_class![env; _Podroid_UIView_AnimationDelegate new];
             () = msg![env; animation_delegate setDelegate:delegate];
-            let animation_id: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, touchHLE_kCATransactionAnimationId))];
+            let animation_id: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, Podroid_kCATransactionAnimationId))];
             () = msg![env; animation_delegate setAnimationId:animation_id];
-            let context: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, touchHLE_kCATransactionAnimationContext))];
+            let context: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, Podroid_kCATransactionAnimationContext))];
             if context != nil {
                 let context: u32 = msg![env; context unsignedIntValue];
                 let context: ConstVoidPtr = ConstVoidPtr::from_bits(context as GuestUSize);
                 () = msg![env; animation_delegate setContext:context];
             }
-            let will_start_selector: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, touchHLE_kCATransactionAnimationWillStartSelector))];
+            let will_start_selector: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, Podroid_kCATransactionAnimationWillStartSelector))];
             if will_start_selector != nil {
                 let will_start_selector = to_rust_string(env, will_start_selector);
                 let will_start_selector = env.objc.lookup_selector(&will_start_selector).unwrap();
                 () = msg![env; animation_delegate setWillStartSelector:will_start_selector];
             }
-            let did_stop_selector: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, touchHLE_kCATransactionAnimationDidStopSelector))];
+            let did_stop_selector: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, Podroid_kCATransactionAnimationDidStopSelector))];
             if did_stop_selector != nil {
                 let did_stop_selector = to_rust_string(env, did_stop_selector);
                 let did_stop_selector = env.objc.lookup_selector(&did_stop_selector).unwrap();
@@ -319,9 +319,9 @@ pub const CLASSES: ClassExports = objc_classes! {
             () = msg![env; animation_delegate setTotalAnimationCount:total_animation_count];
             animation_delegate
         };
-        let delay: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, touchHLE_kCATransactionAnimationDelay))];
-        let repeat_count: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, touchHLE_kCATransactionAnimationRepeatCount))];
-        let repeat_autoreverses: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, touchHLE_kCATransactionAnimationRepeatAutoreverses))];
+        let delay: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, Podroid_kCATransactionAnimationDelay))];
+        let repeat_count: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, Podroid_kCATransactionAnimationRepeatCount))];
+        let repeat_autoreverses: id = msg_class![env; CATransaction valueForKey:(get_static_str(env, Podroid_kCATransactionAnimationRepeatAutoreverses))];
         for (layer, animation) in animations {
             log_dbg!("[UIView commitAnimations] adding animation {:?} to layer {:?}", animation, layer);
             () = msg![env; animation setDelegate:animation_delegate];
@@ -966,7 +966,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
-@implementation _touchHLE_UIView_AnimationDelegate: NSObject
+@implementation _Podroid_UIView_AnimationDelegate: NSObject
 
 + (id)alloc {
     let host_object = Box::<UIViewAnimationDelegateHostObject>::default();
@@ -1021,7 +1021,7 @@ pub const CLASSES: ClassExports = objc_classes! {
         ..
     } = *env.objc.borrow::<UIViewAnimationDelegateHostObject>(this);
     let new_started_animation_count = started_animation_count + 1;
-    log_dbg!("[(_touchHLE_UIView_AnimationDelegate*){:?} animationDidStart:{:?}] started_animation_count {} -> {}", this, animation, started_animation_count, new_started_animation_count);
+    log_dbg!("[(_Podroid_UIView_AnimationDelegate*){:?} animationDidStart:{:?}] started_animation_count {} -> {}", this, animation, started_animation_count, new_started_animation_count);
     if started_animation_count == 0 && delegate != nil && will_start_selector.is_some() {
         let will_start_selector = will_start_selector.unwrap();
         log_dbg!("Notifying delegate {:?} {:?} {} with args {:?}, {:?}", delegate, will_start_selector, will_start_selector.as_str(&env.mem), animation_id, context);
@@ -1036,7 +1036,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     let host_object = env.objc.borrow_mut::<UIViewAnimationDelegateHostObject>(this);
     let finished_animation_count = host_object.finished_animation_count;
     let new_finished_animation_count = finished_animation_count + finished as u32;
-    log_dbg!("[(_touchHLE_UIView_AnimationDelegate*){:?} animationDidStop:{:?} finished:{}] finished_animation_count {} -> {}", this, animation, finished, finished_animation_count, new_finished_animation_count);
+    log_dbg!("[(_Podroid_UIView_AnimationDelegate*){:?} animationDidStop:{:?} finished:{}] finished_animation_count {} -> {}", this, animation, finished, finished_animation_count, new_finished_animation_count);
     env.objc.borrow_mut::<UIViewAnimationDelegateHostObject>(this).finished_animation_count = new_finished_animation_count;
     let UIViewAnimationDelegateHostObject {
         total_animation_count,

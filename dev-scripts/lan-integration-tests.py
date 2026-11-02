@@ -19,7 +19,7 @@ import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = Path(os.environ.get("UF_LAN_TEST_BINARY", ROOT / "target/release/touchHLE"))
+BINARY = Path(os.environ.get("UF_LAN_TEST_BINARY", ROOT / "target/release/Podroid"))
 OUT = ROOT / "target/lan-tests"
 NODES = []
 

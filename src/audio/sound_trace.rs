@@ -77,7 +77,7 @@ impl Trace {
             return Ok("PCM capture limit reached for this run.\n".into());
         }
         self.captures += 1;
-        let relative = format!("touchHLE_audio_captures/{marker}");
+        let relative = format!("Podroid_audio_captures/{marker}");
         let directory = crate::paths::user_data_base_path().join(&relative);
         std::fs::create_dir_all(&directory)?;
         let mut report = format!(

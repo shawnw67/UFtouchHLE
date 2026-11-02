@@ -116,11 +116,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     log!("[(UIAlertView*){:?} show]: alerts aren't drawn yet, pressing its only button", this);
     // The delegate is told asynchronously, like when the user presses it.
     retain(env, this);
-    let sel = env.objc.lookup_selector("_touchHLE_pressOnlyButton").unwrap();
+    let sel = env.objc.lookup_selector("_Podroid_pressOnlyButton").unwrap();
     () = msg![env; this performSelector:sel withObject:nil afterDelay:0.0f64];
 }
 
-- (())_touchHLE_pressOnlyButton {
+- (())_Podroid_pressOnlyButton {
     let delegate = env.objc.borrow::<UIAlertViewHostObject>(this).delegate;
     let index: NSInteger = 0;
     if delegate != nil {

@@ -57,7 +57,7 @@ iOS 版用的是日版的字节表、美版的盐。美/欧版 MHFU 的存档主
 
 ## 2. iOS 存档
 
-- **位置**：沙盒 `Documents/savedata.dat`。UFtouchHLE 里是 `touchHLE_sandbox/jp.co.capcom.mhp2gjp/Documents/savedata.dat`，安卓上是 `/sdcard/Android/data/org.touchhleuf.android/files/` 下的同一路径。二进制里还有 `Documents/_savedata` 这个字符串（作用待查）。
+- **位置**：沙盒 `Documents/savedata.dat`。UFtouchHLE 里是 `Podroid_sandbox/jp.co.capcom.mhp2gjp/Documents/savedata.dat`，安卓上是 `/sdcard/Android/data/org.touchhleuf.android/files/` 下的同一路径。二进制里还有 `Documents/_savedata` 这个字符串（作用待查）。
 - **容器**：单个文件，0x16A110 字节，无压缩。
 - **加密**：
   - 外层：AES-128-CBC + PKCS#7（CCCrypt），key `ls6([f$]=~I(nf28`，iv `;lknc(;f_wnX98<i`。

@@ -162,8 +162,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 const EXTERNAL_FILES_CAVEAT: &str = "
 The following authorship, copyright and license information relates to this
 touchHLE executable. Please note that different licensing terms apply to source
-files and to the bundled dynamic libraries (in touchHLE_dylibs/) and fonts (in
-touchHLE_fonts/). Please consult the respective files/directories for more
+files and to the bundled dynamic libraries (in Podroid_dylibs/) and fonts (in
+Podroid_fonts/). Please consult the respective files/directories for more
 information.
 ";
 

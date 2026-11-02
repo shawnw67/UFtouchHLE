@@ -3,6 +3,90 @@
 version = 4
 
 [[package]]
+name = "Podroid"
+version = "0.3.0"
+dependencies = [
+ "Podroid_dynarmic_wrapper",
+ "Podroid_gl_bindings",
+ "Podroid_openal_soft_wrapper",
+ "Podroid_pvrt_decompress_wrapper",
+ "Podroid_stb_image_wrapper",
+ "Podroid_version",
+ "aes",
+ "cargo-license",
+ "cc",
+ "cmake",
+ "corosensei",
+ "digest",
+ "encoding_rs",
+ "getrandom 0.2.17",
+ "gl_generator",
+ "hmac",
+ "hound",
+ "jni-sys",
+ "libc",
+ "mach_object",
+ "md-5",
+ "memchr",
+ "mhp2g_save",
+ "nibarchive",
+ "openh264",
+ "owned_ttf_parser",
+ "plist",
+ "quick-xml",
+ "rusttype",
+ "sdl2",
+ "sdl2-sys",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "symphonia",
+ "uuid",
+ "windows-sys 0.61.0",
+ "zip",
+]
+
+[[package]]
+name = "Podroid_dynarmic_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cc",
+ "cmake",
+]
+
+[[package]]
+name = "Podroid_gl_bindings"
+version = "0.3.0"
+dependencies = [
+ "gl_generator",
+]
+
+[[package]]
+name = "Podroid_openal_soft_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
+name = "Podroid_pvrt_decompress_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "Podroid_stb_image_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "Podroid_version"
+version = "0.3.0"
+
+[[package]]
 name = "ab_glyph_rasterizer"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1147,90 +1231,6 @@ checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
 dependencies = [
  "serde",
 ]
-
-[[package]]
-name = "touchHLE"
-version = "0.3.0"
-dependencies = [
- "aes",
- "cargo-license",
- "cc",
- "cmake",
- "corosensei",
- "digest",
- "encoding_rs",
- "getrandom 0.2.17",
- "gl_generator",
- "hmac",
- "hound",
- "jni-sys",
- "libc",
- "mach_object",
- "md-5",
- "memchr",
- "mhp2g_save",
- "nibarchive",
- "openh264",
- "owned_ttf_parser",
- "plist",
- "quick-xml",
- "rusttype",
- "sdl2",
- "sdl2-sys",
- "serde_json",
- "sha1",
- "sha2",
- "symphonia",
- "touchHLE_dynarmic_wrapper",
- "touchHLE_gl_bindings",
- "touchHLE_openal_soft_wrapper",
- "touchHLE_pvrt_decompress_wrapper",
- "touchHLE_stb_image_wrapper",
- "touchHLE_version",
- "uuid",
- "windows-sys 0.61.0",
- "zip",
-]
-
-[[package]]
-name = "touchHLE_dynarmic_wrapper"
-version = "0.3.0"
-dependencies = [
- "cc",
- "cmake",
-]
-
-[[package]]
-name = "touchHLE_gl_bindings"
-version = "0.3.0"
-dependencies = [
- "gl_generator",
-]
-
-[[package]]
-name = "touchHLE_openal_soft_wrapper"
-version = "0.3.0"
-dependencies = [
- "cmake",
-]
-
-[[package]]
-name = "touchHLE_pvrt_decompress_wrapper"
-version = "0.3.0"
-dependencies = [
- "cc",
-]
-
-[[package]]
-name = "touchHLE_stb_image_wrapper"
-version = "0.3.0"
-dependencies = [
- "cc",
-]
-
-[[package]]
-name = "touchHLE_version"
-version = "0.3.0"
 
 [[package]]
 name = "ttf-parser"

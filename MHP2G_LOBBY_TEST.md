@@ -20,7 +20,7 @@
 
 - 游戏：`jp.co.capcom.mhp2gjp`，1.00.02，ARMv7；未修改 IPA 或游戏指令。
 - 两个独立工作目录：`target/mhp2g-lobby/host/` 和 `target/mhp2g-lobby/client/`。
-- 存档分别位于各目录的 `touchHLE_sandbox/jp.co.capcom.mhp2gjp/Documents/savedata.dat`。原始项目存档不作为测试写入目标。
+- 存档分别位于各目录的 `Podroid_sandbox/jp.co.capcom.mhp2gjp/Documents/savedata.dat`。原始项目存档不作为测试写入目标。
 - 起初副本损坏，已改名 `savedata.pre-lobby-*.dat` 保留。用户提供修复后的文件，两端均已成功读取并进入村庄。下午测试为区分角色，Host 选第一角色，Client 选第二角色。用户协助将角色移到入口后，已继续完成原版匹配并视觉核对双方互见。
 - 测试 app 包仅为本地启动包装，位于各工作目录下 `P2G Lobby Host.app` / `P2G Lobby Client.app`；没有把游戏打入分发包。
 - `target/mhp2g-lobby/touchHLE-lobby-next` 是真实游戏重测用的固定二进制；其后新增的房间发现代码使用新的 Release 程序通过合成测试，不能把两者混称为同一轮实测。

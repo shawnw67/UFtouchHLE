@@ -69,7 +69,7 @@ fn CFRunLoopTimerCreate(
         MutVoidPtr::null()
     };
 
-    let target: id = msg_class![env; _touchHLE_CFTimerTarget alloc];
+    let target: id = msg_class![env; _Podroid_CFTimerTarget alloc];
     let target: id = msg![env; target initWithCallout:callout info:info];
 
     let selector = env.objc.lookup_selector("timerFireMethod:").unwrap();
@@ -135,20 +135,20 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFRunLoopTimerSetNextFireDate(_, _)),
 ];
 
-/// Belongs to _touchHLE_CFTimerTarget
+/// Belongs to _Podroid_CFTimerTarget
 struct CFTimerTargetHostObject {
     callout: GuestFunction,
     info: MutVoidPtr,
 }
 impl HostObject for CFTimerTargetHostObject {}
 
-/// _touchHLE_CFTimerTarget serves as a convenience
+/// _Podroid_CFTimerTarget serves as a convenience
 /// object for performing a callout from a timer.
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
 
-@implementation _touchHLE_CFTimerTarget: NSObject
+@implementation _Podroid_CFTimerTarget: NSObject
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(CFTimerTargetHostObject {

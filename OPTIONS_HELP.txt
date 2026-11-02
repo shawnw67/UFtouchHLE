@@ -200,7 +200,7 @@ Game controller options:
         For example, --button-to-touch=A,470,310 will make the A button simulate
         tapping in the bottom-right corner of the screen, for a landscape game.
 
-        Except where specified in touchHLE_default_options.txt, this is not used
+        Except where specified in Podroid_default_options.txt, this is not used
         by default. There is however a virtual cursor that is controlled by the
         right analog stick (tap/hold by pressing the stick or right shoulder
         button).
@@ -234,7 +234,7 @@ Game controller options:
         Note that this option takes precedence over any D-pad buttons defined
         with --button-to-touch.
 
-        Except where specified in touchHLE_default_options.txt, this is not used
+        Except where specified in Podroid_default_options.txt, this is not used
         by default. There is however a virtual cursor that is controlled by the
         right analog stick (tap/hold by pressing the stick or right shoulder
         button).
@@ -253,7 +253,7 @@ Game controller options:
         stick to control a touch within a 100x100 pixel region starting at
         (10,10) on the screen.
 
-        Except where specified in touchHLE_default_options.txt, this is not used
+        Except where specified in Podroid_default_options.txt, this is not used
         by default. There is however a virtual cursor that is controlled by the
         right analog stick (tap/hold by pressing the stick or right shoulder
         button).
@@ -359,7 +359,7 @@ Other options:
     --args
         All arguments following this option will be passed to the app (via C's
         argc/argv) rather than processed by touchHLE. This option can't be used
-        via touchHLE_options.txt or touchHLE_default_options.txt.
+        via Podroid_options.txt or Podroid_default_options.txt.
 
     --audio-test=original|smooth-edges|lower-volume
         GTA Vice City sound comparisons, also in its Android long-press menu.
@@ -367,12 +367,12 @@ Other options:
         streaming queues retain the original samples. Smooth edges applies a
         2ms ramp at each end; lower volume halves the samples. Both are
         experimental comparisons, disabled on ordinary launches. A few audio
-        events append to touchHLE_performance_tests.txt without enabling frame
+        events append to Podroid_performance_tests.txt without enabling frame
         timing. The Android game screen has a noise marker button in these
         modes. Tap immediately after hearing noise: a bounded history of up to
         192 recent source events (within 15s), current source state and the next
         3s of events append to the report. Recent uploaded PCM (at most 6s /
-        4 MiB, up to 8 captures per run) is saved under touchHLE_audio_captures.
+        4 MiB, up to 8 captures per run) is saved under Podroid_audio_captures.
         This does not record microphone input. Capturing may briefly stall
         playback. Ordinary launches do not keep this history. Original game files and
         saved settings are never modified.
@@ -382,7 +382,7 @@ Other options:
         long-press menu. Tests use 1x scaling, sharp filtering and a 60fps cap.
         Low-resolution modes disable Retina without changing device identity.
         Quiet modes suppress only short-read warnings, not actual I/O errors.
-        Reports append every 5 seconds to touchHLE_performance_tests.txt.
+        Reports append every 5 seconds to Podroid_performance_tests.txt.
         CPU and GL submission timings add diagnostic overhead and measure host
         wall time, not asynchronous GPU execution. Readback is part of present
         time. Use the same gameplay scene for each mode; no settings are saved.
@@ -434,7 +434,7 @@ Other options:
     --gamekit-auto
         Local GameKit without choosing a role: when the app looks for players,
         join a compatible room found on the LAN, or else host one (named by
-        --gamekit-room, or "UFtouchHLE") and advertise it. Requires
+        --gamekit-room, or "Podroid") and advertise it. Requires
         --allow-network-access. An explicit host, join or discover option
         overrides it. On by default for Monster Hunter Portable 2nd G and
         Monster Hunter Freedom Unite.
@@ -446,7 +446,7 @@ Other options:
 
     --network-trace[=on|off]
         Log observed network API calls and callback activity as [NetworkTrace]
-        JSON records in touchHLE_log.txt. Off by default. Does not enable network
+        JSON records in Podroid_log.txt. Off by default. Does not enable network
         access or implement GameKit. Diagnostic logging may slow games down.
 
     --mhp2g-save-research

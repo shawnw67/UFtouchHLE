@@ -10,7 +10,7 @@ use crate::Environment;
 use std::io::Write;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-pub const REPORT_FILE: &str = "touchHLE_performance_tests.txt";
+pub const REPORT_FILE: &str = "Podroid_performance_tests.txt";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Mode {

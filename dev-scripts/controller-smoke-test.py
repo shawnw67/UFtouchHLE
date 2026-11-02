@@ -13,8 +13,8 @@ requests foreground activation once before sending input; leave other windows
 untouched until completion (normal focus neutralization remains enabled).
   python3 dev-scripts/controller-smoke-test.py
   python3 dev-scripts/controller-smoke-test.py --native-fixture --delay 0
-  python3 dev-scripts/controller-smoke-test.py --app touchHLE_apps/p2g.ipa
-  python3 dev-scripts/controller-smoke-test.py --app 'touchHLE_apps/GTA罪恶都市.ipa'
+  python3 dev-scripts/controller-smoke-test.py --app Podroid_apps/p2g.ipa
+  python3 dev-scripts/controller-smoke-test.py --app 'Podroid_apps/GTA罪恶都市.ipa'
 
 Use --delay to allow loading, and append emulator options after --. Keep the
 window visible: --headless bypasses the real window/controller path. A fixed
@@ -499,7 +499,7 @@ def command(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--binary", type=Path, default=ROOT / "target/release/touchHLE")
+    parser.add_argument("--binary", type=Path, default=ROOT / "target/release/Podroid")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--app", type=Path)
     mode.add_argument("--native-fixture", action="store_true", help="build and assert an ARM guest using public GameController APIs")
@@ -546,11 +546,11 @@ def main():
         (host / "MacOS").mkdir(parents=True)
         (host / "Info.plist").write_bytes(plistlib.dumps({
             "CFBundleIdentifier": "org.touchhle.controller-smoke-host",
-            "CFBundleExecutable": "touchHLE", "CFBundleName": "ControllerSmokeHost",
+            "CFBundleExecutable": "Podroid", "CFBundleName": "ControllerSmokeHost",
             "CFBundlePackageType": "APPL", "CFBundleVersion": "1",
             "SDL_FILESYSTEM_BASE_DIR_TYPE": "parent",
         }))
-        snapshot = host / "MacOS" / "touchHLE"
+        snapshot = host / "MacOS" / "Podroid"
         shutil.copy2(binary, snapshot)
         if hashlib.sha256(snapshot.read_bytes()).hexdigest() != digest:
             parser.error("binary changed while copying; retry after build")

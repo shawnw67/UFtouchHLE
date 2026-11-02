@@ -4,7 +4,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #
 # Builds a touchHLE UF APK locally, branded and signed the same way as the
-# GitHub Actions release build (see .github/workflows/touchHLE_release.yml),
+# GitHub Actions release build (see .github/workflows/Podroid_release.yml),
 # so it can be installed over a release from GitHub.
 #
 # Usage: dev-scripts/build-android-uf.sh [KEYSTORE]
@@ -17,7 +17,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-KEYSTORE="${1:-$HOME/Documents/touchHLE-signing/touchHLE_UF.keystore}"
+KEYSTORE="${1:-$HOME/Documents/touchHLE-signing/Podroid_UF.keystore}"
 GRADLE="${GRADLE:-gradle}"
 
 if [ ! -f "$KEYSTORE" ]; then
@@ -34,12 +34,13 @@ export TOUCHHLE_BRANDING=UF
 cd "$ROOT/android"
 # Make Gradle merge the native libraries again: it has been seen packaging the
 # Rust library from a previous build.
+rm -f app/src/main/jniLibs/arm64-v8a/libtouchHLE.so
 rm -rf app/build/intermediates/merged_jni_libs app/build/intermediates/merged_native_libs app/build/intermediates/stripped_native_libs
 "$GRADLE" assembleRelease -q
 
-VERSION="$(cd "$ROOT" && cargo run -q --package touchHLE_version)"
+VERSION="$(cd "$ROOT" && cargo run -q --package Podroid_version)"
 # The launcher's update check looks for this name (see checkForUpdate).
-OUT="$ROOT/UFtouchHLE_${VERSION}_Android_AArch64.apk"
+OUT="$ROOT/Podroid_${VERSION}_Android_AArch64.apk"
 cp app/build/outputs/apk/release/app-release.apk "$OUT"
 echo
 echo "Built $OUT"

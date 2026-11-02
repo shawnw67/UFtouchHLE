@@ -1,1 +1,0 @@
-../../../../../touchHLE_default_options.txt

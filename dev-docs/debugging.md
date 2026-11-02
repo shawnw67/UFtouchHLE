@@ -8,8 +8,8 @@ See also `BUILDING.md`.
 
 Some modules you might want to enable:
 
-* The combination of `touchHLE::abi` and `touchHLE::dyld` gives you a trace of almost all guest-to-host calls, among other things
-* `touchHLE::mem` logs memory allocations and deallocations
+* The combination of `Podroid::abi` and `Podroid::dyld` gives you a trace of almost all guest-to-host calls, among other things
+* `Podroid::mem` logs memory allocations and deallocations
 
 ## Debugging crashes in host code
 
