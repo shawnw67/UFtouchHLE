@@ -479,11 +479,21 @@ impl Mem {
     /// a guest pointer. This exists solely to deal with OpenGL `glGetPointerv`.
     /// You should never have another reason to use this.
     ///
-    /// Panics if the host pointer is not addressing a location in guest memory.
+    /// Returns null if the host pointer does not address guest memory.
     pub fn host_ptr_to_guest_ptr(&self, host_ptr: *const std::ffi::c_void) -> ConstVoidPtr {
         let host_ptr = host_ptr.cast::<u8>();
         let guest_mem_range = self.bytes().as_ptr_range();
-        assert!(guest_mem_range.contains(&host_ptr));
+        if !guest_mem_range.contains(&host_ptr) {
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            static WARNINGS: AtomicUsize = AtomicUsize::new(0);
+            if WARNINGS.fetch_add(1, Ordering::Relaxed) < 8 {
+                log!(
+                    "Ignoring OpenGL pointer outside guest memory: {:?}",
+                    host_ptr
+                );
+            }
+            return Ptr::null();
+        }
         let guest_addr = host_ptr as usize - guest_mem_range.start as usize;
         Ptr::from_bits(u32::try_from(guest_addr).unwrap())
     }
@@ -872,6 +882,16 @@ impl Mem {
 #[cfg(test)]
 mod allocation_tests {
     use super::*;
+
+    #[test]
+    fn gl_host_pointer_conversion_rejects_outside_memory() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(PAGE_SIZE);
+        let guest = mem.alloc(16);
+        let host = mem.ptr_at(guest.cast_const().cast::<u8>(), 1).cast();
+        assert_eq!(mem.host_ptr_to_guest_ptr(host), guest.cast_const());
+        assert!(mem.host_ptr_to_guest_ptr(std::ptr::null()).is_null());
+    }
 
     #[test]
     fn fallible_heap_initialization_can_fail_and_recover() {

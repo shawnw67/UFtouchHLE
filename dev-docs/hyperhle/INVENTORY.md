@@ -644,7 +644,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/log.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
 | `src/mach_o.rs` | both-modified | — | pending |
 | `src/matrix.rs` | hyper-modified | — | pending |
-| `src/mem.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
+| `src/mem.rs` | both-modified | — | partial: ES2/ES3 batch and GL host-pointer hardening |
 | `src/mem/alloc_probe_tests.rs` | hyper-added | — | pending |
 | `src/mem/allocator.rs` | both-modified | — | pending |
 | `src/mem/host.rs` | both-modified | — | pending |

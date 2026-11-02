@@ -1475,7 +1475,7 @@ unsafe fn translate_pointer_or_offset_to_guest(
     let _ = gles.GetError();
     if buffer_binding != 0 {
         let offset = pointer_or_offset as usize;
-        Ptr::from_bits(u32::try_from(offset).unwrap())
+        Ptr::from_bits(offset as u32)
     } else if pointer_or_offset.is_null() {
         Ptr::null()
     } else {
