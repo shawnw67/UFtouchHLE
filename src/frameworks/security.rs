@@ -5,13 +5,12 @@
  */
 //! The Security framework.
 //!
-//! Only the keychain item functions, which apps use to store small secrets
-//! (e.g. an account ID). The keychain is always empty: adding items succeeds
-//! but nothing is stored.
+//! The keychain is currently empty: adding items succeeds but nothing is
+//! stored. Security random bytes are supplied by the host operating system.
 
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant, HostDylib};
 use crate::frameworks::core_foundation::CFTypeRef;
-use crate::mem::MutPtr;
+use crate::mem::{GuestUSize, MutPtr};
 use crate::objc::nil;
 use crate::Environment;
 
@@ -26,9 +25,32 @@ pub const DYLIB: HostDylib = HostDylib {
 type OSStatus = i32;
 const errSecSuccess: OSStatus = 0;
 const errSecItemNotFound: OSStatus = -25300;
+const errSecParam: OSStatus = -50;
 
 /// `CFDictionaryRef`
 type CFDictionaryRef = CFTypeRef;
+
+fn fill_random_with<E>(bytes: &mut [u8], fill: impl FnOnce(&mut [u8]) -> Result<(), E>) -> i32 {
+    match fill(bytes) {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
+}
+
+fn SecRandomCopyBytes(
+    env: &mut Environment,
+    _random: CFTypeRef,
+    count: GuestUSize,
+    bytes: MutPtr<u8>,
+) -> i32 {
+    if count == 0 {
+        return 0;
+    }
+    if bytes.is_null() {
+        return errSecParam;
+    }
+    fill_random_with(env.mem.bytes_at_mut(bytes, count), getrandom::getrandom)
+}
 
 fn SecItemAdd(
     _env: &mut Environment,
@@ -78,6 +100,7 @@ fn SecItemDelete(_env: &mut Environment, query: CFDictionaryRef) -> OSStatus {
 }
 
 const CONSTANTS: ConstantExports = &[
+    ("_kSecRandomDefault", HostConstant::NullPtr),
     ("_kSecClass", HostConstant::NSString("class")),
     ("_kSecClassGenericPassword", HostConstant::NSString("genp")),
     ("_kSecAttrService", HostConstant::NSString("svce")),
@@ -90,8 +113,28 @@ const CONSTANTS: ConstantExports = &[
 ];
 
 const FUNCTIONS: FunctionExports = &[
+    export_c_func!(SecRandomCopyBytes(_, _, _)),
     export_c_func!(SecItemAdd(_, _)),
     export_c_func!(SecItemCopyMatching(_, _)),
     export_c_func!(SecItemUpdate(_, _)),
     export_c_func!(SecItemDelete(_)),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn random_fill_reports_failure_and_preserves_generated_bytes() {
+        let mut bytes = [0; 4];
+        assert_eq!(
+            fill_random_with(&mut bytes, |out| {
+                out.copy_from_slice(&[1, 2, 3, 4]);
+                Ok::<(), ()>(())
+            }),
+            0
+        );
+        assert_eq!(bytes, [1, 2, 3, 4]);
+        assert_eq!(fill_random_with(&mut bytes, |_| Err(())), -1);
+    }
+}
