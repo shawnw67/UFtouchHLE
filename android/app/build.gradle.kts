@@ -61,8 +61,13 @@ android {
         }
         resValue("string", "app_name", "UFtouchHLE")
         buildConfigField("String", "APP_NAME", "\"UFtouchHLE\"")
-        manifestPlaceholders["icon"] = join("@drawable/icon", "_", branding.lowercase())
-        buildConfigField("int", "APP_ICON", join("R.drawable.icon", "_", branding.lowercase()))
+        val icon = if (branding == "UF") "@mipmap/ic_launcher"
+            else join("@drawable/icon", "_", branding.lowercase())
+        manifestPlaceholders["icon"] = icon
+        manifestPlaceholders["roundIcon"] =
+            if (branding == "UF") "@mipmap/ic_launcher_round" else icon
+        buildConfigField("int", "APP_ICON", if (branding == "UF") "R.mipmap.ic_launcher"
+            else join("R.drawable.icon", "_", branding.lowercase()))
         versionName = getTouchHLEVersionName()
 
         minSdk = 29 // Android 10
