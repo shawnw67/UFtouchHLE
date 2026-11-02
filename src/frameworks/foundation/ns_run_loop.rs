@@ -59,8 +59,33 @@ struct NSRunLoopHostObject {
     /// Strong references to `NSTimer*` in no particular order. Timers are owned
     /// by the run loop. The timer must remove itself when invalidated.
     timers: Vec<id>,
+    cf_sources: Vec<id>,
 }
 impl HostObject for NSRunLoopHostObject {}
+
+pub fn add_cf_source(env: &mut Environment, run_loop: id, source: id) {
+    env.objc
+        .borrow_mut::<NSRunLoopHostObject>(run_loop)
+        .cf_sources
+        .push(source);
+}
+
+pub fn remove_cf_source(env: &mut Environment, run_loop: id, source: id) {
+    let sources = &mut env
+        .objc
+        .borrow_mut::<NSRunLoopHostObject>(run_loop)
+        .cf_sources;
+    if let Some(index) = sources.iter().position(|&item| item == source) {
+        sources.remove(index);
+    }
+}
+
+pub fn cf_sources(env: &mut Environment, run_loop: id) -> Vec<id> {
+    env.objc
+        .borrow::<NSRunLoopHostObject>(run_loop)
+        .cf_sources
+        .clone()
+}
 
 #[derive(Clone, Debug)]
 struct ObjectSelectorSource {
@@ -378,6 +403,10 @@ pub fn run_run_loop(
             limit_sleep_time(&mut sleep_until, next_due);
         }
 
+        crate::frameworks::core_foundation::cf_run_loop_source::perform_signaled_sources(
+            env, run_loop,
+        );
+
         assert!(timers_tmp.is_empty());
         timers_tmp.extend_from_slice(&env.objc.borrow::<NSRunLoopHostObject>(run_loop).timers);
         // Retain the timers in case a timer cancels another timer
@@ -523,6 +552,7 @@ fn run_loop_for_thread(env: &mut Environment, this: Class, thread_id: ThreadId) 
             audio_queues: Vec::new(),
             selector_objects: VecDeque::new(),
             timers: Vec::new(),
+            cf_sources: Vec::new(),
         });
         // TODO: is it OK to allocate static object for all threads,
         // not only main one?

@@ -136,6 +136,75 @@ int test_CFRunLoop_custom_mode_timer(void) {
   return fired == 1 ? 0 : -2;
 }
 
+struct source_test_info {
+  int schedules;
+  int cancels;
+  int performs;
+  int retains;
+  int releases;
+};
+
+static const void *source_test_retain(const void *info) {
+  ((struct source_test_info *)info)->retains++;
+  return info;
+}
+static void source_test_release(const void *info) {
+  ((struct source_test_info *)info)->releases++;
+}
+static void source_test_schedule(void *info, CFRunLoopRef loop,
+                                 CFStringRef mode) {
+  (void)loop;
+  (void)mode;
+  ((struct source_test_info *)info)->schedules++;
+}
+static void source_test_cancel(void *info, CFRunLoopRef loop,
+                               CFStringRef mode) {
+  (void)loop;
+  (void)mode;
+  ((struct source_test_info *)info)->cancels++;
+}
+static void source_test_perform(void *info) {
+  ((struct source_test_info *)info)->performs++;
+}
+
+static void *source_test_worker(void *result) {
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  struct source_test_info info = {0};
+  CFRunLoopSourceContext context = {0,
+                                    &info,
+                                    source_test_retain,
+                                    source_test_release,
+                                    NULL,
+                                    NULL,
+                                    NULL,
+                                    source_test_schedule,
+                                    source_test_cancel,
+                                    source_test_perform};
+  CFRunLoopSourceRef source = CFRunLoopSourceCreate(NULL, 2, &context);
+  CFRunLoopRef loop = CFRunLoopGetCurrent();
+  CFRunLoopAddSource(loop, source, kCFRunLoopDefaultMode);
+  int contains = CFRunLoopContainsSource(loop, source, kCFRunLoopDefaultMode);
+  CFRunLoopSourceSignal(source);
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  CFRunLoopSourceInvalidate(source);
+  int valid = CFRunLoopSourceIsValid(source);
+  CFRelease(source);
+  *(int *)result = contains && !valid && info.schedules == 1 &&
+                   info.cancels == 1 && info.performs == 1 &&
+                   info.retains == 1 && info.releases == 1;
+  [pool drain];
+  return NULL;
+}
+
+int test_CFRunLoop_source(void) {
+  pthread_t worker;
+  int passed = 0;
+  if (pthread_create(&worker, NULL, source_test_worker, &passed) ||
+      pthread_join(worker, NULL))
+    return -1;
+  return passed ? 0 : -2;
+}
+
 // Declare test functions from other files.
 
 int test_AutoreleasePool(void);    // AutoReleasePoolTest.m
@@ -9076,6 +9145,7 @@ struct {
     FUNC_DEF(test_uuid_c_values),
     FUNC_DEF(test_CFRunLoop_custom_mode),
     FUNC_DEF(test_CFRunLoop_custom_mode_timer),
+    FUNC_DEF(test_CFRunLoop_source),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
