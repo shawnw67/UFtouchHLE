@@ -235,6 +235,25 @@ int test_CFRunLoop_stop(void) {
   return passed ? 0 : -2;
 }
 
+int test_CFBundle_create_from_url(void) {
+  CFBundleRef main = CFBundleGetMainBundle();
+  CFURLRef url = CFBundleCopyBundleURL(main);
+  CFBundleRef created = CFBundleCreate(NULL, url);
+  if (!created) {
+    CFRelease(url);
+    return -1;
+  }
+  CFStringRef expected = CFBundleGetIdentifier(main);
+  CFStringRef actual = CFBundleGetIdentifier(created);
+  int matches = expected && actual && CFEqual(expected, actual);
+  CFDictionaryRef dictionary = CFBundleCopyInfoDictionaryInDirectory(url);
+  if (dictionary)
+    CFRelease(dictionary);
+  CFRelease(created);
+  CFRelease(url);
+  return matches && dictionary ? 0 : -2;
+}
+
 // Declare test functions from other files.
 
 int test_AutoreleasePool(void);    // AutoReleasePoolTest.m
@@ -9177,6 +9196,7 @@ struct {
     FUNC_DEF(test_CFRunLoop_custom_mode_timer),
     FUNC_DEF(test_CFRunLoop_source),
     FUNC_DEF(test_CFRunLoop_stop),
+    FUNC_DEF(test_CFBundle_create_from_url),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),

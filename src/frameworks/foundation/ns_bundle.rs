@@ -89,6 +89,14 @@ pub const CLASSES: ClassExports = objc_classes! {
     autorelease(env, new)
 }
 
++ (id)bundleWithURL:(id)url { // NSURL*
+    if url == nil { return nil; }
+    let is_file: bool = msg![env; url isFileURL];
+    if !is_file { return nil; }
+    let path: id = msg![env; url path];
+    msg![env; this bundleWithPath:path]
+}
+
 + (id)mainBundle {
     if let Some(bundle) = env.framework_state.foundation.ns_bundle.main_bundle {
         bundle

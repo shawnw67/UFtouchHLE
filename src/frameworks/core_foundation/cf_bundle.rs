@@ -8,6 +8,7 @@
 //! This is not even toll-free bridged to `NSBundle` in Apple's implementation,
 //! but here it is the same type.
 
+use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::cf_array::CFArrayRef;
 use super::cf_dictionary::CFDictionaryRef;
 use super::cf_string::CFStringRef;
@@ -54,6 +55,58 @@ pub type CFBundleRef = CFTypeRef;
 
 fn CFBundleGetMainBundle(env: &mut Environment) -> CFBundleRef {
     msg_class![env; NSBundle mainBundle]
+}
+
+fn CFBundleCreate(env: &mut Environment, allocator: CFAllocatorRef, url: CFURLRef) -> CFBundleRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
+    if url == nil {
+        return nil;
+    }
+    let bundle: id = msg_class![env; NSBundle bundleWithURL:url];
+    retain(env, bundle)
+}
+
+fn CFBundleGetIdentifier(env: &mut Environment, bundle: CFBundleRef) -> CFStringRef {
+    if bundle == nil {
+        return nil;
+    }
+    let key = ns_string::get_static_str(env, "CFBundleIdentifier");
+    CFBundleGetValueForInfoDictionaryKey(env, bundle, key)
+}
+
+fn CFBundleCopyBundleIdentifier(env: &mut Environment, bundle: CFBundleRef) -> CFStringRef {
+    let identifier = CFBundleGetIdentifier(env, bundle);
+    msg![env; identifier copy]
+}
+
+fn CFBundleCopyInfoDictionaryForURL(env: &mut Environment, url: CFURLRef) -> CFDictionaryRef {
+    if url == nil {
+        return nil;
+    }
+    let bundle: id = msg_class![env; NSBundle bundleWithURL:url];
+    let dict: id = msg![env; bundle infoDictionary];
+    msg![env; dict copy]
+}
+
+fn CFBundleCopyInfoDictionaryInDirectory(env: &mut Environment, url: CFURLRef) -> CFDictionaryRef {
+    CFBundleCopyInfoDictionaryForURL(env, url)
+}
+
+fn CFBundleCopyResourceURLInDirectory(
+    env: &mut Environment,
+    url: CFURLRef,
+    name: CFStringRef,
+    resource_type: CFStringRef,
+    subdirectory: CFStringRef,
+) -> CFURLRef {
+    if url == nil {
+        return nil;
+    }
+    let bundle: id = msg_class![env; NSBundle bundleWithURL:url];
+    if bundle == nil {
+        return nil;
+    }
+    CFBundleCopyResourceURL(env, bundle, name, resource_type, subdirectory)
 }
 
 fn CFBundleGetInfoDictionary(env: &mut Environment, bundle: CFBundleRef) -> CFDictionaryRef {
@@ -237,6 +290,12 @@ fn CFBundleCopyLocalizedString(
 
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFBundleGetMainBundle()),
+    export_c_func!(CFBundleCreate(_, _)),
+    export_c_func!(CFBundleGetIdentifier(_)),
+    export_c_func!(CFBundleCopyBundleIdentifier(_)),
+    export_c_func!(CFBundleCopyInfoDictionaryForURL(_)),
+    export_c_func!(CFBundleCopyInfoDictionaryInDirectory(_)),
+    export_c_func!(CFBundleCopyResourceURLInDirectory(_, _, _, _)),
     export_c_func!(CFBundleGetInfoDictionary(_)),
     export_c_func!(CFBundleGetValueForInfoDictionaryKey(_, _)),
     export_c_func!(CFBundleGetVersionNumber(_)),
