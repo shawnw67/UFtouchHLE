@@ -11,6 +11,7 @@
 //! interrupted by other threads. All operations are therefore trivially atomic.
 
 use crate::dyld::FunctionExports;
+use crate::environment::ThreadBlock;
 use crate::export_c_func;
 use crate::mem::{MutPtr, MutVoidPtr};
 use crate::Environment;
@@ -296,6 +297,25 @@ fn OSMemoryBarrier(_env: &mut Environment) {
     // No-op — single host thread; memory ordering is trivially satisfied.
 }
 
+fn OSSpinLockTry(env: &mut Environment, lock: MutPtr<i32>) -> bool {
+    if env.mem.read(lock) != 0 {
+        return false;
+    }
+    env.mem.write(lock, 1);
+    true
+}
+
+fn OSSpinLockLock(env: &mut Environment, lock: MutPtr<i32>) {
+    while !OSSpinLockTry(env, lock) {
+        // Other guest threads share this host thread. Let the lock holder run.
+        env.yield_thread(ThreadBlock::NotBlocked);
+    }
+}
+
+fn OSSpinLockUnlock(env: &mut Environment, lock: MutPtr<i32>) {
+    env.mem.write(lock, 0);
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     // Add32
     export_c_func!(OSAtomicAdd32(_, _)),
@@ -350,4 +370,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(OSAtomicTestAndClearBarrier(_, _)),
     // Memory barrier
     export_c_func!(OSMemoryBarrier()),
+    export_c_func!(OSSpinLockLock(_)),
+    export_c_func!(OSSpinLockTry(_)),
+    export_c_func!(OSSpinLockUnlock(_)),
 ];

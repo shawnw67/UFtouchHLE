@@ -31,6 +31,7 @@
 #include <semaphore.h>
 #include <setjmp.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,6 +51,38 @@ extern kern_return_t thread_resume(mach_port_t target_act);
 extern kern_return_t thread_info(mach_port_t target_act, natural_t flavor,
                                  integer_t *thread_info_out,
                                  natural_t *thread_info_out_cnt);
+
+extern void OSSpinLockLock(volatile int *lock);
+extern void OSSpinLockUnlock(volatile int *lock);
+extern bool OSSpinLockTry(volatile int *lock);
+
+static volatile int spin_lock_test_lock;
+static sem_t spin_lock_test_ready;
+
+static void *spin_lock_test_worker(void *unused) {
+  (void)unused;
+  OSSpinLockLock(&spin_lock_test_lock);
+  sem_post(&spin_lock_test_ready);
+  usleep(10000);
+  OSSpinLockUnlock(&spin_lock_test_lock);
+  return NULL;
+}
+
+int test_OSSpinLock_contention(void) {
+  pthread_t worker;
+  spin_lock_test_lock = 0;
+  if (sem_init(&spin_lock_test_ready, 0, 0) ||
+      pthread_create(&worker, NULL, spin_lock_test_worker, NULL))
+    return -1;
+  if (sem_wait(&spin_lock_test_ready) || OSSpinLockTry(&spin_lock_test_lock))
+    return -2;
+  OSSpinLockLock(&spin_lock_test_lock);
+  OSSpinLockUnlock(&spin_lock_test_lock);
+  if (pthread_join(worker, NULL) || !OSSpinLockTry(&spin_lock_test_lock))
+    return -3;
+  OSSpinLockUnlock(&spin_lock_test_lock);
+  return sem_destroy(&spin_lock_test_ready);
+}
 
 // Declare test functions from other files.
 
@@ -8989,6 +9022,7 @@ struct {
     FUNC_DEF(test_vsnprintf),
     FUNC_DEF(test_variadic_callback_snapshot),
     FUNC_DEF(test_uuid_c_values),
+    FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),
