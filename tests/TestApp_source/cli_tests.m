@@ -7,6 +7,7 @@
 // This file contains the command-line automated tests. tests/integration.rs
 // runs these automatically.
 
+#include <CoreFoundation/CFArray.h>
 #include <CoreFoundation/CFBase.h>
 #include <CoreFoundation/CFBundle.h>
 #include <CoreFoundation/CFDictionary.h>
@@ -264,6 +265,33 @@ int test_CFBundle_resource_urls(void) {
     CFRelease(urls);
   CFRelease(extension);
   return found ? 0 : -1;
+}
+
+int test_CFString_split_join_and_replace(void) {
+  CFStringRef original =
+      CFStringCreateWithCString(NULL, "alpha,beta", kCFStringEncodingUTF8);
+  CFStringRef separator =
+      CFStringCreateWithCString(NULL, ",", kCFStringEncodingUTF8);
+  CFArrayRef parts =
+      CFStringCreateArrayBySeparatingStrings(NULL, original, separator);
+  CFStringRef joined = CFStringCreateByCombiningStrings(NULL, parts, separator);
+  CFMutableStringRef mutable = CFStringCreateMutableCopy(NULL, 0, joined);
+  CFStringRef word =
+      CFStringCreateWithCString(NULL, "x", kCFStringEncodingUTF8);
+  CFStringReplace(mutable, CFRangeMake(0, 5), word);
+  CFStringInsert(mutable, 1, word);
+  CFStringRef expected =
+      CFStringCreateWithCString(NULL, "xx,beta", kCFStringEncodingUTF8);
+  int passed = CFArrayGetCount(parts) == 2 && CFEqual(joined, original) &&
+               CFStringHasPrefix(mutable, word) && CFEqual(mutable, expected);
+  CFRelease(expected);
+  CFRelease(word);
+  CFRelease(mutable);
+  CFRelease(joined);
+  CFRelease(parts);
+  CFRelease(separator);
+  CFRelease(original);
+  return passed ? 0 : -1;
 }
 
 // Declare test functions from other files.
@@ -9210,6 +9238,7 @@ struct {
     FUNC_DEF(test_CFRunLoop_stop),
     FUNC_DEF(test_CFBundle_create_from_url),
     FUNC_DEF(test_CFBundle_resource_urls),
+    FUNC_DEF(test_CFString_split_join_and_replace),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),

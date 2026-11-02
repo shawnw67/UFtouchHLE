@@ -9,6 +9,7 @@
 //! Apple's implementation. Here it is the same type.
 
 use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
+use super::cf_array::CFArrayRef;
 use super::cf_dictionary::CFDictionaryRef;
 use super::cf_locale::CFLocaleRef;
 use super::{kCFNotFound, CFComparisonResult, CFIndex, CFOptionFlags, CFRange};
@@ -17,11 +18,82 @@ use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::foundation::{ns_string, unichar, NSNotFound, NSRange, NSUInteger};
 use crate::libc::string::strlen;
 use crate::mem::{ConstPtr, GuestUSize, MutPtr};
-use crate::objc::{id, msg, msg_class};
+use crate::objc::{id, msg, msg_class, release, retain};
 use crate::Environment;
 
 pub type CFStringRef = super::CFTypeRef;
 pub type CFMutableStringRef = CFStringRef;
+
+fn CFStringRetain(env: &mut Environment, string: CFStringRef) -> CFStringRef {
+    if string.is_null() {
+        string
+    } else {
+        retain(env, string)
+    }
+}
+
+fn CFStringRelease(env: &mut Environment, string: CFStringRef) {
+    if !string.is_null() {
+        release(env, string);
+    }
+}
+
+fn CFStringCreateArrayBySeparatingStrings(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    string: CFStringRef,
+    separator: CFStringRef,
+) -> CFArrayRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
+    let array: id = msg![env; string componentsSeparatedByString:separator];
+    retain(env, array)
+}
+
+fn CFStringCreateByCombiningStrings(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    array: CFArrayRef,
+    separator: CFStringRef,
+) -> CFStringRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
+    let string: id = msg![env; array componentsJoinedByString:separator];
+    retain(env, string)
+}
+
+fn CFStringGetDoubleValue(env: &mut Environment, string: CFStringRef) -> f64 {
+    msg![env; string doubleValue]
+}
+
+fn CFStringHasPrefix(env: &mut Environment, string: CFStringRef, prefix: CFStringRef) -> bool {
+    msg![env; string hasPrefix:prefix]
+}
+
+fn CFStringInsert(
+    env: &mut Environment,
+    string: CFMutableStringRef,
+    index: CFIndex,
+    inserted: CFStringRef,
+) {
+    let index: NSUInteger = index.try_into().unwrap();
+    () = msg![env; string insertString:inserted atIndex:index];
+}
+
+fn CFStringReplace(
+    env: &mut Environment,
+    string: CFMutableStringRef,
+    range: CFRange,
+    replacement: CFStringRef,
+) {
+    let range = NSRange {
+        location: range.location.try_into().unwrap(),
+        length: range.length.try_into().unwrap(),
+    };
+    () = msg![env; string replaceCharactersInRange:range withString:replacement];
+}
+
+fn CFStringReplaceAll(env: &mut Environment, string: CFMutableStringRef, replacement: CFStringRef) {
+    () = msg![env; string setString:replacement];
+}
 
 fn CFStringCreateWithCharacters(
     env: &mut Environment,
@@ -484,6 +556,15 @@ fn CFStringNormalize(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFStringRetain(_)),
+    export_c_func!(CFStringRelease(_)),
+    export_c_func!(CFStringCreateArrayBySeparatingStrings(_, _, _)),
+    export_c_func!(CFStringCreateByCombiningStrings(_, _, _)),
+    export_c_func!(CFStringGetDoubleValue(_)),
+    export_c_func!(CFStringHasPrefix(_, _)),
+    export_c_func!(CFStringInsert(_, _, _)),
+    export_c_func!(CFStringReplace(_, _, _)),
+    export_c_func!(CFStringReplaceAll(_, _)),
     export_c_func!(CFStringAppend(_, _)),
     export_c_func!(CFStringAppendCharacters(_, _, _)),
     export_c_func!(CFStringAppendCString(_, _, _)),
