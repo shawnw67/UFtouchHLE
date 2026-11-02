@@ -17,7 +17,8 @@ use crate::frameworks::core_foundation::CFIndex;
 use crate::frameworks::foundation::{ns_run_loop, ns_timer};
 use crate::mem::{MutPtr, MutVoidPtr, SafeRead};
 use crate::objc::{
-    id, msg, msg_class, nil, objc_classes, retain, Class, ClassExports, HostObject, NSZonePtr,
+    id, msg, msg_class, nil, objc_classes, release, retain, Class, ClassExports, HostObject,
+    NSZonePtr,
 };
 use crate::Environment;
 
@@ -57,7 +58,7 @@ fn CFRunLoopTimerCreate(
         assert_eq!(version, 0);
 
         // TODO: handle non-NULL callbacks
-        let retain_callback = context.release_callback;
+        let retain_callback = context.retain_callback;
         assert!(retain_callback.to_ptr().is_null());
         let release_callback = context.release_callback;
         assert!(release_callback.to_ptr().is_null());
@@ -80,6 +81,7 @@ fn CFRunLoopTimerCreate(
                                                          selector:selector
                                                          userInfo:nil
                                                           repeats:repeats];
+    release(env, target);
     ns_timer::set_fire_date(env, timer, fire_date);
     // Follows the Create Rule, so the caller owns the timer, unlike with
     // timerWithTimeInterval:.
@@ -127,12 +129,58 @@ fn CFRunLoopTimerInvalidate(env: &mut Environment, timer: CFRunLoopTimerRef) {
     () = msg![env; timer invalidate];
 }
 
+fn CFRunLoopTimerRetain(env: &mut Environment, timer: CFRunLoopTimerRef) -> CFRunLoopTimerRef {
+    if timer.is_null() {
+        timer
+    } else {
+        retain(env, timer)
+    }
+}
+
+fn CFRunLoopTimerRelease(env: &mut Environment, timer: CFRunLoopTimerRef) {
+    if !timer.is_null() {
+        release(env, timer);
+    }
+}
+
+fn CFRunLoopTimerIsValid(env: &mut Environment, timer: CFRunLoopTimerRef) -> bool {
+    msg![env; timer isValid]
+}
+
+fn CFRunLoopTimerGetNextFireDate(
+    env: &mut Environment,
+    timer: CFRunLoopTimerRef,
+) -> CFAbsoluteTime {
+    let date: id = msg![env; timer fireDate];
+    msg![env; date timeIntervalSinceReferenceDate]
+}
+
+fn CFRunLoopTimerGetInterval(env: &mut Environment, timer: CFRunLoopTimerRef) -> CFTimeInterval {
+    msg![env; timer timeInterval]
+}
+
+fn CFRunLoopTimerDoesRepeat(env: &mut Environment, timer: CFRunLoopTimerRef) -> bool {
+    CFRunLoopTimerGetInterval(env, timer) > 0.0
+}
+
+fn CFRunLoopTimerGetOrder(_env: &mut Environment, _timer: CFRunLoopTimerRef) -> CFIndex {
+    // CFRunLoopTimerCreate currently accepts only order zero.
+    0
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFRunLoopTimerCreate(_, _, _, _, _, _, _)),
     export_c_func!(CFRunLoopAddTimer(_, _, _)),
     export_c_func!(CFRunLoopRemoveTimer(_, _, _)),
     export_c_func!(CFRunLoopTimerInvalidate(_)),
     export_c_func!(CFRunLoopTimerSetNextFireDate(_, _)),
+    export_c_func!(CFRunLoopTimerRetain(_)),
+    export_c_func!(CFRunLoopTimerRelease(_)),
+    export_c_func!(CFRunLoopTimerIsValid(_)),
+    export_c_func!(CFRunLoopTimerGetNextFireDate(_)),
+    export_c_func!(CFRunLoopTimerGetInterval(_)),
+    export_c_func!(CFRunLoopTimerDoesRepeat(_)),
+    export_c_func!(CFRunLoopTimerGetOrder(_)),
 ];
 
 /// Belongs to _Podroid_CFTimerTarget
