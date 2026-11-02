@@ -10,7 +10,7 @@
 
 use super::{ns_string, ns_timer, NSTimeInterval};
 use crate::dyld::{ConstantExports, HostConstant};
-use crate::environment::ThreadId;
+use crate::environment::{ThreadBlock, ThreadId};
 use crate::frameworks::audio_toolbox::audio_queue::{handle_audio_queue, AudioQueueRef};
 use crate::frameworks::audio_toolbox::audio_unit::{render_audio_unit, AudioUnit};
 use crate::frameworks::core_animation::ca_transaction;
@@ -60,8 +60,35 @@ struct NSRunLoopHostObject {
     /// by the run loop. The timer must remove itself when invalidated.
     timers: Vec<id>,
     cf_sources: Vec<id>,
+    owner: ThreadId,
+    waiting: bool,
+    stop_flags: Vec<bool>,
 }
 impl HostObject for NSRunLoopHostObject {}
+
+pub fn cf_run_loop_is_waiting(env: &mut Environment, run_loop: id) -> bool {
+    env.objc.borrow::<NSRunLoopHostObject>(run_loop).waiting
+}
+
+pub fn wake_cf_run_loop(env: &mut Environment, run_loop: id) {
+    let host = env.objc.borrow::<NSRunLoopHostObject>(run_loop);
+    let (waiting, owner) = (host.waiting, host.owner);
+    if waiting && matches!(env.threads[owner].blocked_by, ThreadBlock::Sleeping(_)) {
+        env.threads[owner].blocked_by = ThreadBlock::NotBlocked;
+    }
+}
+
+pub fn stop_cf_run_loop(env: &mut Environment, run_loop: id) {
+    if let Some(flag) = env
+        .objc
+        .borrow_mut::<NSRunLoopHostObject>(run_loop)
+        .stop_flags
+        .last_mut()
+    {
+        *flag = true;
+        wake_cf_run_loop(env, run_loop);
+    }
+}
 
 pub fn add_cf_source(env: &mut Environment, run_loop: id, source: id) {
     env.objc
@@ -129,7 +156,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     } else {
         Some(msg![env; limit_date timeIntervalSince1970])
     };
-    run_run_loop(env, this, /* single_iteration: */ true, limit);
+    let _ = run_run_loop(env, this, /* single_iteration: */ true, limit);
     // Modes are not yet tracked separately, so source availability is unknown.
     true
 }
@@ -155,12 +182,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())run {
-    run_run_loop(env, this, /* single_iteration: */ false, None);
+    let _ = run_run_loop(env, this, /* single_iteration: */ false, None);
 }
 
 - (())runUntilDate:(id)date {
     let time_limit: NSTimeInterval = msg![env; date timeIntervalSince1970];
-    run_run_loop(env, this, /* single_iteration: */ false, Some(time_limit));
+    let _ = run_run_loop(env, this, /* single_iteration: */ false, Some(time_limit));
 }
 
 // TODO: other run methods
@@ -346,7 +373,7 @@ pub(super) fn cancel_perform_requests(
 /// for the app picker, since we don't have `runMode:beforeDate:` yet.
 /// (TODO: implement those to replace this.)
 pub fn run_run_loop_single_iteration(env: &mut Environment, run_loop: id) {
-    run_run_loop(env, run_loop, /* single_iteration: */ true, None)
+    let _ = run_run_loop(env, run_loop, /* single_iteration: */ true, None);
 }
 
 pub fn run_run_loop(
@@ -354,7 +381,7 @@ pub fn run_run_loop(
     run_loop: id,
     single_iteration: bool,
     unix_time_limit: Option<f64>,
-) {
+) -> bool {
     if single_iteration {
         log_dbg!(
             "Entering run loop {:?} (single iteration), limit {:?}",
@@ -368,6 +395,11 @@ pub fn run_run_loop(
             unix_time_limit
         );
     }
+
+    env.objc
+        .borrow_mut::<NSRunLoopHostObject>(run_loop)
+        .stop_flags
+        .push(false);
 
     // Temporary vectors used to track things without needing a reference to the
     // environment or to lock the object. Re-used each iteration for efficiency.
@@ -514,8 +546,29 @@ pub fn run_run_loop(
         // The compromise used here is that we will wait for a 60th of a second,
         // or until the next scheduled event, whichever is sooner. iPhone OS
         // apps can't do more than 60fps so this should be fine.
+        if *env
+            .objc
+            .borrow::<NSRunLoopHostObject>(run_loop)
+            .stop_flags
+            .last()
+            .unwrap()
+        {
+            break;
+        }
         let limit = Duration::from_millis(1000 / 60);
+        env.objc.borrow_mut::<NSRunLoopHostObject>(run_loop).waiting = true;
         env.sleep(sleep_until.map_or(limit, |i| i.duration_since(Instant::now()).min(limit)));
+        env.objc.borrow_mut::<NSRunLoopHostObject>(run_loop).waiting = false;
+
+        if *env
+            .objc
+            .borrow::<NSRunLoopHostObject>(run_loop)
+            .stop_flags
+            .last()
+            .unwrap()
+        {
+            break;
+        }
 
         if single_iteration {
             break;
@@ -536,6 +589,11 @@ pub fn run_run_loop(
             }
         }
     }
+    env.objc
+        .borrow_mut::<NSRunLoopHostObject>(run_loop)
+        .stop_flags
+        .pop()
+        .unwrap()
 }
 
 /// Helper method for `mainRunLoop` and `currentRunLoop` NSThread class methods
@@ -553,6 +611,9 @@ fn run_loop_for_thread(env: &mut Environment, this: Class, thread_id: ThreadId) 
             selector_objects: VecDeque::new(),
             timers: Vec::new(),
             cf_sources: Vec::new(),
+            owner: thread_id,
+            waiting: false,
+            stop_flags: Vec::new(),
         });
         // TODO: is it OK to allocate static object for all threads,
         // not only main one?

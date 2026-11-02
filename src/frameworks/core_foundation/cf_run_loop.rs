@@ -10,7 +10,7 @@
 
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::core_foundation::time::CFTimeInterval;
-use crate::frameworks::foundation::ns_run_loop::run_run_loop_single_iteration;
+use crate::frameworks::foundation::ns_run_loop;
 use crate::objc::{id, msg, msg_class, release, retain};
 use crate::Environment;
 
@@ -44,6 +44,22 @@ fn CFRunLoopRun(env: &mut Environment) {
     () = msg![env; run_loop run];
 }
 
+fn CFRunLoopStop(env: &mut Environment, run_loop: CFRunLoopRef) {
+    if !run_loop.is_null() {
+        ns_run_loop::stop_cf_run_loop(env, run_loop);
+    }
+}
+
+fn CFRunLoopWakeUp(env: &mut Environment, run_loop: CFRunLoopRef) {
+    if !run_loop.is_null() {
+        ns_run_loop::wake_cf_run_loop(env, run_loop);
+    }
+}
+
+fn CFRunLoopIsWaiting(env: &mut Environment, run_loop: CFRunLoopRef) -> bool {
+    !run_loop.is_null() && ns_run_loop::cf_run_loop_is_waiting(env, run_loop)
+}
+
 fn CFRunLoopRunInMode(
     env: &mut Environment,
     mode: CFRunLoopMode,
@@ -54,13 +70,18 @@ fn CFRunLoopRunInMode(
     // timers. Treat custom modes like the default until modes are separated.
     assert!(!mode.is_null());
     let current_run_loop = CFRunLoopGetCurrent(env);
-    if seconds == 0.0 {
-        run_run_loop_single_iteration(env, current_run_loop);
+    let stopped = if seconds <= 0.0 {
+        ns_run_loop::run_run_loop(env, current_run_loop, true, None)
     } else {
         let limit_date: id = msg_class![env; NSDate dateWithTimeIntervalSinceNow:seconds];
-        () = msg![env; current_run_loop runUntilDate:limit_date];
-    }
-    1 // kCFRunLoopRunFinished
+        let limit: f64 = msg![env; limit_date timeIntervalSince1970];
+        ns_run_loop::run_run_loop(env, current_run_loop, false, Some(limit))
+    };
+    if stopped {
+        2
+    } else {
+        1
+    } // stopped or finished
 }
 
 pub const kCFRunLoopCommonModes: &str = "kCFRunLoopCommonModes";
@@ -83,5 +104,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFRunLoopRetain(_)),
     export_c_func!(CFRunLoopRelease(_)),
     export_c_func!(CFRunLoopRun()),
+    export_c_func!(CFRunLoopStop(_)),
+    export_c_func!(CFRunLoopWakeUp(_)),
+    export_c_func!(CFRunLoopIsWaiting(_)),
     export_c_func!(CFRunLoopRunInMode(_, _, _)),
 ];

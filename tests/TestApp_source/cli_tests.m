@@ -205,6 +205,36 @@ int test_CFRunLoop_source(void) {
   return passed ? 0 : -2;
 }
 
+static void source_stop_perform(void *info) {
+  *(int *)info += 1;
+  CFRunLoopStop(CFRunLoopGetCurrent());
+}
+
+static void *source_stop_worker(void *result) {
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  int fired = 0;
+  CFRunLoopSourceContext context = {
+      0, &fired, NULL, NULL, NULL, NULL, NULL, NULL, NULL, source_stop_perform};
+  CFRunLoopSourceRef source = CFRunLoopSourceCreate(NULL, 0, &context);
+  CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopDefaultMode);
+  CFRunLoopSourceSignal(source);
+  int reason = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 5, false);
+  CFRunLoopSourceInvalidate(source);
+  CFRelease(source);
+  *(int *)result = fired == 1 && reason == kCFRunLoopRunStopped;
+  [pool drain];
+  return NULL;
+}
+
+int test_CFRunLoop_stop(void) {
+  pthread_t worker;
+  int passed = 0;
+  if (pthread_create(&worker, NULL, source_stop_worker, &passed) ||
+      pthread_join(worker, NULL))
+    return -1;
+  return passed ? 0 : -2;
+}
+
 // Declare test functions from other files.
 
 int test_AutoreleasePool(void);    // AutoReleasePoolTest.m
@@ -9146,6 +9176,7 @@ struct {
     FUNC_DEF(test_CFRunLoop_custom_mode),
     FUNC_DEF(test_CFRunLoop_custom_mode_timer),
     FUNC_DEF(test_CFRunLoop_source),
+    FUNC_DEF(test_CFRunLoop_stop),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
