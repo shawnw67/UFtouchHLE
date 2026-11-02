@@ -370,7 +370,10 @@ mod tests {
         assert_eq!(import.characters, ["テスト"]);
         let save = load(&import.file, None).unwrap();
         assert_eq!(save.format, Format::IosFile);
-        assert_eq!(save.plain[HEADER_LEN..SLOT_OFF], plain[HEADER_LEN..SLOT_OFF]);
+        assert_eq!(
+            save.plain[HEADER_LEN..SLOT_OFF],
+            plain[HEADER_LEN..SLOT_OFF]
+        );
     }
 
     #[test]
