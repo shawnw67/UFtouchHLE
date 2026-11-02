@@ -8,13 +8,24 @@
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::NSInteger;
 use crate::frameworks::uikit::ui_geometry::UIEdgeInsets;
-use crate::objc::{id, msg, msg_class, objc_classes, ClassExports, TrivialHostObject, SEL};
+use crate::objc::{id, msg, msg_class, nil, objc_classes, ClassExports, TrivialHostObject, SEL};
 
 #[derive(Default)]
 pub struct State {
     main_screen: Option<id>,
     current_mode: Option<id>,
     overscan_compensation: NSInteger,
+}
+
+/// Convert screen bounds from points to the physical pixel grid.
+fn native_bounds(bounds: CGRect, scale: CGFloat) -> CGRect {
+    CGRect {
+        origin: CGPoint { x: 0.0, y: 0.0 },
+        size: CGSize {
+            width: bounds.size.width * scale,
+            height: bounds.size.height * scale,
+        },
+    }
 }
 
 pub const CLASSES: ClassExports = objc_classes! {
@@ -73,7 +84,16 @@ pub const CLASSES: ClassExports = objc_classes! {
     bounds
 }
 
+- (CGRect)nativeBounds {
+    let bounds: CGRect = msg![env; this bounds];
+    native_bounds(bounds, env.options.screen_scale() as CGFloat)
+}
+
 - (CGFloat)scale {
+    env.options.screen_scale() as CGFloat
+}
+
+- (CGFloat)nativeScale {
     env.options.screen_scale() as CGFloat
 }
 
@@ -92,6 +112,21 @@ pub const CLASSES: ClassExports = objc_classes! {
     let mode: id = msg![env; this currentMode];
     msg_class![env; NSArray arrayWithObject:mode]
 }
+
+- (id)preferredMode { nil }
+
+- (())setCurrentMode:(id)_mode {
+    // The built-in display has a single fixed mode.
+}
+
+- (id)mirroredScreen { nil }
+
+- (bool)isCaptured { false }
+
+- (CGRect)convertRect:(CGRect)rect toScreen:(id)_other_screen { rect }
+- (CGRect)convertRect:(CGRect)rect fromScreen:(id)_other_screen { rect }
+- (CGPoint)convertPoint:(CGPoint)point toScreen:(id)_other_screen { point }
+- (CGPoint)convertPoint:(CGPoint)point fromScreen:(id)_other_screen { point }
 
 - (id)displayLinkWithTarget:(id)target selector:(SEL)selector {
     msg_class![env; CADisplayLink displayLinkWithTarget:target selector:selector]
@@ -133,3 +168,27 @@ pub const CLASSES: ClassExports = objc_classes! {
 @end
 
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_screen_bounds_are_in_pixels() {
+        let bounds = CGRect {
+            origin: CGPoint { x: 0.0, y: 0.0 },
+            size: CGSize {
+                width: 320.0,
+                height: 480.0,
+            },
+        };
+        assert_eq!(
+            native_bounds(bounds, 2.0).size,
+            CGSize {
+                width: 640.0,
+                height: 960.0
+            }
+        );
+        assert_eq!(native_bounds(bounds, 1.0), bounds);
+    }
+}
