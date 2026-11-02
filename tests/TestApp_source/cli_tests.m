@@ -254,6 +254,18 @@ int test_CFBundle_create_from_url(void) {
   return matches && dictionary ? 0 : -2;
 }
 
+int test_CFBundle_resource_urls(void) {
+  CFStringRef extension =
+      CFStringCreateWithCString(NULL, "plist", kCFStringEncodingUTF8);
+  CFArrayRef urls =
+      CFBundleCopyResourceURLsOfType(CFBundleGetMainBundle(), extension, NULL);
+  int found = urls && CFArrayGetCount(urls) > 0;
+  if (urls)
+    CFRelease(urls);
+  CFRelease(extension);
+  return found ? 0 : -1;
+}
+
 // Declare test functions from other files.
 
 int test_AutoreleasePool(void);    // AutoReleasePoolTest.m
@@ -9197,6 +9209,7 @@ struct {
     FUNC_DEF(test_CFRunLoop_source),
     FUNC_DEF(test_CFRunLoop_stop),
     FUNC_DEF(test_CFBundle_create_from_url),
+    FUNC_DEF(test_CFBundle_resource_urls),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),

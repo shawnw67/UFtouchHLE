@@ -79,6 +79,65 @@ fn CFBundleCopyBundleIdentifier(env: &mut Environment, bundle: CFBundleRef) -> C
     msg![env; identifier copy]
 }
 
+fn copy_info_string(env: &mut Environment, bundle: CFBundleRef, key: &'static str) -> CFStringRef {
+    if bundle == nil {
+        return nil;
+    }
+    let key = ns_string::get_static_str(env, key);
+    let value = CFBundleGetValueForInfoDictionaryKey(env, bundle, key);
+    msg![env; value copy]
+}
+
+fn CFBundleCopyShortVersionString(env: &mut Environment, bundle: CFBundleRef) -> CFStringRef {
+    copy_info_string(env, bundle, "CFBundleShortVersionString")
+}
+
+fn CFBundleCopyBundleDevelopmentRegion(env: &mut Environment, bundle: CFBundleRef) -> CFStringRef {
+    let region = copy_info_string(env, bundle, "CFBundleDevelopmentRegion");
+    if region != nil {
+        return region;
+    }
+    let english = ns_string::get_static_str(env, "en");
+    msg![env; english copy]
+}
+
+fn CFBundleCopyDisplayName(env: &mut Environment, bundle: CFBundleRef) -> CFStringRef {
+    for key in ["CFBundleDisplayName", "CFBundleName", "CFBundleExecutable"] {
+        let value = copy_info_string(env, bundle, key);
+        if value != nil {
+            return value;
+        }
+    }
+    let empty = ns_string::get_static_str(env, "");
+    msg![env; empty copy]
+}
+
+fn CFBundleCopyHelpBookName(env: &mut Environment, bundle: CFBundleRef) -> CFStringRef {
+    copy_info_string(env, bundle, "CFBundleHelpBookName")
+}
+
+fn CFBundleCopyResourceURLsOfType(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    resource_type: CFStringRef,
+    subdirectory: CFStringRef,
+) -> CFArrayRef {
+    if bundle == nil {
+        return nil;
+    }
+    let paths: id =
+        msg![env; bundle pathsForResourcesOfType:resource_type inDirectory:subdirectory];
+    let count: NSUInteger = msg![env; paths count];
+    let mut urls = Vec::new();
+    for index in 0..count {
+        let path: id = msg![env; paths objectAtIndex:index];
+        let url: id = msg_class![env; NSURL alloc];
+        let url: id = msg![env; url initFileURLWithPath:path];
+        urls.push(url);
+    }
+    ns_array::from_vec(env, urls)
+}
+
 fn CFBundleCopyInfoDictionaryForURL(env: &mut Environment, url: CFURLRef) -> CFDictionaryRef {
     if url == nil {
         return nil;
@@ -293,6 +352,11 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFBundleCreate(_, _)),
     export_c_func!(CFBundleGetIdentifier(_)),
     export_c_func!(CFBundleCopyBundleIdentifier(_)),
+    export_c_func!(CFBundleCopyShortVersionString(_)),
+    export_c_func!(CFBundleCopyBundleDevelopmentRegion(_)),
+    export_c_func!(CFBundleCopyDisplayName(_)),
+    export_c_func!(CFBundleCopyHelpBookName(_)),
+    export_c_func!(CFBundleCopyResourceURLsOfType(_, _, _)),
     export_c_func!(CFBundleCopyInfoDictionaryForURL(_)),
     export_c_func!(CFBundleCopyInfoDictionaryInDirectory(_)),
     export_c_func!(CFBundleCopyResourceURLInDirectory(_, _, _, _)),
