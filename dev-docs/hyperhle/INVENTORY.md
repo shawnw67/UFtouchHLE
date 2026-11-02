@@ -477,7 +477,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/frameworks/uikit/ui_document.rs` | hyper-added | class:UIDocument | pending |
 | `src/frameworks/uikit/ui_event.rs` | hyper-modified | — | pending |
 | `src/frameworks/uikit/ui_font.rs` | both-modified | — | pending |
-| `src/frameworks/uikit/ui_geometry.rs` | hyper-modified | NSDefaultMallocZone | pending |
+| `src/frameworks/uikit/ui_geometry.rs` | hyper-modified | NSDefaultMallocZone | partial: UIEdgeInsets return ABI; remaining declarations pending |
 | `src/frameworks/uikit/ui_gesture_recognizer.rs` | hyper-added | class:UIGestureRecognizer, class:UILongPressGestureRecognizer, class:UIPanGestureRecognizer, class:UISwipeGestureRecognizer, class:UITapGestureRecognizer | pending |
 | `src/frameworks/uikit/ui_graphics.rs` | both-modified | UIGraphicsBeginImageContext, UIGraphicsBeginImageContextWithOptions, UIGraphicsBeginPDFContextToData, UIGraphicsBeginPDFContextToFile, UIGraphicsBeginPDFPage, UIGraphicsBeginPDFPageWithInfo, UIGraphicsEndImageContext, UIGraphicsEndPDFContext, UIGraphicsGetImageFromCurrentImageContext, UIGraphicsGetPDFContextBounds, UIRectClip, UIRectFillUsingBlendMode, UIRectFrame | pending |
 | `src/frameworks/uikit/ui_image.rs` | both-modified | UIImageJPEGRepresentation, UIImagePNGRepresentation, UIImageWriteToSavedPhotosAlbum | pending |
@@ -495,7 +495,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/frameworks/uikit/ui_popover_controller.rs` | hyper-added | class:UIPopoverController | pending |
 | `src/frameworks/uikit/ui_responder.rs` | hyper-modified | — | pending |
 | `src/frameworks/uikit/ui_rotation_gesture_recognizer.rs` | hyper-added | class:UIRotationGestureRecognizer | pending |
-| `src/frameworks/uikit/ui_screen.rs` | both-modified | class:UITraitCollection | pending |
+| `src/frameworks/uikit/ui_screen.rs` | both-modified | class:UITraitCollection | partial: overscan compensation; remaining declarations pending |
 | `src/frameworks/uikit/ui_screen_mode.rs` | hyper-added | class:UIScreenMode | pending |
 | `src/frameworks/uikit/ui_search_bar.rs` | hyper-added | class:UISearchBar | pending |
 | `src/frameworks/uikit/ui_split_view_controller.rs` | hyper-added | class:UISplitViewController | pending |
