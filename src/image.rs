@@ -19,8 +19,8 @@
 
 use std::ffi::{c_int, c_uchar, CStr};
 
-use touchHLE_pvrt_decompress_wrapper::*;
-use touchHLE_stb_image_wrapper::*;
+use Podroid_pvrt_decompress_wrapper::*;
+use Podroid_stb_image_wrapper::*;
 
 pub struct Image {
     pixels: PixelStore,
@@ -291,7 +291,7 @@ pub fn decode_pvrtc_with_alpha(
     let rgba8_word_count = width as usize * height as usize;
     let mut rgba8_data = Vec::with_capacity(rgba8_word_count);
     unsafe {
-        let consumed_size = touchHLE_decompress_pvrtc(
+        let consumed_size = Podroid_decompress_pvrtc(
             pvrtc_data.as_ptr() as *const _,
             is_2bit,
             width,

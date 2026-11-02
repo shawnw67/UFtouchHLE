@@ -70,7 +70,7 @@ use environment::{Environment, MutexId, MutexType, ThreadId, PTHREAD_MUTEX_DEFAU
 
 use std::path::PathBuf;
 
-pub use touchHLE_version::*;
+pub use Podroid_version::*;
 
 /// This is the true entry point on Android (SDLActivity calls it after
 /// initialization). On other platforms the true entry point is in src/bin.rs.
@@ -117,15 +117,15 @@ pub extern "C" fn SDL_main(
         })
         .collect();
     match main(args.into_iter()) {
-        Ok(_) => echo!("UFtouchHLE finished"),
-        Err(e) => echo!("UFtouchHLE errored: {e:?}"),
+        Ok(_) => echo!("Podroid finished"),
+        Err(e) => echo!("Podroid errored: {e:?}"),
     }
     0
 }
 
 const USAGE: &str = "\
 Usage:
-    touchHLE [PATH] [OPTIONS]
+    Podroid [PATH] [OPTIONS]
 
 PATH should be a path to a .app bundle or .ipa file.
 
@@ -147,7 +147,7 @@ Special options:
 ";
 
 pub fn main<T: Iterator<Item = String>>(mut args: T) -> Result<(), String> {
-    echo!("UFtouchHLE {} — https://touchhle.org/", VERSION);
+    echo!("Podroid {} — https://touchhle.org/", VERSION);
     if GITHUB_RUN_ID.is_some() && !branding().is_empty() {
         echo!(
             "Built from branch {:?} of {:?} by GitHub Actions workflow run {}/{}/actions/runs/{}.",
@@ -162,7 +162,7 @@ pub fn main<T: Iterator<Item = String>>(mut args: T) -> Result<(), String> {
 
     {
         let base_path = paths::user_data_base_path();
-        log!("Base path for touchHLE files: {}", base_path.display());
+        log!("Base path for Podroid files: {}", base_path.display());
         paths::prepopulate_user_data_dir();
     }
 

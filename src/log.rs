@@ -21,11 +21,11 @@ pub static LOG_TO_FILE: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 pub fn get_log_file() -> &'static File {
     static LOG_FILE: LazyLock<File> = LazyLock::new(|| {
         let base = crate::paths::user_data_base_path();
-        let path = base.join("touchHLE_log.txt");
+        let path = base.join("Podroid_log.txt");
         // Keep the log of the previous run. If touchHLE crashed (especially
         // on Android, where it's easy to relaunch it straight away), that log
         // is the one that's needed to find out why.
-        let _ = std::fs::rename(&path, base.join("touchHLE_log_previous.txt"));
+        let _ = std::fs::rename(&path, base.join("Podroid_log_previous.txt"));
         File::create(path).unwrap()
     });
 
@@ -182,6 +182,6 @@ macro_rules! echo_no_panic {
     }
 }
 
-/// Put modules to enable [log_dbg] for here, e.g. "touchHLE::mem" to see when
+/// Put modules to enable [log_dbg] for here, e.g. "Podroid::mem" to see when
 /// memory is allocated and freed.
 pub const ENABLED_MODULES: &[&str] = &[];

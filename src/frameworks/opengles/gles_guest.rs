@@ -17,7 +17,7 @@ use crate::window::DeviceFamily;
 use crate::Environment;
 use std::collections::HashMap;
 use std::slice::from_raw_parts;
-use touchHLE_gl_bindings::gles11::{
+use Podroid_gl_bindings::gles11::{
     ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER_BINDING, WRITE_ONLY_OES,
 };
 

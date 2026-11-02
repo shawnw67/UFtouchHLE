@@ -426,7 +426,7 @@ impl Environment {
 
             Some(Box::new(window::Window::new(
                 &format!(
-                    "{} (UFtouchHLE {})",
+                    "{} (Podroid {})",
                     bundle.localized_display_name(
                         &fs,
                         &options
@@ -835,7 +835,7 @@ impl Environment {
 
         assert!(!options.headless);
         let window = Some(Box::new(window::Window::new(
-            &format!("UFtouchHLE {}", super::VERSION),
+            &format!("Podroid {}", super::VERSION),
             Some(icon),
             launch_image,
             &mut options,
@@ -1001,7 +1001,7 @@ impl Environment {
     /// headless mode.
     pub fn window(&self) -> &window::Window {
         self.window.as_ref().expect(
-            "Tried to do something that needs a window, but touchHLE is running in headless mode!",
+            "Tried to do something that needs a window, but Podroid is running in headless mode!",
         )
     }
 
@@ -1009,7 +1009,7 @@ impl Environment {
     /// in headless mode.
     pub fn window_mut(&mut self) -> &mut window::Window {
         self.window.as_mut().expect(
-            "Tried to do something that needs a window, but touchHLE is running in headless mode!",
+            "Tried to do something that needs a window, but Podroid is running in headless mode!",
         )
     }
 

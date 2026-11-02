@@ -27,13 +27,13 @@ use std::path::{Path, PathBuf};
 
 /// Name of the directory containing ARMv6 dynamic libraries bundled with
 /// touchHLE.
-pub const DYLIBS_DIR: &str = "touchHLE_dylibs";
+pub const DYLIBS_DIR: &str = "Podroid_dylibs";
 
 /// Name of the directory containing fonts bundled with touchHLE.
-pub const FONTS_DIR: &str = "touchHLE_fonts";
+pub const FONTS_DIR: &str = "Podroid_fonts";
 
 /// Name of the file containing touchHLE's default options for various apps.
-pub const DEFAULT_OPTIONS_FILE: &str = "touchHLE_default_options.txt";
+pub const DEFAULT_OPTIONS_FILE: &str = "Podroid_default_options.txt";
 
 /// macOS-only: If touchHLE is located in a .app bundle, return the path of the
 /// Resources directory. If touchHLE is not located in a .app bundle, return
@@ -93,22 +93,22 @@ pub const RESOURCES_ARE_EXTERNAL_FILES: bool = cfg!(not(target_os = "android"));
 
 /// Name of the directory where the user can put apps if they want them to
 /// appear in the app picker.
-pub const APPS_DIR: &str = "touchHLE_apps";
+pub const APPS_DIR: &str = "Podroid_apps";
 
 /// Name of the file intended for the user's own options.
-pub const USER_OPTIONS_FILE: &str = "touchHLE_options.txt";
+pub const USER_OPTIONS_FILE: &str = "Podroid_options.txt";
 
 /// Names of files the user can put a wallpaper image (for the app picker) in.
 #[allow(unused)]
 pub const WALLPAPER_FILES: &[&str] = &[
-    "touchHLE_wallpaper.png",
-    "touchHLE_wallpaper.jpg",
-    "touchHLE_wallpaper.jpeg",
+    "Podroid_wallpaper.png",
+    "Podroid_wallpaper.jpg",
+    "Podroid_wallpaper.jpeg",
 ];
 
 /// Name of the directory where touchHLE will store sandboxed app data, e.g.
 /// the `Documents` directory.
-pub const SANDBOX_DIR: &str = "touchHLE_sandbox";
+pub const SANDBOX_DIR: &str = "Podroid_sandbox";
 
 /// Get a platform-specific base path needed for accessing touchHLE's
 /// user-modifiable files. This is empty on platforms other than Android.
@@ -157,9 +157,9 @@ pub fn url_for_opening_user_data_dir() -> Result<String, String> {
         // AndroidManifest.xml.
         // The package name, see android/app/build.gradle.kts.
         let package = match crate::branding() {
-            "UF" => "org.touchhleuf.android".to_string(),
-            "" => "org.touchhle.android".to_string(),
-            brand => format!("org.touchhle.android.{}", brand.to_lowercase()),
+            "UF" => "org.podroid.android".to_string(),
+            "" => "org.podroid.android".to_string(),
+            brand => format!("org.podroid.android.{}", brand.to_lowercase()),
         };
         Ok(format!("{package}.files://open"))
     } else {
@@ -220,14 +220,14 @@ pub fn prepopulate_user_data_dir() {
     if !apps_dir_readme.is_file() {
         let content = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/touchHLE_apps/README.txt"
+            "/Podroid_apps/README.txt"
         ));
         create_file(&apps_dir_readme, content);
     }
 
     let user_options = base_path.join(USER_OPTIONS_FILE);
     if !user_options.is_file() {
-        let content = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/touchHLE_options.txt"));
+        let content = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Podroid_options.txt"));
         create_file(&user_options, content);
     }
 

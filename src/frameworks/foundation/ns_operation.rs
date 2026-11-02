@@ -96,13 +96,13 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())addOperation:(id)operation {
     retain(env, operation);
     env.objc.borrow_mut::<NSOperationQueueHostObject>(this).pending.push(operation);
-    // Retained until _touchHLE_runNextOperation runs.
+    // Retained until _Podroid_runNextOperation runs.
     retain(env, this);
-    let sel = env.objc.lookup_selector("_touchHLE_runNextOperation").unwrap();
+    let sel = env.objc.lookup_selector("_Podroid_runNextOperation").unwrap();
     () = msg![env; this performSelector:sel withObject:nil afterDelay:0.0f64];
 }
 
-- (())_touchHLE_runNextOperation {
+- (())_Podroid_runNextOperation {
     let host_object = env.objc.borrow_mut::<NSOperationQueueHostObject>(this);
     if !host_object.suspended && !host_object.pending.is_empty() {
         let operation = host_object.pending.remove(0);

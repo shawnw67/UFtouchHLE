@@ -18,7 +18,7 @@ pub(crate) use p2g_wide::validate as validate_p2g_wide;
 
 pub use eagl::redraw_last_frame;
 
-use touchHLE_gl_bindings::gles11::types::{GLenum, GLint, GLsizei, GLuint};
+use Podroid_gl_bindings::gles11::types::{GLenum, GLint, GLsizei, GLuint};
 
 use crate::mem::ConstPtr;
 

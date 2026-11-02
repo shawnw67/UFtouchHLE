@@ -47,17 +47,17 @@
 | 版本 | 编号 | 游戏 key | 盐 | 字节表 | 状态 |
 |---|---|---|---|---|---|
 | 日版 MHP2G | ULJM-05500 | `cd1f2059…` | `S)R?Bf8xW3#5h9lGU8wR` | iOS 同款 | **已验证**（k73） |
-| 美版 MHFU | ULUS-10391 | 与日版不同（`/tmp/ulus10391.key`，来源未核实） | `3Nc94Hq1zOLh8d62Sb69`（mhef） | 未知：mhef 用 `A6 21 22…` 表，这张表对日版是错的 | **未验证**，需要样本 |
-| 欧版 MHFU | ULES-01213 | 未知 | 同美版（mhef） | 未知 | **未验证** |
+| 美版 MHFU | ULUS-10391 | `4a1ff359…`（从 `PARAM.SFO` 的文件哈希反推） | `3Nc94Hq1zOLh8d62Sb69` | 与日版相同 | **读取已验证**（1 份样本，SHA-1 吻合） |
+| 欧版 MHFU | ULES-01213 | 同美版 | 同美版 | 与日版相同 | **读取已验证**（2 份样本，SHA-1 吻合） |
 | iOS 版 | `jp.co.capcom.mhp2gjp` | 无系统层（AES 外层） | `3Nc94Hq1zOLh8d62Sb69`（与 MHFU 相同） | 与日版 PSP 相同 | **已验证** |
 
-iOS 版用的是日版的字节表、美版的盐。美/欧版 MHFU 的存档主体布局（英文版物品编号等）可能与日版不同，目前完全没有验证过。
+iOS 版用的是日版的字节表、美版的盐。美/欧版 MHFU 的存档主体布局与日版一致（槽内字段的位置见 README.md 的“MHFU 存档”），但英文版的物品编号等是否与日版相同还没有核对，转换后的存档也还没有在游戏里实测。
 
 ---
 
 ## 2. iOS 存档
 
-- **位置**：沙盒 `Documents/savedata.dat`。UFtouchHLE 里是 `touchHLE_sandbox/jp.co.capcom.mhp2gjp/Documents/savedata.dat`，安卓上是 `/sdcard/Android/data/org.touchhleuf.android/files/` 下的同一路径。二进制里还有 `Documents/_savedata` 这个字符串（作用待查）。
+- **位置**：沙盒 `Documents/savedata.dat`。UFtouchHLE 里是 `Podroid_sandbox/jp.co.capcom.mhp2gjp/Documents/savedata.dat`，安卓上是 `/sdcard/Android/data/org.touchhleuf.android/files/` 下的同一路径。二进制里还有 `Documents/_savedata` 这个字符串（作用待查）。
 - **容器**：单个文件，0x16A110 字节，无压缩。
 - **加密**：
   - 外层：AES-128-CBC + PKCS#7（CCCrypt），key `ls6([f$]=~I(nf28`，iv `;lknc(;f_wnX98<i`。
@@ -150,4 +150,4 @@ PSP 每个角色的数据结构长 0x6A92C，iOS 长 0x6803C（iOS 存档时，�
 **PSP**
 5. 一份打过联机、收过公会卡的 MHP2G 日版存档（整个 `ULJM05500` 目录），用来验证“收到的公会卡”区域是否对齐。
 6. 一份带完整公会卡统计的 PSP 存档。这份可以和上一份是同一份，再配上它在游戏里公会卡的截图，用来翻译公会卡字段。
-7. 如果需要支持美/欧版：一份 MHFU（ULUS-10391 或 ULES-01213）存档目录，用来确认 key、字节表和布局。
+7. ~~如果需要支持美/欧版：一份 MHFU（ULUS-10391 或 ULES-01213）存档目录，用来确认 key、字节表和布局。~~：已提供（美版 1 份、欧版 2 份），见 §1.3。

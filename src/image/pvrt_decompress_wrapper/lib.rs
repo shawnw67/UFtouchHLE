@@ -15,7 +15,7 @@ use std::ffi::c_void;
 
 // See build.rs, lib.cpp and ../../../vendor/PVRTDecompress/PVRTDecompress.h
 extern "C" {
-    pub fn touchHLE_decompress_pvrtc(
+    pub fn Podroid_decompress_pvrtc(
         pvrtc_data: *const c_void,
         is_2bit: bool,
         width: u32,

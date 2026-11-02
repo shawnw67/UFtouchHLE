@@ -122,9 +122,7 @@ pub fn CGBitmapContextCreate(
         rgb_stroke_color: (0.0, 0.0, 0.0, 1.0),
         line_width: 1.0,
     };
-    let isa = env
-        .objc
-        .get_known_class("_touchHLE_CGContext", &mut env.mem);
+    let isa = env.objc.get_known_class("_Podroid_CGContext", &mut env.mem);
     env.objc
         .alloc_object(isa, Box::new(host_object), &mut env.mem)
 }

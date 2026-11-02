@@ -47,7 +47,7 @@ for release in json.load(sys.stdin):
         break
 ' "$tag")"
 if [[ -z "$release_json" ]]; then
-    body="$(python3 -c 'import json,sys; print(json.dumps({"tag_name": sys.argv[1], "name": "UFtouchHLE " + sys.argv[1], "draft": True, "body": "Build artifacts for " + sys.argv[1] + ". Release notes are pending review."}))' "$tag")"
+    body="$(python3 -c 'import json,sys; print(json.dumps({"tag_name": sys.argv[1], "name": "Podroid " + sys.argv[1], "draft": True, "body": "Build artifacts for " + sys.argv[1] + ". Release notes are pending review."}))' "$tag")"
     release_json="$(curl -sS -X POST -H "Authorization: Bearer $token" \
         -H "Accept: application/vnd.github+json" -d "$body" "$api/releases")"
 fi

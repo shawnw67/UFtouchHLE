@@ -133,7 +133,7 @@ fn source_type_timer(env: &mut Environment) -> ConstVoidPtr {
 }
 
 fn block_class(env: &mut Environment) -> ConstVoidPtr {
-    let class = env.objc.get_known_class("_touchHLE_NSBlock", &mut env.mem);
+    let class = env.objc.get_known_class("_Podroid_NSBlock", &mut env.mem);
     env.libc_state.dispatch.block_class = class;
     class.cast_void().cast_const()
 }
@@ -146,7 +146,7 @@ pub(crate) fn is_block(env: &Environment, object: id) -> bool {
 
 pub const CLASSES: ClassExports = objc_classes! {
 (env, this, _cmd);
-@implementation _touchHLE_NSBlock: NSObject
+@implementation _Podroid_NSBlock: NSObject
 - (id)copyWithZone:(MutVoidPtr)_zone {
     _Block_copy(env, this.cast_void().cast_const()).cast()
 }

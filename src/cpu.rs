@@ -14,10 +14,10 @@ use crate::abi::GuestFunction;
 use crate::mem::{ConstPtr, GuestUSize, Mem, MutPtr, Ptr, SafeRead, SafeWrite};
 
 // Import functions from C++
-use touchHLE_dynarmic_wrapper::*;
+use Podroid_dynarmic_wrapper::*;
 
 type VAddr = u32;
-pub type CpuContext = touchHLE_DynarmicContext;
+pub type CpuContext = Podroid_DynarmicContext;
 
 /// MHP2G save-analysis: module-level capture logs shared by the read/write
 /// hooks and the dump helper (read hook + write hook are in different fns).
@@ -26,8 +26,8 @@ static MHP2G_WLOG: std::sync::Mutex<Vec<(u32, u32)>> = std::sync::Mutex::new(Vec
 static MHP2G_RLOG_C: std::sync::Mutex<Vec<(u32, u32)>> = std::sync::Mutex::new(Vec::new());
 static MHP2G_WLOG_C: std::sync::Mutex<Vec<(u32, u32)>> = std::sync::Mutex::new(Vec::new());
 
-fn touchHLE_cpu_read_impl<T: SafeRead + Default>(
-    mem: *mut touchHLE_Mem,
+fn Podroid_cpu_read_impl<T: SafeRead + Default>(
+    mem: *mut Podroid_Mem,
     addr: VAddr,
     error: *mut bool,
 ) -> T {
@@ -94,7 +94,7 @@ fn touchHLE_cpu_read_impl<T: SafeRead + Default>(
     value
 }
 
-fn touchHLE_cpu_write_impl<T: SafeWrite>(mem: *mut touchHLE_Mem, addr: VAddr, value: T) -> bool {
+fn Podroid_cpu_write_impl<T: SafeWrite>(mem: *mut Podroid_Mem, addr: VAddr, value: T) -> bool {
     // MHP2G save-analysis hook: trace writes into the inner-cipher output
     // buffer (0x313f6000..0x31561000 + ciphertext staging) and the main
     // save buffer (0x345dae0..0x3560a20). Debug-only instrumentation.
@@ -142,40 +142,40 @@ fn touchHLE_cpu_write_impl<T: SafeWrite>(mem: *mut touchHLE_Mem, addr: VAddr, va
 
 // Export functions for use by C++
 #[no_mangle]
-extern "C" fn touchHLE_cpu_read_u8(mem: *mut touchHLE_Mem, addr: VAddr, error: *mut bool) -> u8 {
-    touchHLE_cpu_read_impl(mem, addr, error)
+extern "C" fn Podroid_cpu_read_u8(mem: *mut Podroid_Mem, addr: VAddr, error: *mut bool) -> u8 {
+    Podroid_cpu_read_impl(mem, addr, error)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_read_u16(mem: *mut touchHLE_Mem, addr: VAddr, error: *mut bool) -> u16 {
-    touchHLE_cpu_read_impl(mem, addr, error)
+extern "C" fn Podroid_cpu_read_u16(mem: *mut Podroid_Mem, addr: VAddr, error: *mut bool) -> u16 {
+    Podroid_cpu_read_impl(mem, addr, error)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_read_u32(mem: *mut touchHLE_Mem, addr: VAddr, error: *mut bool) -> u32 {
-    touchHLE_cpu_read_impl(mem, addr, error)
+extern "C" fn Podroid_cpu_read_u32(mem: *mut Podroid_Mem, addr: VAddr, error: *mut bool) -> u32 {
+    Podroid_cpu_read_impl(mem, addr, error)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_read_u64(mem: *mut touchHLE_Mem, addr: VAddr, error: *mut bool) -> u64 {
-    touchHLE_cpu_read_impl(mem, addr, error)
+extern "C" fn Podroid_cpu_read_u64(mem: *mut Podroid_Mem, addr: VAddr, error: *mut bool) -> u64 {
+    Podroid_cpu_read_impl(mem, addr, error)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_write_u8(mem: *mut touchHLE_Mem, addr: VAddr, value: u8) -> bool {
-    touchHLE_cpu_write_impl(mem, addr, value)
+extern "C" fn Podroid_cpu_write_u8(mem: *mut Podroid_Mem, addr: VAddr, value: u8) -> bool {
+    Podroid_cpu_write_impl(mem, addr, value)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_write_u16(mem: *mut touchHLE_Mem, addr: VAddr, value: u16) -> bool {
-    touchHLE_cpu_write_impl(mem, addr, value)
+extern "C" fn Podroid_cpu_write_u16(mem: *mut Podroid_Mem, addr: VAddr, value: u16) -> bool {
+    Podroid_cpu_write_impl(mem, addr, value)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_write_u32(mem: *mut touchHLE_Mem, addr: VAddr, value: u32) -> bool {
-    touchHLE_cpu_write_impl(mem, addr, value)
+extern "C" fn Podroid_cpu_write_u32(mem: *mut Podroid_Mem, addr: VAddr, value: u32) -> bool {
+    Podroid_cpu_write_impl(mem, addr, value)
 }
 #[no_mangle]
-extern "C" fn touchHLE_cpu_write_u64(mem: *mut touchHLE_Mem, addr: VAddr, value: u64) -> bool {
-    touchHLE_cpu_write_impl(mem, addr, value)
+extern "C" fn Podroid_cpu_write_u64(mem: *mut Podroid_Mem, addr: VAddr, value: u64) -> bool {
+    Podroid_cpu_write_impl(mem, addr, value)
 }
 
 pub struct Cpu {
-    dynarmic_wrapper: *mut touchHLE_DynarmicWrapper,
+    dynarmic_wrapper: *mut Podroid_DynarmicWrapper,
     /// Copy of the direct memory access pointer used to check it has not
     /// changed. If this is null, direct memory access is not in use.
     direct_memory_access_ptr: *const std::ffi::c_void,
@@ -183,7 +183,7 @@ pub struct Cpu {
 
 impl Drop for Cpu {
     fn drop(&mut self) {
-        unsafe { touchHLE_DynarmicWrapper_delete(self.dynarmic_wrapper) }
+        unsafe { Podroid_DynarmicWrapper_delete(self.dynarmic_wrapper) }
     }
 }
 
@@ -246,7 +246,7 @@ impl Cpu {
                 mem.direct_memory_access_ptr()
             });
         let dynarmic_wrapper =
-            unsafe { touchHLE_DynarmicWrapper_new(direct_memory_access_ptr, null_page_count) };
+            unsafe { Podroid_DynarmicWrapper_new(direct_memory_access_ptr, null_page_count) };
         Cpu {
             dynarmic_wrapper,
             direct_memory_access_ptr,
@@ -255,13 +255,13 @@ impl Cpu {
 
     pub fn regs(&self) -> &[u32; 16] {
         unsafe {
-            let ptr = touchHLE_DynarmicWrapper_regs_const(self.dynarmic_wrapper);
+            let ptr = Podroid_DynarmicWrapper_regs_const(self.dynarmic_wrapper);
             &*(ptr as *const [u32; 16])
         }
     }
     pub fn regs_mut(&mut self) -> &mut [u32; 16] {
         unsafe {
-            let ptr = touchHLE_DynarmicWrapper_regs_mut(self.dynarmic_wrapper);
+            let ptr = Podroid_DynarmicWrapper_regs_mut(self.dynarmic_wrapper);
             &mut *(ptr as *mut [u32; 16])
         }
     }
@@ -298,23 +298,23 @@ impl Cpu {
     }
 
     pub fn cpsr(&self) -> u32 {
-        unsafe { touchHLE_DynarmicWrapper_cpsr(self.dynarmic_wrapper) }
+        unsafe { Podroid_DynarmicWrapper_cpsr(self.dynarmic_wrapper) }
     }
     pub fn set_cpsr(&mut self, cpsr: u32) {
-        unsafe { touchHLE_DynarmicWrapper_set_cpsr(self.dynarmic_wrapper, cpsr) }
+        unsafe { Podroid_DynarmicWrapper_set_cpsr(self.dynarmic_wrapper, cpsr) }
     }
     /// The VFP status and control register, e.g. for the rounding mode.
     pub fn fpscr(&self) -> u32 {
-        unsafe { touchHLE_DynarmicWrapper_fpscr(self.dynarmic_wrapper) }
+        unsafe { Podroid_DynarmicWrapper_fpscr(self.dynarmic_wrapper) }
     }
     pub fn set_fpscr(&mut self, fpscr: u32) {
-        unsafe { touchHLE_DynarmicWrapper_set_fpscr(self.dynarmic_wrapper, fpscr) }
+        unsafe { Podroid_DynarmicWrapper_set_fpscr(self.dynarmic_wrapper, fpscr) }
     }
 
     /// Swap the current state of the CPU (registers etc) with the state stored
     /// in the context object.
     pub fn swap_context(&mut self, context: &mut CpuContext) {
-        unsafe { touchHLE_DynarmicWrapper_swap_context(self.dynarmic_wrapper, context) }
+        unsafe { Podroid_DynarmicWrapper_swap_context(self.dynarmic_wrapper, context) }
     }
 
     /// Get PC with the Thumb bit appropriately set.
@@ -350,9 +350,7 @@ impl Cpu {
     /// This is of interest to the dynamic linker, which will sometimes rewrite
     /// code.
     pub fn invalidate_cache_range(&mut self, base: VAddr, size: GuestUSize) {
-        unsafe {
-            touchHLE_DynarmicWrapper_invalidate_cache_range(self.dynarmic_wrapper, base, size)
-        }
+        unsafe { Podroid_DynarmicWrapper_invalidate_cache_range(self.dynarmic_wrapper, base, size) }
     }
 
     /// Start CPU execution.
@@ -373,9 +371,9 @@ impl Cpu {
         }
 
         let res = unsafe {
-            touchHLE_DynarmicWrapper_run_or_step(
+            Podroid_DynarmicWrapper_run_or_step(
                 self.dynarmic_wrapper,
-                mem as *mut Mem as *mut touchHLE_Mem,
+                mem as *mut Mem as *mut Podroid_Mem,
                 ticks,
             )
         };

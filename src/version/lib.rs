@@ -35,7 +35,7 @@ pub fn branding() -> &'static str {
         "PREVIEW"
     } else {
         // Short for "unofficial". Note that the Android package name for
-        // this is org.touchhleuf.android, see android/app/build.gradle.kts
+        // this is org.podroid.android, see android/app/build.gradle.kts
         // and src/paths.rs.
         "UF"
     }

@@ -25,7 +25,7 @@ use crate::gles::gles11_raw as gles11;
 use crate::gles::gles11_raw::types::{GLboolean, GLenum, GLint, GLsizei, GLuint, GLvoid};
 use crate::gles::GLES;
 use crate::mem::{ConstVoidPtr, Mem, Ptr};
-use touchHLE_gl_bindings::gles11::ARRAY_BUFFER;
+use Podroid_gl_bindings::gles11::ARRAY_BUFFER;
 
 /// Texture units whose texture coordinate arrays are tracked. This is the
 /// largest `GL_MAX_TEXTURE_UNITS` of any iPhone OS device.

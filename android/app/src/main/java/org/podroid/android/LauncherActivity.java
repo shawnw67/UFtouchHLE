@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-package org.touchhle.android;
+package org.podroid.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -18,6 +18,7 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Insets;
 import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
@@ -41,6 +42,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.WindowInsets;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.GridView;
@@ -89,7 +91,7 @@ import org.json.JSONObject;
 public class LauncherActivity extends Activity {
     static {
         System.loadLibrary("SDL2");
-        System.loadLibrary("touchHLE");
+        System.loadLibrary("Podroid");
     }
 
     /** See src/android_launcher.rs. */
@@ -98,10 +100,10 @@ public class LauncherActivity extends Activity {
     private static native byte[] nativeVersion();
     private static native byte[] nativeImportPspSave(byte[] file, byte[] sfo, byte[] current);
 
-    private static final String APPS_DIR = "touchHLE_apps";
-    private static final String LOG_FILE = "touchHLE_log.txt";
+    private static final String APPS_DIR = "Podroid_apps";
+    private static final String LOG_FILE = "Podroid_log.txt";
     private static final String[] WALLPAPER_FILES = {
-        "touchHLE_wallpaper.png", "touchHLE_wallpaper.jpg", "touchHLE_wallpaper.jpeg",
+        "Podroid_wallpaper.png", "Podroid_wallpaper.jpg", "Podroid_wallpaper.jpeg",
     };
     private static final int REQUEST_IMPORT = 1;
     private static final int REQUEST_IMPORT_SAVE = 2;
@@ -111,19 +113,23 @@ public class LauncherActivity extends Activity {
     private static final String MHP2G_BUNDLE_ID = "jp.co.capcom.mhp2gjp";
     /// Monster Hunter Freedom Unite, P2G's Western release (same engine).
     private static final String MHFU_BUNDLE_ID = "jp.co.capcom.mhp2gwd";
+    /// The folders (in PSP/SAVEDATA) of the PSP saves that can be imported
+    /// into either game: MHP2G, and Freedom Unite in North America and Europe.
+    private static final String[] PSP_SAVE_FOLDERS = {"ULJM05500", "ULUS10391", "ULES01213"};
     /// Where touchHLE keeps each app's data (see src/paths.rs), in a folder
     /// named after the app's bundle identifier.
-    private static final String SANDBOX_DIR = "touchHLE_sandbox";
+    private static final String SANDBOX_DIR = "Podroid_sandbox";
     /// Saves are backed up here before importing others over them.
-    private static final String SAVE_BACKUPS_DIR = "touchHLE_save_backups";
+    private static final String SAVE_BACKUPS_DIR = "Podroid_save_backups";
     /// Exported saves go here if the system can't ask where to save them.
-    private static final String SAVE_EXPORTS_DIR = "touchHLE_save_exports";
+    private static final String SAVE_EXPORTS_DIR = "Podroid_save_exports";
     /// Added to exported saves, to tell which app they're for.
-    private static final String SAVE_MARKER = "touchHLE_save.txt";
+    private static final String SAVE_MARKER = "Podroid_save.txt";
+    private static final String LEGACY_SAVE_MARKER = "touchHLE_save.txt";
 
     /// The newest release of this fork, checked for updates.
     private static final String LATEST_RELEASE_URL =
-        "https://api.github.com/repos/shawnw67/UFtouchHLE/releases/latest";
+        "https://api.github.com/repos/shawnw67/Podroid/releases/latest";
     private static final String PREFS = "launcher";
     private static final String PREF_CHECK_UPDATES = "checkUpdates";
     private static final String PREF_ONLINE_POSTERS = "onlinePosters";
@@ -371,9 +377,9 @@ public class LauncherActivity extends Activity {
             return;
         }
         final File dir = getPostersDir();
-        final String userAgent = "UFtouchHLE/"
+        final String userAgent = "Podroid/"
             + new String(nativeVersion(), StandardCharsets.UTF_8).trim()
-            + " (https://github.com/shawnw67/UFtouchHLE)";
+            + " (https://github.com/shawnw67/Podroid)";
         new Thread(() -> {
             for (final App app : found) {
                 if (!Posters.shouldFetch(dir, app.bundleId, app.name)) {
@@ -531,10 +537,17 @@ public class LauncherActivity extends Activity {
         root.addView(content, new FrameLayout.LayoutParams(-1, -1));
         final int pad = dp(isLandscape() ? 20 : 16);
         content.setPadding(pad, pad, pad, pad);
-        // Keep clear of display cutouts (e.g. the front camera).
+        // Keep controls clear of display cutouts and visible system bars.
         content.setOnApplyWindowInsetsListener((view, insets) -> {
             int left = 0, top = 0, right = 0, bottom = 0;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Insets safe = insets.getInsets(
+                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                left = safe.left;
+                top = safe.top;
+                right = safe.right;
+                bottom = safe.bottom;
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 DisplayCutout cutout = insets.getDisplayCutout();
                 if (cutout != null) {
                     left = cutout.getSafeInsetLeft();
@@ -1156,6 +1169,8 @@ public class LauncherActivity extends Activity {
         } else if (MHFU_BUNDLE_ID.equals(app.bundleId)) {
             items.add(getString(R.string.menu_p2g_layout));
             actions.add(() -> showP2GViewOptions(app));
+            items.add(getString(R.string.menu_import_psp_save));
+            actions.add(() -> confirmImportPspSave(app));
         }
     }
 
@@ -1163,10 +1178,10 @@ public class LauncherActivity extends Activity {
 
     /// Shortcuts open the launcher with this action, which starts the game
     /// straight away.
-    private static final String ACTION_PLAY = "org.touchhle.android.action.PLAY";
-    private static final String EXTRA_APP_PATH = "org.touchhle.android.APP_PATH";
-    private static final String EXTRA_BUNDLE_ID = "org.touchhle.android.BUNDLE_ID";
-    private static final String EXTRA_APP_NAME = "org.touchhle.android.APP_NAME";
+    private static final String ACTION_PLAY = "org.podroid.android.action.PLAY";
+    private static final String EXTRA_APP_PATH = "org.podroid.android.APP_PATH";
+    private static final String EXTRA_BUNDLE_ID = "org.podroid.android.BUNDLE_ID";
+    private static final String EXTRA_APP_NAME = "org.podroid.android.APP_NAME";
 
     private void addShortcut(App app) {
         Intent play = new Intent(this, LauncherActivity.class)
@@ -1238,7 +1253,7 @@ public class LauncherActivity extends Activity {
             .show();
     }
 
-    private static final String PERFORMANCE_REPORT = "touchHLE_performance_tests.txt";
+    private static final String PERFORMANCE_REPORT = "Podroid_performance_tests.txt";
 
     private void showPerformanceTests(final App app) {
         final String[] modes = {"reference", "low-resolution", "quiet-log", "low-resolution-quiet-log"};
@@ -1659,7 +1674,7 @@ public class LauncherActivity extends Activity {
      * picker (src/environment/app_picker.rs).
      */
     static class QuickOptions {
-        static final String FILE = "touchHLE_quick_options.txt";
+        static final String FILE = "Podroid_quick_options.txt";
         static final String[] ASPECT = {null, "stretch", "fill", "integer"};
         static final String[] FILTER = {"smooth", "sharp", "pixel", "hq"};
         static final String[] ORIENTATION =
@@ -2096,7 +2111,7 @@ public class LauncherActivity extends Activity {
             .show();
     }
 
-    // ---- PSP saves (Monster Hunter Portable 2nd G) ----
+    // ---- PSP saves (Monster Hunter Portable 2nd G, Freedom Unite) ----
 
     private void confirmImportPspSave(final App app) {
         new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
@@ -2134,17 +2149,20 @@ public class LauncherActivity extends Activity {
             .show();
     }
 
-    /// Finds MHP2NDG.BIN and PARAM.SFO in a chosen folder (or in its
-    /// ULJM05500 subfolder, e.g. if PSP/SAVEDATA was chosen) or among chosen
-    /// files. Returns {save, PARAM.SFO or null}.
+    /// Finds MHP2NDG.BIN and PARAM.SFO in a chosen folder (or in one of its
+    /// subfolders named like a PSP save, e.g. if PSP/SAVEDATA was chosen) or
+    /// among chosen files. Returns {save, PARAM.SFO or null}.
     private Uri[] findPspSave(Uri tree, List<Uri> files) {
         Uri[] found = new Uri[2];
         if (tree != null) {
             String folder = DocumentsContract.getTreeDocumentId(tree);
             if (findChild(tree, folder, "MHP2NDG.BIN") == null) {
-                String subfolder = findChild(tree, folder, "ULJM05500");
-                if (subfolder != null) {
-                    folder = subfolder;
+                for (String name : PSP_SAVE_FOLDERS) {
+                    String subfolder = findChild(tree, folder, name);
+                    if (subfolder != null) {
+                        folder = subfolder;
+                        break;
+                    }
                 }
             }
             found[0] = documentUri(tree, findChild(tree, folder, "MHP2NDG.BIN"));
@@ -2283,9 +2301,9 @@ public class LauncherActivity extends Activity {
             try {
                 unzip(uri, staging);
                 File root = saveRoot(staging);
-                zipBundleId = readMarker(new File(staging, SAVE_MARKER));
+                zipBundleId = readSaveMarker(staging);
                 if (zipBundleId == null) {
-                    zipBundleId = readMarker(new File(root, SAVE_MARKER));
+                    zipBundleId = readSaveMarker(root);
                 }
                 if (!hasFiles(root)) {
                     error = getString(R.string.zip_has_no_saves);
@@ -2312,6 +2330,11 @@ public class LauncherActivity extends Activity {
                 }
             });
         }).start();
+    }
+
+    private static String readSaveMarker(File dir) {
+        String marker = readMarker(new File(dir, SAVE_MARKER));
+        return marker != null ? marker : readMarker(new File(dir, LEGACY_SAVE_MARKER));
     }
 
     private void applySave(final File staging, final String bundleId, final String name) {
@@ -2362,7 +2385,7 @@ public class LauncherActivity extends Activity {
     }
 
     /// Where the saves are in an unpacked zip: possibly inside a single folder
-    /// (e.g. a zipped `touchHLE_sandbox/<bundle id>` folder).
+    /// (e.g. a zipped `Podroid_sandbox/<bundle id>` folder).
     private static File saveRoot(File staging) {
         File root = staging;
         while (true) {
@@ -2373,7 +2396,7 @@ public class LauncherActivity extends Activity {
             File onlyDir = null;
             int others = 0;
             for (File child : children) {
-                if (child.getName().equals(SAVE_MARKER)) {
+                if ((child.getName().equals(SAVE_MARKER) || child.getName().equals(LEGACY_SAVE_MARKER))) {
                     continue;
                 }
                 if (child.isDirectory() && onlyDir == null) {
@@ -2402,7 +2425,7 @@ public class LauncherActivity extends Activity {
             || new File(root, "Library").isDirectory();
         for (File child : children) {
             String childName = child.getName();
-            if (childName.equals(SAVE_MARKER)) {
+            if ((childName.equals(SAVE_MARKER) || childName.equals(LEGACY_SAVE_MARKER))) {
                 continue;
             }
             File dest;

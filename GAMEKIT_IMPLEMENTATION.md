@@ -30,10 +30,10 @@
 
 ```sh
 # Host：游戏自己的匹配 API 发起时才创建监听器
-target/release/touchHLE touchHLE_apps/p2g.ipa --allow-network-access \
+target/release/Podroid Podroid_apps/p2g.ipa --allow-network-access \
   --gamekit-host=127.0.0.1:42018 --network-trace
 # Client：使用原有游戏流程发起匹配
-target/release/touchHLE touchHLE_apps/p2g.ipa --allow-network-access \
+target/release/Podroid Podroid_apps/p2g.ipa --allow-network-access \
   --gamekit-join=127.0.0.1:42018 --network-trace
 ```
 
@@ -41,7 +41,7 @@ target/release/touchHLE touchHLE_apps/p2g.ipa --allow-network-access \
 
 必须同时有 `--allow-network-access` 和一个 GameKit 角色；只有其中一个不会打开本适配。未启用时 `GKLocalPlayer.localPlayer` 仍返回 nil，Matchmaker 原有不调度 completion 的占位行为保留；GKSession 等其他模块未改。新增 GKMatch 的发送在无活动匹配时返回真实错误，不会打开网络。
 
-可用选项也能写到应用的 `touchHLE_options.txt` 条目中；不要同时配置 Host 和 join 两种角色，冲突会报错。该后端没有修改 Android 启动器界面。
+可用选项也能写到应用的 `Podroid_options.txt` 条目中；不要同时配置 Host 和 join 两种角色，冲突会报错。该后端没有修改 Android 启动器界面。
 
 | 选项 | 含义 |
 | --- | --- |

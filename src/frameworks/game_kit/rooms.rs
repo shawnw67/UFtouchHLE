@@ -41,7 +41,7 @@ pub(super) struct State {
 }
 
 /// Room name used in automatic mode without `--gamekit-room`.
-const AUTO_ROOM_NAME: &str = "UFtouchHLE";
+const AUTO_ROOM_NAME: &str = "Podroid";
 impl State {
     pub fn start(
         &mut self,

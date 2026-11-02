@@ -136,8 +136,8 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())start {
-    let symb = "__touchHLE_NSThreadInvocationHelper";
-    let hf: HostFunction = &(_touchHLE_NSThreadInvocationHelper as fn(&mut Environment, _) -> _);
+    let symb = "__Podroid_NSThreadInvocationHelper";
+    let hf: HostFunction = &(_Podroid_NSThreadInvocationHelper as fn(&mut Environment, _) -> _);
     let gf = env
         .dyld
         .create_guest_function(&mut env.mem, symb, hf);
@@ -239,10 +239,10 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 type NSThreadRef = CFTypeRef;
 
-pub fn _touchHLE_NSThreadInvocationHelper(env: &mut Environment, ns_thread_obj: NSThreadRef) {
+pub fn _Podroid_NSThreadInvocationHelper(env: &mut Environment, ns_thread_obj: NSThreadRef) {
     let class: Class = msg![env; ns_thread_obj class];
     log_dbg!(
-        "_touchHLE_NSThreadInvocationHelper on object of class: {}",
+        "_Podroid_NSThreadInvocationHelper on object of class: {}",
         env.objc.get_class_name(class)
     );
     let thread_class = env.objc.get_known_class("NSThread", &mut env.mem);

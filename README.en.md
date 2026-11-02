@@ -1,14 +1,14 @@
-# UFtouchHLE
+# Podroid
 
 [简体中文](README.md) | [English](README.en.md)
 
-[![GitHub Release](https://img.shields.io/github/v/release/shawnw67/UFtouchHLE?style=flat&logo=github&color=1f6feb)](https://github.com/shawnw67/UFtouchHLE/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/shawnw67/UFtouchHLE?style=flat&logo=github&color=gold)](https://github.com/shawnw67/UFtouchHLE)
-[![GitHub Issues](https://img.shields.io/github/issues/shawnw67/UFtouchHLE?style=flat&logo=github&color=lightgrey)](https://github.com/shawnw67/UFtouchHLE/issues)
-[![License](https://img.shields.io/github/license/shawnw67/UFtouchHLE?style=flat&logo=github&color=blue)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20macOS%20%7C%20Windows-blue?style=flat)](https://github.com/shawnw67/UFtouchHLE/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/shawnw67/Podroid?style=flat&logo=github&color=1f6feb)](https://github.com/shawnw67/Podroid/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/shawnw67/Podroid?style=flat&logo=github&color=gold)](https://github.com/shawnw67/Podroid)
+[![GitHub Issues](https://img.shields.io/github/issues/shawnw67/Podroid?style=flat&logo=github&color=lightgrey)](https://github.com/shawnw67/Podroid/issues)
+[![License](https://img.shields.io/github/license/shawnw67/Podroid?style=flat&logo=github&color=blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Android-blue?style=flat)](https://github.com/shawnw67/Podroid/releases)
 
-**UFtouchHLE** is an unofficial fork of [touchHLE](https://github.com/touchHLE/touchHLE), a high-level emulator for early iOS apps. This fork adds game-specific compatibility fixes, an Android launcher, save import/export, device profiles, and native controller support.
+**Podroid** is an unofficial fork of [touchHLE](https://github.com/touchHLE/touchHLE), a high-level emulator for early iOS apps. This fork adds game-specific compatibility fixes, an Android launcher, save import/export, device profiles, and native controller support.
 
 Maintained by [shawnw67](https://github.com/shawnw67). This fork includes AI-assisted code and is maintained independently of upstream touchHLE.
 
@@ -22,11 +22,11 @@ Maintained by [shawnw67](https://github.com/shawnw67). This fork includes AI-ass
 - **Expanded P2G view:** Optionally expand the horizontal field of view while keeping touch controls in a central 16:9 area. In the default layout, joystick drags can continue into the letterbox margins.
 - **Audio and lifecycle fixes:** Includes P2G background music looping, fixes for some Vice City sound artifacts, and improvements to quitting and Android background/resume handling.
 
-See the [release notes](https://github.com/shawnw67/UFtouchHLE/releases) for version-specific changes. [CHANGELOG.md](CHANGELOG.md) currently preserves upstream history rather than a complete changelog for this fork.
+See the [release notes](https://github.com/shawnw67/Podroid/releases) for version-specific changes. [CHANGELOG.md](CHANGELOG.md) currently preserves upstream history rather than a complete changelog for this fork.
 
 ## Compatibility
 
-UFtouchHLE runs a game's ARM code and implements the iOS APIs it needs. It does not boot a complete iOS installation.
+Podroid runs a game's ARM code and implements the iOS APIs it needs. It does not boot a complete iOS installation.
 
 Only **32-bit ARM (armv6 / armv7) apps** are supported. Upstream compatibility focuses on the iPhone OS 2–4 era; this fork adds support for selected iOS 5 / 6-era games. That does not mean all apps targeting those OS versions will work.
 
@@ -44,15 +44,9 @@ Different versions, localizations, or modified packages of the same game may beh
 
 ## Download and installation
 
-Download the appropriate package from this repository's [Releases](https://github.com/shawnw67/UFtouchHLE/releases):
+Download the Android ARM64 APK from this repository's [Releases](https://github.com/shawnw67/Podroid/releases). New release files use the name `Podroid_vX.Y.Z_Android_AArch64.apk`; older releases retain the UFtouchHLE name.
 
-| Platform | Package name (v0.3.21 example) |
-| --- | --- |
-| Android ARM64 | `UFtouchHLE_v0.3.21_Android_AArch64.apk` |
-| macOS Intel x86_64 | `UFtouchHLE_v0.3.21_macOS_x86_64.dmg` |
-| Windows x86_64 | `UFtouchHLE_v0.3.21_Windows_x86_64.zip` |
-
-Apple Silicon Macs can run the released x86_64 build through Rosetta, or build an ARM64 version from source. Linux users need to build from source.
+Only Android APKs are currently released. macOS, Windows, and Linux users can build from source.
 
 Games are not included. Supply your own legally obtained, decrypted apps suitable for emulation. Release packages do not contain game IPAs.
 
@@ -65,19 +59,19 @@ The launcher currently uses Chinese labels. The English descriptions below expla
 3. Tap a game to launch it, or long-press it to open its management menu.
 4. Use the gear icon for global settings, or long-press a game to choose its device profile.
 
-The Android package ID is `org.touchhleuf.android`. Its data directory is:
+The Android package ID is `org.podroid.android`. This is a separate installation from the old `org.touchhleuf.android` app. Before removing the old app, export each game save to a shared location, then import the games and saves into Podroid. Settings must be configured again. Its data directory is:
 
 ```text
-/storage/emulated/0/Android/data/org.touchhleuf.android/files/
+/storage/emulated/0/Android/data/org.podroid.android/files/
 ```
 
 Common subdirectories:
 
 ```text
-touchHLE_apps/          Game files
-touchHLE_sandbox/       Game sandboxes and saves
-touchHLE_save_exports/  Saves exported to the app's own directory
-touchHLE_save_backups/  Existing saves backed up before import
+Podroid_apps/          Game files
+Podroid_sandbox/       Game sandboxes and saves
+Podroid_save_exports/  Saves exported to the app's own directory
+Podroid_save_backups/  Existing saves backed up before import
 ```
 
 Recent Android versions may restrict file manager access to `Android/data`. Prefer the launcher's import/export functions. UF uses a different package ID from upstream, so saves need to be transferred separately.
@@ -86,7 +80,7 @@ Recent Android versions may restrict file manager access to `Android/data`. Pref
 
 ### Windows / macOS
 
-Open the app from the release package. Place `.ipa` files or `.app` bundles in `touchHLE_apps` to run them through the built-in app picker. On Windows, extract the entire ZIP and retain the bundled fonts, libraries, and configuration files.
+Open the app from the release package. Place `.ipa` files or `.app` bundles in `Podroid_apps` to run them through the built-in app picker. On Windows, extract the entire ZIP and retain the bundled fonts, libraries, and configuration files.
 
 You can also supply a game path from a terminal:
 
@@ -106,9 +100,9 @@ See [OPTIONS_HELP.txt](OPTIONS_HELP.txt) for options and the [build documentatio
 
 On Android, long-press a game and select **导出存档** (Export saves) to create a ZIP. Import the same game on the destination device, long-press it, select **导入存档** (Import saves), and choose that ZIP.
 
-Existing saves are moved to `touchHLE_save_backups` before import. Use the same game version and Bundle ID where possible; saves from different regions or versions may not be compatible. Save ZIPs do not contain the game itself.
+Existing saves are moved to `Podroid_save_backups` before import. Use the same game version and Bundle ID where possible; saves from different regions or versions may not be compatible. Save ZIPs do not contain the game itself.
 
-On desktop, game data is stored in `touchHLE_sandbox`. Exit the game and back up the original directory before transferring files manually.
+On desktop, game data is stored in `Podroid_sandbox`. Exit the game and back up the original directory before transferring files manually.
 
 ## Device profiles and display settings
 
@@ -126,7 +120,7 @@ Android settings offer **自动** (Automatic) selection or a fixed global profil
 
 These are emulated screen configurations. Actual rendering dimensions may differ, and games that do not support a particular screen use compatible dimensions. Higher resolutions increase rendering cost and cannot add textures that are absent from the IPA.
 
-Game defaults in `touchHLE_default_options.txt` and custom arguments in `touchHLE_options.txt` still apply. The launcher's device profile selection also contributes to the final configuration. Check the `Device:` line in the startup log to confirm the selected device.
+Game defaults in `Podroid_default_options.txt` and custom arguments in `Podroid_options.txt` still apply. The launcher's device profile selection also contributes to the final configuration. Check the `Device:` line in the startup log to confirm the selected device.
 
 For P2G, long-press the game and open **画面与按键布局** (Display and control layout) to select the expanded view. It increases the field of view on wider screens while keeping the touch control area centered. Return to the default layout if you encounter display or input problems.
 
@@ -159,11 +153,11 @@ For other games without native controller input, touch mappings, a virtual curso
 
 ## Reporting problems
 
-Open an issue in [this repository](https://github.com/shawnw67/UFtouchHLE/issues) and include:
+Open an issue in [this repository](https://github.com/shawnw67/Podroid/issues) and include:
 
-- UFtouchHLE version, device model, and OS version.
+- Podroid version, device model, and OS version.
 - Game name, version, Bundle ID, device profile, and display layout.
-- Steps to reproduce and `touchHLE_log.txt`; include `touchHLE_log_previous.txt` if relevant.
+- Steps to reproduce and `Podroid_log.txt`; include `Podroid_log_previous.txt` if relevant.
 - Screenshots for display issues, or the controller model and Bluetooth/USB connection type for input issues.
 
 The Android launcher can display and share logs. Vice City also has performance and audio comparison tools in its long-press menu.
@@ -173,8 +167,8 @@ The Android launcher can display and share logs. Vice City also has performance 
 See [dev-docs/building.md](dev-docs/building.md) for dependencies and complete instructions. Clone this fork with:
 
 ```sh
-git clone --recurse-submodules https://github.com/shawnw67/UFtouchHLE.git
-cd UFtouchHLE
+git clone --recurse-submodules https://github.com/shawnw67/Podroid.git Podroid
+cd Podroid
 ```
 
 Build and test locally on macOS:
@@ -194,7 +188,7 @@ dev-scripts/build-android-uf.sh /path/to/your.keystore
 
 The script prompts for the signing password interactively. Use your own key. Updating an existing installation requires the same package ID and signing certificate.
 
-After all three platform builds for a version tag succeed, CI uploads the `UFtouchHLE_version_platform` packages to a release draft. The maintainer reviews the draft, adds English release notes, and publishes it manually.
+Only Android APKs are currently released. Build and sign locally, upload to a release draft, then review it and add English release notes before publishing.
 
 This fork includes AI-assisted code. Upstream touchHLE does not accept AI-generated code, so do not submit this fork's code upstream as a contribution. Keep fork-specific changes and discussion in this repository.
 
@@ -202,7 +196,7 @@ This fork includes AI-assisted code. Upstream touchHLE does not accept AI-genera
 
 touchHLE © 2023–2026 touchHLE project contributors. This fork retains upstream and dependency copyright and license notices.
 
-touchHLE's own source code is licensed under the **Mozilla Public License 2.0**. Due to dependency license compatibility requirements, distributed binaries are licensed under the **GNU GPL v3 or later**. Bundled libraries and fonts have their own terms; see [touchHLE_dylibs](touchHLE_dylibs/) and [touchHLE_fonts](touchHLE_fonts/). Dependency copyright information is available in the app's settings or through `--copyright`.
+touchHLE's own source code is licensed under the **Mozilla Public License 2.0**. Due to dependency license compatibility requirements, distributed binaries are licensed under the **GNU GPL v3 or later**. Bundled libraries and fonts have their own terms; see [Podroid_dylibs](Podroid_dylibs/) and [Podroid_fonts](Podroid_fonts/). Dependency copyright information is available in the app's settings or through `--copyright`.
 
 Thanks to [upstream touchHLE and its contributors](https://github.com/touchHLE/touchHLE/graphs/contributors), dynarmic, SDL, OpenAL Soft, Symphonia, the Rust ecosystem, all other open-source dependencies, and everyone who helps test the fork and report issues.
 

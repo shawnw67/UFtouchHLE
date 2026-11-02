@@ -25,7 +25,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // CGGradient seems to be a CFType-based type, but in our implementation those
 // are just Objective-C types, so we need a class for it, but its name is not
 // visible anywhere.
-@implementation _touchHLE_CGGradient: NSObject
+@implementation _Podroid_CGGradient: NSObject
 @end
 
 };
@@ -95,7 +95,7 @@ fn create(env: &mut Environment, colors: Vec<Rgba>, locations: ConstPtr<CGFloat>
     stops.sort_by(|a, b| a.0.total_cmp(&b.0));
     let isa = env
         .objc
-        .get_known_class("_touchHLE_CGGradient", &mut env.mem);
+        .get_known_class("_Podroid_CGGradient", &mut env.mem);
     env.objc
         .alloc_object(isa, Box::new(CGGradientHostObject { stops }), &mut env.mem)
 }

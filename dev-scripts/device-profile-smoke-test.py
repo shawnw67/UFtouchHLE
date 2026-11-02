@@ -120,7 +120,7 @@ def build_guest(directory, binary):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--binary", type=Path, default=ROOT / "target/release/touchHLE")
+    parser.add_argument("--binary", type=Path, default=ROOT / "target/release/Podroid")
     parser.add_argument("--output", type=Path, default=ROOT / "target/device-profile-smoke-tests")
     parser.add_argument("--timeout", type=float, default=20)
     args = parser.parse_args()
@@ -134,7 +134,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="device-profile-smoke-") as temporary:
         directory = Path(temporary)
         # Keep all cases on the same executable despite concurrent builds.
-        snapshot = directory / "touchHLE"
+        snapshot = directory / "Podroid"
         shutil.copy2(binary, snapshot)
         digest = hashlib.sha256(snapshot.read_bytes()).hexdigest()
         print("Binary SHA256: " + digest, flush=True)

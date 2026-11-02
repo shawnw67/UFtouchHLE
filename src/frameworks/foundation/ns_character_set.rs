@@ -43,7 +43,7 @@ const CONTROL_CHARACTERS: [char; 99] = [
     '\u{FFF9}', '\u{FFFA}', '\u{FFFB}',
 ];
 
-/// Belongs to _touchHLE_NSCharacterSet
+/// Belongs to _Podroid_NSCharacterSet
 struct CharacterSetHostObject {
     set: HashSet<unichar>,
     inverted: bool,
@@ -57,7 +57,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // NSCharacterSet is an abstract class. A subclass must provide:
 // - (bool)characterIsMember:(unichar)character
 // We can pick whichever subclass we want for the various alloc methods.
-// For the time being, that will always be _touchHLE_NSCharacterSet.
+// For the time being, that will always be _Podroid_NSCharacterSet.
 @implementation NSCharacterSet: NSObject
 
 + (id)allocWithZone:(NSZonePtr)zone {
@@ -65,7 +65,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // allocWithZone: to have the normal behaviour. Unimplemented: call
     // superclass alloc then.
     assert!(this == env.objc.get_known_class("NSCharacterSet", &mut env.mem));
-    msg_class![env; _touchHLE_NSCharacterSet allocWithZone:zone]
+    msg_class![env; _Podroid_NSCharacterSet allocWithZone:zone]
 }
 
 // This doesn't have a corresponding init method for some reason.
@@ -142,14 +142,14 @@ pub const CLASSES: ClassExports = objc_classes! {
     // allocWithZone: to have the normal behaviour. Unimplemented: call
     // superclass alloc then.
     assert!(this == env.objc.get_known_class("NSMutableCharacterSet", &mut env.mem));
-    msg_class![env; _touchHLE_NSMutableCharacterSet allocWithZone:zone]
+    msg_class![env; _Podroid_NSMutableCharacterSet allocWithZone:zone]
 }
 
 @end
 
 // Our private subclass that is the single implementation of NSCharacterSet for
 // the time being.
-@implementation _touchHLE_NSCharacterSet: NSCharacterSet
+@implementation _Podroid_NSCharacterSet: NSCharacterSet
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(CharacterSetHostObject {
@@ -181,7 +181,7 @@ pub const CLASSES: ClassExports = objc_classes! {
         set: old_host_object.set.clone(),
         inverted: !old_host_object.inverted
     });
-    let class = env.objc.get_known_class("_touchHLE_NSCharacterSet", &mut env.mem);
+    let class = env.objc.get_known_class("_Podroid_NSCharacterSet", &mut env.mem);
     env.objc.alloc_object(class, host_object, &mut env.mem)
 }
 
@@ -189,7 +189,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Our private subclass that is the single implementation of
 // NSMutableCharacterSet for the time being.
-@implementation _touchHLE_NSMutableCharacterSet: NSMutableCharacterSet
+@implementation _Podroid_NSMutableCharacterSet: NSMutableCharacterSet
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(CharacterSetHostObject {

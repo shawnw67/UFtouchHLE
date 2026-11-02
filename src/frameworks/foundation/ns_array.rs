@@ -34,7 +34,7 @@ struct ObjectEnumeratorHostObject {
 }
 impl HostObject for ObjectEnumeratorHostObject {}
 
-/// Belongs to _touchHLE_NSArray
+/// Belongs to _Podroid_NSArray
 #[derive(Debug, Default)]
 pub(super) struct ArrayHostObject {
     pub(super) array: Vec<id>,
@@ -94,8 +94,8 @@ pub fn cf_array_copy(env: &mut Environment, array: id, mutable: bool) -> Option<
         .get_host_object(array)
         .and_then(|object| object.as_any().downcast_ref::<CFArrayHostObject>())
         .map(|object| object.callbacks);
-    let plain_immutable: Class = msg_class![env; _touchHLE_NSArray_non_retaining class];
-    let plain_mutable: Class = msg_class![env; _touchHLE_NSMutableArray_non_retaining class];
+    let plain_immutable: Class = msg_class![env; _Podroid_NSArray_non_retaining class];
+    let plain_mutable: Class = msg_class![env; _Podroid_NSMutableArray_non_retaining class];
     let plain: bool = msg![env; array isKindOfClass:plain_immutable];
     let plain = plain || msg![env; array isKindOfClass:plain_mutable];
     if callbacks.is_none() && !plain {
@@ -106,9 +106,9 @@ pub fn cf_array_copy(env: &mut Environment, array: id, mutable: bool) -> Option<
         return Some(cf_array_new_immutable(env, callbacks, values));
     }
     let name = if callbacks.is_some() {
-        "_touchHLE_NSMutableArray_cf_callbacks"
+        "_Podroid_NSMutableArray_cf_callbacks"
     } else {
-        "_touchHLE_NSMutableArray_non_retaining"
+        "_Podroid_NSMutableArray_non_retaining"
     };
     let class = env.objc.get_known_class(name, &mut env.mem);
     let result = if let Some(callbacks) = callbacks {
@@ -147,9 +147,9 @@ pub fn cf_array_new_immutable(
         assert_eq!(callbacks.version, 0);
     }
     let name = if callbacks.is_some() {
-        "_touchHLE_NSArray_cf_callbacks"
+        "_Podroid_NSArray_cf_callbacks"
     } else {
-        "_touchHLE_NSArray_non_retaining"
+        "_Podroid_NSArray_non_retaining"
     };
     let class = env.objc.get_known_class(name, &mut env.mem);
     let array = if let Some(callbacks) = callbacks {
@@ -191,7 +191,7 @@ pub fn cf_array_replace(
         .objc
         .get_host_object(array)
         .is_some_and(|object| object.as_any().is::<CFArrayHostObject>());
-    let plain_class: Class = msg_class![env; _touchHLE_NSMutableArray_non_retaining class];
+    let plain_class: Class = msg_class![env; _Podroid_NSMutableArray_non_retaining class];
     let plain: bool = msg![env; array isKindOfClass:plain_class];
     if !custom && !plain {
         return false;
@@ -226,7 +226,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // - (NSUInteger)count;
 // - (id)objectAtIndex:(NSUInteger)index;
 // We can pick whichever subclass we want for the various alloc methods.
-// For the time being, that will always be _touchHLE_NSArray.
+// For the time being, that will always be _Podroid_NSArray.
 @implementation NSArray: NSObject
 
 
@@ -234,7 +234,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // NSArray might be subclassed by something which needs allocWithZone:
     // to have the normal behaviour. Unimplemented: call superclass alloc then.
     assert!(this == env.objc.get_known_class("NSArray", &mut env.mem));
-    msg_class![env; _touchHLE_NSArray allocWithZone:zone]
+    msg_class![env; _Podroid_NSArray allocWithZone:zone]
 }
 
 + (id)array {
@@ -473,7 +473,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // NSArray might be subclassed by something which needs allocWithZone:
     // to have the normal behaviour. Unimplemented: call superclass alloc then.
     assert!(this == env.objc.get_known_class("NSMutableArray", &mut env.mem));
-    msg_class![env; _touchHLE_NSMutableArray allocWithZone:zone]
+    msg_class![env; _Podroid_NSMutableArray allocWithZone:zone]
 }
 
 + (id)arrayWithCapacity:(NSUInteger)capacity {
@@ -568,7 +568,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Our private subclass that is the single implementation of NSArray for the
 // time being.
-@implementation _touchHLE_NSArray: NSArray
+@implementation _Podroid_NSArray: NSArray
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(ArrayHostObject {
@@ -689,7 +689,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Special variant for use by CFArray with NULL callbacks: objects aren't
 // necessarily Objective-C objects and won't be retained/released.
-@implementation _touchHLE_NSArray_non_retaining: _touchHLE_NSArray
+@implementation _Podroid_NSArray_non_retaining: _Podroid_NSArray
 
 - (id)copyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, false).unwrap() }
 - (id)mutableCopyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, true).unwrap() }
@@ -700,7 +700,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
-@implementation _touchHLE_NSArray_ObjectEnumerator: NSEnumerator
+@implementation _Podroid_NSArray_ObjectEnumerator: NSEnumerator
 
 - (id)nextObject {
     let host_obj = env.objc.borrow_mut::<ObjectEnumeratorHostObject>(this);
@@ -717,7 +717,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Our private subclass that is the single implementation of NSMutableArray for
 // the time being.
-@implementation _touchHLE_NSMutableArray: NSMutableArray
+@implementation _Podroid_NSMutableArray: NSMutableArray
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(ArrayHostObject {
@@ -964,7 +964,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @end
 
 // CFArray callbacks can manage arbitrary guest pointers, not just ObjC ids.
-@implementation _touchHLE_NSArray_cf_callbacks: _touchHLE_NSArray
+@implementation _Podroid_NSArray_cf_callbacks: _Podroid_NSArray
 
 - (id)copyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, false).unwrap() }
 - (id)mutableCopyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, true).unwrap() }
@@ -979,7 +979,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
-@implementation _touchHLE_NSMutableArray_cf_callbacks: _touchHLE_NSMutableArray
+@implementation _Podroid_NSMutableArray_cf_callbacks: _Podroid_NSMutableArray
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let null = GuestFunction::null_ptr();
@@ -1048,7 +1048,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Special variant for use by CFArray with NULL callbacks: objects aren't
 // necessarily Objective-C objects and won't be retained/released.
-@implementation _touchHLE_NSMutableArray_non_retaining: _touchHLE_NSMutableArray
+@implementation _Podroid_NSMutableArray_non_retaining: _Podroid_NSMutableArray
 
 - (id)copyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, false).unwrap() }
 - (id)mutableCopyWithZone:(NSZonePtr)_zone { cf_array_copy(env, this, true).unwrap() }
@@ -1157,7 +1157,7 @@ fn object_enumerator_inner_helper(env: &mut Environment, arr: id, vec: Vec<id>) 
     retain(env, arr);
     let class = env
         .objc
-        .get_known_class("_touchHLE_NSArray_ObjectEnumerator", &mut env.mem);
+        .get_known_class("_Podroid_NSArray_ObjectEnumerator", &mut env.mem);
     let enumerator = env.objc.alloc_object(class, host_object, &mut env.mem);
     autorelease(env, enumerator)
 }
@@ -1175,7 +1175,7 @@ fn mutable_copy_inner(env: &mut Environment, arr: id) -> id {
 fn init_with_coder_inner(env: &mut Environment, arr: id, coder: id) -> id {
     let class: Class = msg![env; coder class];
     let keyed_unarch_class: Class = msg_class![env; NSKeyedUnarchiver class];
-    let nib_archive_class: Class = msg_class![env; _touchHLE_NIBArchiveDecoder class];
+    let nib_archive_class: Class = msg_class![env; _Podroid_NIBArchiveDecoder class];
     // It seems that every NSArray item in an NSKeyedArchiver plist looks like:
     // {
     //   "$class" => (uid of NSArray class goes here),

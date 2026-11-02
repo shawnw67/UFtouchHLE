@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-package org.touchhle.android;
+package org.podroid.android;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -35,13 +35,13 @@ import org.json.JSONObject;
  * one made from the game's iTunesArtwork (the App Store artwork in its IPA)
  * or icon.
  *
- * Downloaded posters are kept in touchHLE_posters, and games without one are
+ * Downloaded posters are kept in Podroid_posters, and games without one are
  * looked up again after a week. Posters are portrait, like box art (3:4).
  */
 final class Posters {
     private Posters() {}
 
-    static final String DIR = "touchHLE_posters";
+    static final String DIR = "Podroid_posters";
     /// Width and height of drawn posters, in the same 3:4 shape as the cards
     /// (and most IGDB covers, so they aren't cropped).
     static final int WIDTH = 450;

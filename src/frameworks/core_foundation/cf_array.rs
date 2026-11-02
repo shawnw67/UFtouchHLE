@@ -71,9 +71,9 @@ fn CFArrayCreateMutable(
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
     assert!(capacity == 0); // TODO: fixed capacity support
     if callbacks.is_null() {
-        msg_class![env; _touchHLE_NSMutableArray_non_retaining new]
+        msg_class![env; _Podroid_NSMutableArray_non_retaining new]
     } else {
-        let array: id = msg_class![env; _touchHLE_NSMutableArray_cf_callbacks alloc];
+        let array: id = msg_class![env; _Podroid_NSMutableArray_cf_callbacks alloc];
         msg![env; array initWithCallbacks:callbacks]
     }
 }
@@ -184,8 +184,8 @@ fn find_values(
     let len: NSUInteger = range.length.try_into().unwrap();
     let count: NSUInteger = msg![env; array count];
     assert!(start <= count && len <= count - start);
-    let immutable: Class = msg_class![env; _touchHLE_NSArray_non_retaining class];
-    let mutable: Class = msg_class![env; _touchHLE_NSMutableArray_non_retaining class];
+    let immutable: Class = msg_class![env; _Podroid_NSArray_non_retaining class];
+    let mutable: Class = msg_class![env; _Podroid_NSMutableArray_non_retaining class];
     let non_retaining: bool = msg![env; array isKindOfClass:immutable];
     let non_retaining = non_retaining || msg![env; array isKindOfClass:mutable];
     let needle: id = value.cast().cast_mut();

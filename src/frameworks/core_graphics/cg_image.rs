@@ -52,7 +52,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 // CGImage seems to be a CFType-based type, but in our implementation those
 // are just Objective-C types, so we need a class for it, but its name is not
 // visible anywhere.
-@implementation _touchHLE_CGImage: NSObject
+@implementation _Podroid_CGImage: NSObject
 @end
 
 };
@@ -80,7 +80,7 @@ pub fn CGImageRetain(env: &mut Environment, c: CGImageRef) -> CGImageRef {
 /// an [Image] instance.
 pub fn from_image(env: &mut Environment, image: Image) -> CGImageRef {
     let host_obj = Box::new(CGImageHostObject { image });
-    let class = env.objc.get_known_class("_touchHLE_CGImage", &mut env.mem);
+    let class = env.objc.get_known_class("_Podroid_CGImage", &mut env.mem);
     env.objc.alloc_object(class, host_obj, &mut env.mem)
 }
 

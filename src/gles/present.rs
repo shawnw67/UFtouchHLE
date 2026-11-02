@@ -74,7 +74,7 @@ impl FpsCounter {
             #[cfg(target_os = "ios")]
             crate::report_host_fps(fps);
             if log_output {
-                echo!("UFtouchHLE: {} FPS: {:.2}", label, fps);
+                echo!("Podroid: {} FPS: {:.2}", label, fps);
             }
             // Update global text cache for on-screen overlay if enabled via
             // environment variable or the runtime flag.

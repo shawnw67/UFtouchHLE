@@ -64,7 +64,7 @@ impl HostObject for CFUUIDHostObject {}
 
 pub const CLASSES: ClassExports = objc_classes! {
 (env, this, _cmd);
-@implementation _touchHLE_CFUUID: NSObject
+@implementation _Podroid_CFUUID: NSObject
 - (bool)isEqual:(id)other {
     equal(env, this, other).unwrap_or(false)
 }
@@ -123,7 +123,7 @@ fn intern(
         }
         return object;
     }
-    let class = env.objc.get_known_class("_touchHLE_CFUUID", &mut env.mem);
+    let class = env.objc.get_known_class("_Podroid_CFUUID", &mut env.mem);
     let object = env
         .objc
         .alloc_object(class, Box::new(CFUUIDHostObject { uuid }), &mut env.mem);

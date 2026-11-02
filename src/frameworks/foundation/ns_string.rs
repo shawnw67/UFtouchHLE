@@ -89,7 +89,7 @@ unsafe impl SafeRead for cfstringStruct {}
 
 type Utf16String = Vec<u16>;
 
-/// Belongs to _touchHLE_NSString.
+/// Belongs to _Podroid_NSString.
 enum StringHostObject {
     Utf8(Cow<'static, str>),
     /// Not necessarily well-formed UTF-16: might contain unpaired surrogates.
@@ -307,14 +307,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 // - (NSUInteger)length;
 // - (unichar)characterAtIndex:(NSUInteger)index;
 // We can pick whichever subclass we want for the various alloc methods.
-// For the time being, that will always be _touchHLE_NSString.
+// For the time being, that will always be _Podroid_NSString.
 @implementation NSString: NSObject
 
 + (id)allocWithZone:(NSZonePtr)zone {
     // NSString might be subclassed by something which needs allocWithZone:
     // to have the normal behaviour. Unimplemented: call superclass alloc then.
     assert!(this == env.objc.get_known_class("NSString", &mut env.mem));
-    msg_class![env; _touchHLE_NSString allocWithZone:zone]
+    msg_class![env; _Podroid_NSString allocWithZone:zone]
 }
 
 + (id)string {
@@ -385,7 +385,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     let res = from_rust_string(env, res);
     let res = autorelease(env, res);
 
-    // This will return _touchHLE_NSString or _touchHLE_NSMutableString
+    // This will return _Podroid_NSString or _Podroid_NSMutableString
     msg![env; this stringWithString:res]
 }
 
@@ -847,7 +847,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // TODO: For a foreign subclass of NSString, do we have to return that
     // subclass? The signature implies this isn't the case and it's probably not
     // worth the effort, but it's an interesting question.
-    let class = env.objc.get_known_class("_touchHLE_NSString", &mut env.mem);
+    let class = env.objc.get_known_class("_Podroid_NSString", &mut env.mem);
 
     let component_ns_strings = components.drain(..).map(|utf16| {
         let host_object = Box::new(StringHostObject::Utf16(utf16));
@@ -930,7 +930,7 @@ pub const CLASSES: ClassExports = objc_classes! {
         }
     });
 
-    let res = msg_class![env; _touchHLE_NSString alloc];
+    let res = msg_class![env; _Podroid_NSString alloc];
     *env.objc.borrow_mut(res) = StringHostObject::Utf16(res_utf16);
     autorelease(env, res)
 }
@@ -944,7 +944,7 @@ pub const CLASSES: ClassExports = objc_classes! {
         }
     });
 
-    let res = msg_class![env; _touchHLE_NSString alloc];
+    let res = msg_class![env; _Podroid_NSString alloc];
     *env.objc.borrow_mut(res) = StringHostObject::Utf16(res_utf16);
     autorelease(env, res)
 }
@@ -1027,7 +1027,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // TODO: For a foreign subclass of NSString, do we have to return that
     // subclass? The signature implies this isn't the case and it's probably not
     // worth the effort, but it's an interesting question.
-    let class = env.objc.get_known_class("_touchHLE_NSString", &mut env.mem);
+    let class = env.objc.get_known_class("_Podroid_NSString", &mut env.mem);
     let host_object = Box::new(StringHostObject::Utf16(new_utf16));
     env.objc.alloc_object(class, host_object, &mut env.mem)
 }
@@ -1333,7 +1333,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // which needs allocWithZone: to have the normal behaviour.
     // Unimplemented: call superclass alloc then.
     assert!(this == env.objc.get_known_class("NSMutableString", &mut env.mem));
-    msg_class![env; _touchHLE_NSMutableString allocWithZone:zone]
+    msg_class![env; _Podroid_NSMutableString allocWithZone:zone]
 }
 
 + (id)stringWithCapacity:(NSUInteger)capacity {
@@ -1407,7 +1407,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Our private subclass that is the single implementation of NSString for the
 // time being.
-@implementation _touchHLE_NSString: NSString
+@implementation _Podroid_NSString: NSString
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(StringHostObject::Utf8(Cow::Borrowed("")));
@@ -1420,7 +1420,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)initWithCoder:(id)coder {
     let class: Class = msg![env; coder class];
     let keyed_unarch_class: Class = msg_class![env; NSKeyedUnarchiver class];
-    let nib_archive_class: Class = msg_class![env; _touchHLE_NIBArchiveDecoder class];
+    let nib_archive_class: Class = msg_class![env; _Podroid_NIBArchiveDecoder class];
     let new_str = if env.objc.class_is_subclass_of(class, keyed_unarch_class) {
         ns_keyed_unarchiver::decode_current_string(env, coder)
     } else if env.objc.class_is_subclass_of(class, nib_archive_class) {
@@ -1673,7 +1673,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 // Specialised subclass for static-lifetime strings.
 // See `get_static_str`.
-@implementation _touchHLE_NSString_Static: _touchHLE_NSString
+@implementation _Podroid_NSString_Static: _Podroid_NSString
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(StringHostObject::Utf8(Cow::Borrowed("")));
@@ -1687,7 +1687,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @end
 
 // Specialised subclasses for static-lifetime strings from the guest app binary.
-@implementation _touchHLE_NSString_CFConstantString_UTF8: _touchHLE_NSString_Static
+@implementation _Podroid_NSString_CFConstantString_UTF8: _Podroid_NSString_Static
 
 - (ConstPtr<u8>)UTF8String {
     let cfstringStruct { bytes, .. } = env.mem.read(this.cast());
@@ -1697,10 +1697,10 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
-@implementation _touchHLE_NSString_CFConstantString_UTF16: _touchHLE_NSString_Static
+@implementation _Podroid_NSString_CFConstantString_UTF16: _Podroid_NSString_Static
 @end
 
-@implementation _touchHLE_NSMutableString: NSMutableString
+@implementation _Podroid_NSMutableString: NSMutableString
 
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(StringHostObject::Utf8(Cow::Borrowed("")));
@@ -1775,7 +1775,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 };
 
 /// This helper is used in `initWithFormat:` on our private subclasses
-/// _touchHLE_NSString and _touchHLE_NSMutableString
+/// _Podroid_NSString and _Podroid_NSMutableString
 fn init_with_format_inner(env: &mut Environment, this: id, format: id, args: VaList) -> id {
     let res = with_format(env, format, args);
     *env.objc.borrow_mut::<StringHostObject>(this) = StringHostObject::Utf8(res.into());
@@ -1783,7 +1783,7 @@ fn init_with_format_inner(env: &mut Environment, this: id, format: id, args: VaL
 }
 
 /// This helper is used in `dataUsingEncoding:allowLossyConversion:` on our
-/// private subclasses _touchHLE_NSString and _touchHLE_NSMutableString
+/// private subclasses _Podroid_NSString and _Podroid_NSMutableString
 fn data_using_encoding_lossy_inner(
     env: &mut Environment,
     this: id,
@@ -1840,7 +1840,7 @@ pub fn register_constant_strings(bin: &MachO, mem: &mut Mem, objc: &mut ObjC) {
 
             (
                 StringHostObject::Utf8(Cow::Owned(String::from(decoded))),
-                "_touchHLE_NSString_CFConstantString_UTF8",
+                "_Podroid_NSString_CFConstantString_UTF8",
             )
         } else if flags == 0x7D0 {
             // UTF16 (length is in code units, not bytes)
@@ -1852,7 +1852,7 @@ pub fn register_constant_strings(bin: &MachO, mem: &mut Mem, objc: &mut ObjC) {
 
             (
                 StringHostObject::Utf16(decoded),
-                "_touchHLE_NSString_CFConstantString_UTF16",
+                "_Podroid_NSString_CFConstantString_UTF16",
             )
         } else {
             panic!("Bad CFTypeID for constant string: {flags:#x}");
@@ -1871,7 +1871,7 @@ pub fn get_static_str(env: &mut Environment, from: &'static str) -> id {
     if let Some(&existing) = State::get(env).static_str_pool.get(from) {
         existing
     } else {
-        let new = msg_class![env; _touchHLE_NSString_Static alloc];
+        let new = msg_class![env; _Podroid_NSString_Static alloc];
         *env.objc.borrow_mut(new) = StringHostObject::Utf8(Cow::Borrowed(from));
         State::get(env).static_str_pool.insert(from, new);
         new
@@ -1881,7 +1881,7 @@ pub fn get_static_str(env: &mut Environment, from: &'static str) -> id {
 /// Shortcut for host code, roughly equivalent to
 /// `[[NSString alloc] initWithUTF8String:]` in the proper API.
 pub fn from_rust_string(env: &mut Environment, from: String) -> id {
-    let string: id = msg_class![env; _touchHLE_NSString alloc];
+    let string: id = msg_class![env; _Podroid_NSString alloc];
     let host_object: &mut StringHostObject = env.objc.borrow_mut(string);
     *host_object = StringHostObject::Utf8(Cow::Owned(from));
     string
@@ -1890,7 +1890,7 @@ pub fn from_rust_string(env: &mut Environment, from: String) -> id {
 /// Shortcut for host code, roughly equivalent to
 /// `[[NSMutableString alloc] initWithUTF8String:]` in the proper API.
 pub fn mutable_from_rust_string(env: &mut Environment, from: String) -> id {
-    let string: id = msg_class![env; _touchHLE_NSMutableString alloc];
+    let string: id = msg_class![env; _Podroid_NSMutableString alloc];
     let host_object: &mut StringHostObject = env.objc.borrow_mut(string);
     *host_object = StringHostObject::Utf8(Cow::Owned(from));
     string
@@ -1898,7 +1898,7 @@ pub fn mutable_from_rust_string(env: &mut Environment, from: String) -> id {
 
 /// Shortcut for host code, allocs and inits with the given u16 vec.
 pub fn from_u16_vec(env: &mut Environment, from: Vec<u16>) -> id {
-    let string: id = msg_class![env; _touchHLE_NSString alloc];
+    let string: id = msg_class![env; _Podroid_NSString alloc];
     let host_object: &mut StringHostObject = env.objc.borrow_mut(string);
     *host_object = StringHostObject::Utf16(from);
     string
@@ -2238,7 +2238,7 @@ fn string_by_replacing_occurrences_inner(
     // TODO: For a foreign subclass of NSString, do we have to return that
     // subclass? The signature implies this isn't the case and it's probably not
     // worth the effort, but it's an interesting question.
-    let result_ns_string = msg_class![env; _touchHLE_NSString alloc];
+    let result_ns_string = msg_class![env; _Podroid_NSString alloc];
     *env.objc.borrow_mut(result_ns_string) = StringHostObject::Utf16(result);
     autorelease(env, result_ns_string)
 }

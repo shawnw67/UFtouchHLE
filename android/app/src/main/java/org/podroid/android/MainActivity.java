@@ -6,7 +6,7 @@
  * Parts of this file are derived from SDL 2's Android project template, which
  * has a different license. Please see vendor/SDL/LICENSE.txt for details.
  */
-package org.touchhle.android;
+package org.podroid.android;
 
 import android.content.Context;
 import android.content.Intent;
@@ -39,9 +39,9 @@ public class MainActivity extends SDLActivity {
      * The command-line arguments for touchHLE (the app path and options),
      * set by LauncherActivity.
      */
-    public static final String EXTRA_ARGS = "org.touchhle.android.ARGS";
+    public static final String EXTRA_ARGS = "org.podroid.android.ARGS";
     /** The game's key in the launcher's library, for counting play time. */
-    public static final String EXTRA_LIBRARY_KEY = "org.touchhle.android.LIBRARY_KEY";
+    public static final String EXTRA_LIBRARY_KEY = "org.podroid.android.LIBRARY_KEY";
 
     /// When the game last came to the foreground, or 0 while it's not there.
     private long resumedAt;
@@ -313,7 +313,7 @@ public class MainActivity extends SDLActivity {
     protected String[] getLibraries() {
         return new String[]{
             "SDL2",
-            "touchHLE"
+            "Podroid"
         };
     }
 }

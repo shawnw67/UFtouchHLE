@@ -9,9 +9,10 @@
 //! Only as much of the MPEG-4 file format as is needed to find the video
 //! frames is parsed here. The audio is decoded with [crate::audio].
 
-use openh264::decoder::{Decoder, DecoderConfig, Flush};
+use openh264::decoder::{DecodedYUV, Decoder, DecoderConfig, Flush};
 use openh264::formats::YUVSource;
 use openh264::OpenH264API;
+use std::collections::VecDeque;
 use std::time::Duration;
 
 /// A decoded video frame.
@@ -53,10 +54,22 @@ pub struct MovieDecoder {
     subtitle_tracks: Vec<(String, Vec<Subtitle>)>,
     width: u32,
     height: u32,
+    /// The samples, in decode order.
     samples: Vec<Sample>,
+    /// The presentation times of the samples, sorted. With B-frames the
+    /// samples are not in presentation order, but the decoder outputs
+    /// pictures in presentation order, so the Nth picture is shown at the Nth
+    /// of these times.
+    presentation_times: Vec<i64>,
     timescale: u32,
     /// The next sample to decode.
     next_sample: usize,
+    /// How many pictures the decoder has output (or failed to) so far.
+    outputs: usize,
+    /// Whether the pictures the decoder was still holding back after the last
+    /// sample have been taken out of it (into `held_back`).
+    flushed: bool,
+    held_back: VecDeque<Frame>,
     /// SPS and PPS NAL units, in Annex B format.
     parameter_sets: Vec<u8>,
     /// Length of the NAL unit length fields in samples.
@@ -280,6 +293,26 @@ fn parse_subtitle_track(file: &[u8], trak: &[u8]) -> Option<(String, Vec<Subtitl
     Some((language, subtitles))
 }
 
+/// The presentation times of `samples`, in order. The samples are in decode
+/// order, which is not presentation order if there are B-frames.
+fn presentation_times(samples: &[Sample]) -> Vec<i64> {
+    let mut times: Vec<i64> = samples.iter().map(|sample| sample.time).collect();
+    times.sort_unstable();
+    times
+}
+
+/// Convert a decoded picture to RGBA.
+fn to_frame(yuv: &DecodedYUV<'_>) -> Frame {
+    let (width, height) = yuv.dimensions();
+    let mut pixels = vec![0u8; width * height * 4];
+    yuv.write_rgba8(&mut pixels);
+    Frame {
+        pixels,
+        width: width as u32,
+        height: height as u32,
+    }
+}
+
 struct VideoTrack {
     width: u32,
     height: u32,
@@ -365,9 +398,10 @@ impl MovieDecoder {
 
         // Flushing after each frame (the default) breaks decoding Main profile
         // streams (e.g. Dead Rising's movies): it makes OpenH264 run out of
-        // pictures for the next frame. Without B-frames (which all iPhone OS
-        // movies seen so far lack), frames are returned as soon as they're
-        // decoded anyway.
+        // pictures for the next frame. Without it, pictures come out in
+        // presentation order, and for streams with B-frames (e.g. Monster
+        // Hunter Freedom Unite's movies) only after some later samples have
+        // been decoded, which decode_next_frame() takes into account.
         let config = DecoderConfig::new().flush_after_decode(Flush::NoFlush);
         let decoder = Decoder::with_api_config(OpenH264API::from_source(), config)
             .map_err(|e| format!("Couldn't create H.264 decoder: {e}"))?;
@@ -377,9 +411,13 @@ impl MovieDecoder {
                 subtitle_tracks,
                 width: track.width,
                 height: track.height,
+                presentation_times: presentation_times(&track.samples),
                 samples: track.samples,
                 timescale: track.timescale,
                 next_sample: 0,
+                outputs: 0,
+                flushed: false,
+                held_back: VecDeque::new(),
                 parameter_sets: track.parameter_sets,
                 nal_length_size: track.nal_length_size,
                 decoder,
@@ -440,56 +478,89 @@ impl MovieDecoder {
     /// When the next frame is due, relative to the start of the movie, or
     /// [None] if there are no more frames.
     pub fn next_frame_time(&self) -> Option<Duration> {
-        let sample = self.samples.get(self.next_sample)?;
+        let time = *self.presentation_times.get(self.outputs)?;
         Some(Duration::from_secs_f64(
-            sample.time.max(0) as f64 / self.timescale as f64,
+            time.max(0) as f64 / self.timescale as f64,
         ))
     }
 
-    /// Decode the next frame. Returns [None] at the end of the movie. A frame
-    /// may not be produced for every sample, so the inner value can be [None].
+    /// Decode the next frame, in presentation order. Returns [None] at the
+    /// end of the movie. A frame may not be produced for every call (e.g. if
+    /// it can't be decoded), so the inner value can be [None].
+    ///
+    /// The samples are in decode order, and with B-frames a picture only
+    /// comes out of the decoder after the samples that follow it in
+    /// presentation order but precede it in decode order have been decoded.
+    /// So this may decode several samples. Every call moves on to the next
+    /// time that [Self::next_frame_time] returns, even if it produces no
+    /// frame.
     pub fn decode_next_frame(&mut self) -> Option<Option<Frame>> {
-        let sample = self.samples.get(self.next_sample)?;
-        let first = self.next_sample == 0;
-        self.next_sample += 1;
-        let data = self.file.get(sample.offset..sample.offset + sample.size)?;
-
-        // Samples have length-prefixed NAL units, but the decoder wants them
-        // with start codes (Annex B format).
-        let mut annex_b = Vec::with_capacity(data.len() + 64);
-        if first {
-            annex_b.extend_from_slice(&self.parameter_sets);
+        if self.outputs >= self.presentation_times.len() {
+            return None;
         }
-        let mut data = data;
-        while data.len() >= self.nal_length_size {
-            let length = data[..self.nal_length_size]
-                .iter()
-                .fold(0usize, |acc, &b| (acc << 8) | b as usize);
-            data = &data[self.nal_length_size..];
-            if length > data.len() {
-                break;
-            }
-            annex_b.extend_from_slice(&[0, 0, 0, 1]);
-            annex_b.extend_from_slice(&data[..length]);
-            data = &data[length..];
-        }
+        loop {
+            let Some(sample) = self.samples.get(self.next_sample) else {
+                return self.next_held_back_frame();
+            };
+            let first = self.next_sample == 0;
+            self.next_sample += 1;
+            let Some(mut data) = self.file.get(sample.offset..sample.offset + sample.size) else {
+                continue;
+            };
 
-        let yuv = match self.decoder.decode(&annex_b) {
-            Ok(Some(yuv)) => yuv,
-            Ok(None) => return Some(None),
-            Err(e) => {
-                log!("Warning: couldn't decode video frame: {}", e);
-                return Some(None);
+            // Samples have length-prefixed NAL units, but the decoder wants
+            // them with start codes (Annex B format).
+            let mut annex_b = Vec::with_capacity(data.len() + 64);
+            if first {
+                annex_b.extend_from_slice(&self.parameter_sets);
             }
-        };
-        let (width, height) = yuv.dimensions();
-        let mut pixels = vec![0u8; width * height * 4];
-        yuv.write_rgba8(&mut pixels);
-        Some(Some(Frame {
-            pixels,
-            width: width as u32,
-            height: height as u32,
-        }))
+            while data.len() >= self.nal_length_size {
+                let length = data[..self.nal_length_size]
+                    .iter()
+                    .fold(0usize, |acc, &b| (acc << 8) | b as usize);
+                data = &data[self.nal_length_size..];
+                if length > data.len() {
+                    break;
+                }
+                annex_b.extend_from_slice(&[0, 0, 0, 1]);
+                annex_b.extend_from_slice(&data[..length]);
+                data = &data[length..];
+            }
+
+            match self.decoder.decode(&annex_b) {
+                Ok(Some(yuv)) => {
+                    self.outputs += 1;
+                    return Some(Some(to_frame(&yuv)));
+                }
+                // The decoder is holding this picture back until it has seen
+                // the ones that come before it in presentation order.
+                Ok(None) => {}
+                Err(e) => {
+                    log!("Warning: couldn't decode video frame: {}", e);
+                    self.outputs += 1;
+                    return Some(None);
+                }
+            }
+        }
+    }
+
+    /// Once all the samples have been decoded, the decoder may still be
+    /// holding back some pictures. This returns them one by one, like
+    /// [Self::decode_next_frame], and [None] when there are none left.
+    fn next_held_back_frame(&mut self) -> Option<Option<Frame>> {
+        if !self.flushed {
+            self.flushed = true;
+            if let Ok(pictures) = self.decoder.flush_remaining() {
+                self.held_back = pictures.iter().map(to_frame).collect();
+            }
+        }
+        if let Some(frame) = self.held_back.pop_front() {
+            self.outputs += 1;
+            Some(Some(frame))
+        } else {
+            self.outputs = self.presentation_times.len();
+            None
+        }
     }
 }
 
@@ -509,6 +580,20 @@ mod tests {
             vec![(&b"abcd"[..], &[1][..]), (&b"efgh"[..], &[2, 3][..])]
         );
         assert_eq!(find_box(&data, b"efgh"), Some(&[2, 3][..]));
+    }
+
+    #[test]
+    fn test_presentation_times() {
+        let sample = |time| Sample {
+            offset: 0,
+            size: 0,
+            time,
+            duration: 1,
+        };
+        // An I-frame, a P-frame and two B-frames between them, in decode
+        // order.
+        let samples = [sample(0), sample(3), sample(1), sample(2)];
+        assert_eq!(presentation_times(&samples), [0, 1, 2, 3]);
     }
 
     /// Decode a movie given with TOUCHHLE_TEST_MOVIE, and save its 100th

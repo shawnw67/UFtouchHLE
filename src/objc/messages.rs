@@ -364,7 +364,7 @@ pub(crate) fn objc_msgSend(env: &mut Environment, receiver: id, selector: SEL) {
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn _touchHLE_objc_msgSend_tolerant(env: &mut Environment, receiver: id, selector: SEL) {
+pub(crate) fn _Podroid_objc_msgSend_tolerant(env: &mut Environment, receiver: id, selector: SEL) {
     objc_msgSend_inner(
         env, receiver, selector, /* super2: */ None, /* tolerate_type_mismatch: */ true,
         /* skip_initialize: */ false,
@@ -373,7 +373,7 @@ pub(crate) fn _touchHLE_objc_msgSend_tolerant(env: &mut Environment, receiver: i
 
 /// Variant of `objc_msgSend` that does not trigger `+initialize`.
 #[allow(non_snake_case)]
-pub(crate) fn _touchHLE_objc_msgSend_no_initialize(
+pub(crate) fn _Podroid_objc_msgSend_no_initialize(
     env: &mut Environment,
     receiver: id,
     selector: SEL,
@@ -406,7 +406,7 @@ pub(super) fn objc_msgSend_stret(
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn _touchHLE_objc_msgSend_stret_tolerant(
+pub(crate) fn _Podroid_objc_msgSend_stret_tolerant(
     env: &mut Environment,
     _stret: MutVoidPtr,
     receiver: id,
@@ -507,10 +507,10 @@ where
     R: GuestRet,
 {
     if R::SIZE_IN_MEM.is_some() {
-        (_touchHLE_objc_msgSend_stret_tolerant as fn(&mut Environment, MutVoidPtr, id, SEL))
+        (_Podroid_objc_msgSend_stret_tolerant as fn(&mut Environment, MutVoidPtr, id, SEL))
             .call_from_host(env, args)
     } else {
-        (_touchHLE_objc_msgSend_tolerant as fn(&mut Environment, id, SEL)).call_from_host(env, args)
+        (_Podroid_objc_msgSend_tolerant as fn(&mut Environment, id, SEL)).call_from_host(env, args)
     }
 }
 
@@ -531,8 +531,7 @@ where
     );
     // Provide type info for dynamic type checking.
     env.objc.message_type_info = Some(<(R, P) as MsgSendSignature>::type_info());
-    (_touchHLE_objc_msgSend_no_initialize as fn(&mut Environment, id, SEL))
-        .call_from_host(env, args)
+    (_Podroid_objc_msgSend_no_initialize as fn(&mut Environment, id, SEL)).call_from_host(env, args)
 }
 
 /// Counterpart of [MsgSendSignature] for [msg_send_super2].

@@ -34,7 +34,7 @@ import subprocess
 import sys
 
 ROOT = os.getcwd()
-TOUCHHLE = os.path.join(ROOT, "target", "release", "touchHLE")
+TOUCHHLE = os.path.join(ROOT, "target", "release", "Podroid")
 OUT = os.path.join(ROOT, "target", "macos-integration-tests")
 STUBS = os.path.join(OUT, "stubs")
 SOURCE = os.path.join(ROOT, "tests", "TestApp_source")
@@ -97,7 +97,7 @@ def tbd(install_name, symbols=(), classes=(), reexports=()):
             "    libraries: [ %s ]" % ", ".join("'%s'" % r for r in reexports),
         ]
     lines += ["exports:", "  - targets: [ armv7-ios ]"]
-    symbols = sorted(set(symbols)) or ["_touchHLE_stub_" + re.sub(r"\W", "_", install_name)]
+    symbols = sorted(set(symbols)) or ["_Podroid_stub_" + re.sub(r"\W", "_", install_name)]
     lines.append("    symbols: [ %s ]" % ", ".join("'%s'" % s for s in symbols))
     if classes:
         lines.append("    objc-classes: [ %s ]" % ", ".join(sorted(set(classes))))
@@ -164,7 +164,7 @@ def make_stubs():
 
     # The bundled libstdc++ has no platform information, which the current
     # linker rejects, so link against a stub of it too.
-    libstdcxx = os.path.join(ROOT, "touchHLE_dylibs", "libstdc++.6.0.9.dylib")
+    libstdcxx = os.path.join(ROOT, "Podroid_dylibs", "libstdc++.6.0.9.dylib")
     exported = run(["nm", "-arch", "armv7", "-gU", libstdcxx]).stdout.split("\n")
     with open(os.path.join(STUBS, "lib", "libstdc++.6.0.9.tbd"), "w") as f:
         f.write(tbd("/usr/lib/libstdc++.6.dylib", [l.split()[-1] for l in exported if l.strip()]))

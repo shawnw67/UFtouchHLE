@@ -11,10 +11,10 @@ if [[ $# == 3 ]]; then
     shift 3
 
     if [[ "x$BRANDING" == "x" ]]; then
-        APP_NAME=UFtouchHLE
+        APP_NAME=Podroid
         ICON_NAME=icon
     else
-        APP_NAME=UFtouchHLE
+        APP_NAME=Podroid
         ICON_NAME="icon_$(echo "$BRANDING" | tr 'A-Z' 'a-z')"
     fi
     rm -rf "$ICON_NAME.icns" "$ICON_NAME.iconset"
@@ -24,17 +24,17 @@ if [[ $# == 3 ]]; then
 
     rm -rf "$APP_NAME.app"
     mkdir -p "$APP_NAME.app"/Contents/MacOS "$APP_NAME.app"/Contents/Resources
-    cp $PATH_TO_BINARY "$APP_NAME.app"/Contents/MacOS/touchHLE
-    cp -r ../touchHLE_dylibs "$APP_NAME.app"/Contents/Resources/
-    cp -r ../touchHLE_fonts "$APP_NAME.app"/Contents/Resources/
-    cp -r ../touchHLE_default_options.txt "$APP_NAME.app"/Contents/Resources/
+    cp $PATH_TO_BINARY "$APP_NAME.app"/Contents/MacOS/Podroid
+    cp -r ../Podroid_dylibs "$APP_NAME.app"/Contents/Resources/
+    cp -r ../Podroid_fonts "$APP_NAME.app"/Contents/Resources/
+    cp -r ../Podroid_default_options.txt "$APP_NAME.app"/Contents/Resources/
     cp "$ICON_NAME.icns" "$APP_NAME.app"/Contents/Resources/
 
     plutil -create xml1 "$APP_NAME.app"/Contents/Info.plist
     plutil -insert CFBundleName -string "$APP_NAME" "$APP_NAME.app"/Contents/Info.plist
     plutil -insert CFBundleDisplayName -string "$APP_NAME" "$APP_NAME.app"/Contents/Info.plist
     plutil -insert CFBundleShortVersionString -string "$VERSION" "$APP_NAME.app"/Contents/Info.plist
-    plutil -insert CFBundleExecutable -string touchHLE "$APP_NAME.app"/Contents/Info.plist
+    plutil -insert CFBundleExecutable -string Podroid "$APP_NAME.app"/Contents/Info.plist
     plutil -insert CFBundleIconFile -string "$ICON_NAME" "$APP_NAME.app"/Contents/Info.plist
 else
     echo "Incorrect usage."

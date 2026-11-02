@@ -8,7 +8,7 @@ Does not launch the app, contact endpoints, extract files, or patch code.
 Static references show presence, not execution or multiplayer criticality.
 Supports little-endian 32-bit Objective-C 2 images, including ARMv7 fat slices.
 Rejects encrypted slices and unsupported relative method lists explicitly.
-Example: python3 dev-scripts/analyze-mhp2g-network.py touchHLE_apps/p2g.ipa
+Example: python3 dev-scripts/analyze-mhp2g-network.py Podroid_apps/p2g.ipa
 """
 
 import argparse

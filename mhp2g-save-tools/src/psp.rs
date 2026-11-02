@@ -31,6 +31,13 @@ use crate::Error;
 pub const MHP2G_JP_KEY: [u8; 16] = [
     0xcd, 0x1f, 0x20, 0x59, 0xae, 0x70, 0xef, 0x68, 0xdc, 0xa2, 0x45, 0x13, 0xb4, 0x5a, 0xdb, 0x0a,
 ];
+/// The game key of Monster Hunter Freedom Unite (ULUS-10391 and ULES-01213,
+/// which share it). It was solved from the file hash in the `PARAM.SFO` of
+/// real saves. Its game layer is the same as MHP2G's, but hashed with the
+/// salt that iOS uses.
+pub const MHFU_KEY: [u8; 16] = [
+    0x4a, 0x1f, 0xf3, 0x59, 0xae, 0xb6, 0xef, 0xf8, 0x1c, 0xa8, 0xcb, 0x23, 0xbc, 0xa5, 0x7b, 0xb3,
+];
 pub const SAVE_FILE_NAME: &str = "MHP2NDG.BIN";
 pub const SFO_FILE_NAME: &str = "PARAM.SFO";
 /// `SAVEDATA_PARAMS[0]` of MHP2G saves: encryption mode 5.
@@ -469,6 +476,18 @@ pub(crate) mod tests {
             let (_, hash2) = encrypt_file(&data, params, &MHP2G_JP_KEY, [0xAC; 16]).unwrap();
             assert_ne!(hash, hash2);
         }
+    }
+
+    #[test]
+    fn freedom_unite_key() {
+        let data: Vec<u8> = (0..1000u32).map(|i| (i * 7) as u8).collect();
+        let (file, hash) = encrypt_file(&data, 0x41, &MHFU_KEY, [0xAB; 16]).unwrap();
+        assert_eq!(decrypt_file(&file, 0x41, &MHFU_KEY).unwrap(), data);
+        // The other game's key gives another file and hash.
+        let (other, other_hash) = encrypt_file(&data, 0x41, &MHP2G_JP_KEY, [0xAB; 16]).unwrap();
+        assert_ne!(file, other);
+        assert_ne!(hash, other_hash);
+        assert_ne!(decrypt_file(&file, 0x41, &MHP2G_JP_KEY).unwrap(), data);
     }
 
     pub fn synthetic_sfo() -> Vec<u8> {

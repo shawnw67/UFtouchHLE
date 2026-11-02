@@ -127,11 +127,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     host_object.transactions.push(transaction);
     host_object.undelivered.push(transaction);
     // Observers are told asynchronously, like on iPhone OS.
-    let sel = env.objc.lookup_selector("_touchHLE_deliverTransactions").unwrap();
+    let sel = env.objc.lookup_selector("_Podroid_deliverTransactions").unwrap();
     () = msg![env; this performSelector:sel withObject:nil afterDelay:0.0f64];
 }
 
-- (())_touchHLE_deliverTransactions {
+- (())_Podroid_deliverTransactions {
     let undelivered = std::mem::take(
         &mut env.objc.borrow_mut::<SKPaymentQueueHostObject>(this).undelivered,
     );

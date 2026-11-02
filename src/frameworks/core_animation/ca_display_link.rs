@@ -40,7 +40,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     // Because timer will pass itself as a second arg in ns_timer:handle_timer,
     // we need to use a re-direction: first fire the timer on the display link,
     // then call the original selector, passing the link as a second argument!
-    let redirect_sel: SEL = env.objc.lookup_selector("_touchHLE_displayLinkTimerDidFire:").unwrap();
+    let redirect_sel: SEL = env.objc.lookup_selector("_Podroid_displayLinkTimerDidFire:").unwrap();
     let ns_timer = msg_class![env; NSTimer timerWithTimeInterval:(1.0/60.0)
                      target:display_link
                    selector:redirect_sel
@@ -88,7 +88,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.dealloc_object(this, &mut env.mem);
 }
 
-- (())_touchHLE_displayLinkTimerDidFire:(id)timer { // NSTimer *
+- (())_Podroid_displayLinkTimerDidFire:(id)timer { // NSTimer *
     let &CADisplayLinkHostObject {
         target,
         selector,

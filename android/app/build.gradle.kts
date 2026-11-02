@@ -16,7 +16,7 @@ plugins {
 
 fun runTouchHLEVersionTool(wantBranding: Boolean): String {
     val output = providers.exec {
-        commandLine("cargo", "run", "--package", "touchHLE_version")
+        commandLine("cargo", "run", "--package", "Podroid_version")
         if (wantBranding) {
             args("--", "--branding")
         }
@@ -41,10 +41,10 @@ android {
     // NDK r28+ links 64-bit ELF LOAD segments aligned to 16 KB by default,
     // which is required on Android devices with a 16 KB page size. Older NDKs
     // (e.g. r25) only produce 4 KB aligned libraries, which the OS refuses to
-    // load. 16 KB alignment for libtouchHLE.so/libSDL2.so is additionally
+    // load. 16 KB alignment for libPodroid.so/libSDL2.so is additionally
     // enforced via the rustflags in .cargo/config.toml.
     ndkVersion = "28.2.13676358"
-    compileSdk = 31
+    compileSdk = 36
     buildFeatures {
         buildConfig = true
     }
@@ -52,21 +52,26 @@ android {
         val branding = getTouchHLEBranding()
         // Must match src/paths.rs.
         if (branding == "UF") {
-            applicationId = "org.touchhleuf.android"
+            applicationId = "org.podroid.android"
         } else {
-            applicationId = "org.touchhle.android"
+            applicationId = "org.podroid.android"
             if (!branding.isEmpty()) {
                 applicationIdSuffix = branding.lowercase()
             }
         }
-        resValue("string", "app_name", "UFtouchHLE")
-        buildConfigField("String", "APP_NAME", "\"UFtouchHLE\"")
-        manifestPlaceholders["icon"] = join("@drawable/icon", "_", branding.lowercase())
-        buildConfigField("int", "APP_ICON", join("R.drawable.icon", "_", branding.lowercase()))
+        resValue("string", "app_name", "Podroid")
+        buildConfigField("String", "APP_NAME", "\"Podroid\"")
+        val icon = if (branding == "UF") "@mipmap/ic_launcher"
+            else join("@drawable/icon", "_", branding.lowercase())
+        manifestPlaceholders["icon"] = icon
+        manifestPlaceholders["roundIcon"] =
+            if (branding == "UF") "@mipmap/ic_launcher_round" else icon
+        buildConfigField("int", "APP_ICON", if (branding == "UF") "R.mipmap.ic_launcher"
+            else join("R.drawable.icon", "_", branding.lowercase()))
         versionName = getTouchHLEVersionName()
 
         minSdk = 29 // Android 10
-        targetSdk = 31
+        targetSdk = 36
         externalNativeBuild {
             ndkBuild {
                 arguments("APP_PLATFORM=android-29")
@@ -172,7 +177,7 @@ android {
     lint {
         abortOnError = false
     }
-    namespace = "org.touchhle.android"
+    namespace = "org.podroid.android"
 }
 
 cargoNdk {
@@ -181,7 +186,7 @@ cargoNdk {
     // Must match minSdk above.
     apiLevel = 29
     module = ".."
-    librariesNames = arrayListOf("libtouchHLE.so", "libSDL2.so", "libc++_shared.so")
+    librariesNames = arrayListOf("libPodroid.so", "libSDL2.so", "libc++_shared.so")
     extraCargoEnv = mapOf(
         "ANDROID_NDK" to android.ndkDirectory.toString(),
         "ANDROID_NDK_HOME" to android.ndkDirectory.toString(),
@@ -224,7 +229,7 @@ cargoNdk {
         "--lib",
         "--no-default-features",
         "--features",
-        "touchHLE_openal_soft_wrapper/static,sdl2/bundled"
+        "Podroid_openal_soft_wrapper/static,sdl2/bundled"
     )
 }
 

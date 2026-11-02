@@ -6,7 +6,7 @@ A list of supported target platforms (platforms you can build touchHLE _for_) ca
 
 Things tend to be easiest when the target and host platforms are the same. When they aren't the same, it's called “cross-compilation”.
 
-These three platforms are [used by our GitHub Actions CI](../.github/workflows/touchHLE_release.yml)
+These three platforms are [used by our GitHub Actions CI](../.github/workflows/Podroid_release.yml)
 
 * Building for x64 Windows on x64 Windows
 * Building for x64 macOS on x64 macOS
@@ -98,6 +98,6 @@ cargo ndk -t arm64-v8a build
 
 ## Other considerations
 
-The `touchHLE_dylibs` and `touchHLE_fonts` directories contain files that the resulting binary will need at runtime, so you'll need to copy them if you want to distribute the result. You also should include the license files.
+The `Podroid_dylibs` and `Podroid_fonts` directories contain files that the resulting binary will need at runtime, so you'll need to copy them if you want to distribute the result. You also should include the license files.
 
 If you're building touchHLE for the purpose of contributing, you might want to generate HTML documentation with `cargo doc --workspace --no-deps --open`. The code has been extensively commented with `cargo doc` in mind.

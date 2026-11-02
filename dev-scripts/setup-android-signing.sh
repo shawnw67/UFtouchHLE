@@ -13,9 +13,9 @@ set -e
 #
 # Usage: dev-scripts/setup-android-signing.sh [owner/repo]
 
-REPO="${1:-shawnw67/UFtouchHLE}"
+REPO="${1:-shawnw67/Podroid}"
 KEYSTORE_DIR="$HOME/Documents/touchHLE-signing"
-KEYSTORE="$KEYSTORE_DIR/touchHLE_UF.keystore"
+KEYSTORE="$KEYSTORE_DIR/Podroid_UF.keystore"
 KEYTOOL="${KEYTOOL:-/opt/homebrew/opt/openjdk@17/bin/keytool}"
 
 if [ -e "$KEYSTORE" ]; then

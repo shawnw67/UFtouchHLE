@@ -9,8 +9,8 @@
 
 fn main() -> Result<(), String> {
     if std::env::args().nth(1).as_deref() == Some("--multiplayer") {
-        touchHLE::lan::run_cli(std::env::args().skip(2))
+        Podroid::lan::run_cli(std::env::args().skip(2))
     } else {
-        touchHLE::main(std::env::args())
+        Podroid::main(std::env::args())
     }
 }

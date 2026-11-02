@@ -310,7 +310,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)initWithCoder:(id)coder {
     let class: Class = msg![env; coder class];
     let keyed_unarch_class: Class = msg_class![env; NSKeyedUnarchiver class];
-    let nib_archive_class: Class = msg_class![env; _touchHLE_NIBArchiveDecoder class];
+    let nib_archive_class: Class = msg_class![env; _Podroid_NIBArchiveDecoder class];
     let new_num = if env.objc.class_is_subclass_of(class, keyed_unarch_class) {
         ns_keyed_unarchiver::decode_current_number(env, coder)
     } else if env.objc.class_is_subclass_of(class, nib_archive_class) {

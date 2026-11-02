@@ -42,9 +42,9 @@ unsafe fn new_byte_array(env: *mut JNIEnv, bytes: &[u8]) -> jbyteArray {
 /// Lists the apps in `apps_dir`. Their icons are written to `icons_dir` as
 /// raw premultiplied RGBA pixels. Returns one line per app, with tab-separated
 /// fields: path, display name, icon file (or empty), icon width, icon height,
-/// bundle identifier (the name of the app's folder in `touchHLE_sandbox`).
+/// bundle identifier (the name of the app's folder in `Podroid_sandbox`).
 #[no_mangle]
-pub unsafe extern "system" fn Java_org_touchhle_android_LauncherActivity_nativeScanApps(
+pub unsafe extern "system" fn Java_org_podroid_android_LauncherActivity_nativeScanApps(
     env: *mut JNIEnv,
     _class: jclass,
     apps_dir: jstring,
@@ -186,7 +186,7 @@ unsafe fn read_asset(manager: *mut c_void, path: &str) -> String {
 /// The copyright, authorship and license information (`--copyright`).
 /// `assets` is the `AssetManager`.
 #[no_mangle]
-pub unsafe extern "system" fn Java_org_touchhle_android_LauncherActivity_nativeCopyrightText(
+pub unsafe extern "system" fn Java_org_podroid_android_LauncherActivity_nativeCopyrightText(
     env: *mut JNIEnv,
     _class: jclass,
     assets: jobject,
@@ -201,7 +201,7 @@ pub unsafe extern "system" fn Java_org_touchhle_android_LauncherActivity_nativeC
 
 /// The version, as shown in the app picker.
 #[no_mangle]
-pub unsafe extern "system" fn Java_org_touchhle_android_LauncherActivity_nativeVersion(
+pub unsafe extern "system" fn Java_org_podroid_android_LauncherActivity_nativeVersion(
     env: *mut JNIEnv,
     _class: jclass,
 ) -> jbyteArray {
@@ -228,7 +228,7 @@ unsafe fn get_byte_array(env: *mut JNIEnv, array: jbyteArray) -> Option<Vec<u8>>
 /// u32, the names of the characters in the save (UTF-8, one per line) and the
 /// new `savedata.dat`. On failure, returns 1 and an error message (UTF-8).
 #[no_mangle]
-pub unsafe extern "system" fn Java_org_touchhle_android_LauncherActivity_nativeImportPspSave(
+pub unsafe extern "system" fn Java_org_podroid_android_LauncherActivity_nativeImportPspSave(
     env: *mut JNIEnv,
     _class: jclass,
     file: jbyteArray,
@@ -259,7 +259,7 @@ pub unsafe extern "system" fn Java_org_touchhle_android_LauncherActivity_nativeI
 /// Request an audio snapshot from the game's UI thread without accessing
 /// emulated state or OpenAL from JNI.
 #[no_mangle]
-pub extern "system" fn Java_org_touchhle_android_MainActivity_nativeMarkAudioNoise(
+pub extern "system" fn Java_org_podroid_android_MainActivity_nativeMarkAudioNoise(
     _env: *mut JNIEnv,
     _this: jobject,
 ) {
