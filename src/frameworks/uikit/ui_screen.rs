@@ -8,7 +8,12 @@
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::NSInteger;
 use crate::frameworks::uikit::ui_geometry::UIEdgeInsets;
-use crate::objc::{id, msg, msg_class, nil, objc_classes, ClassExports, TrivialHostObject, SEL};
+use crate::objc::{
+    autorelease, id, msg, msg_class, nil, objc_classes, ClassExports, HostObject,
+    TrivialHostObject, SEL,
+};
+use crate::window::{DeviceFamily, DeviceOrientation};
+use crate::Environment;
 
 #[derive(Default)]
 pub struct State {
@@ -26,6 +31,67 @@ fn native_bounds(bounds: CGRect, scale: CGFloat) -> CGRect {
             height: bounds.size.height * scale,
         },
     }
+}
+
+const IDIOM_PHONE: NSInteger = 0;
+const IDIOM_PAD: NSInteger = 1;
+const SIZE_COMPACT: NSInteger = 1;
+const SIZE_REGULAR: NSInteger = 2;
+
+#[derive(Default)]
+struct UITraitCollectionHostObject {
+    idiom: NSInteger,
+    horizontal: NSInteger,
+    vertical: NSInteger,
+    scale: CGFloat,
+}
+impl HostObject for UITraitCollectionHostObject {}
+
+fn screen_traits(
+    family: DeviceFamily,
+    landscape: bool,
+    scale: CGFloat,
+) -> (NSInteger, NSInteger, NSInteger, CGFloat) {
+    match family {
+        DeviceFamily::iPad => (IDIOM_PAD, SIZE_REGULAR, SIZE_REGULAR, scale),
+        DeviceFamily::iPhone if landscape => (IDIOM_PHONE, SIZE_COMPACT, SIZE_COMPACT, scale),
+        DeviceFamily::iPhone => (IDIOM_PHONE, SIZE_COMPACT, SIZE_REGULAR, scale),
+    }
+}
+
+fn current_screen_traits(env: &Environment) -> (NSInteger, NSInteger, NSInteger, CGFloat) {
+    if env.window.is_none() {
+        return screen_traits(DeviceFamily::iPhone, false, 1.0);
+    }
+    let window = env.window();
+    let landscape = matches!(
+        window.current_rotation(),
+        DeviceOrientation::LandscapeLeft | DeviceOrientation::LandscapeRight
+    );
+    screen_traits(
+        window.device_family(),
+        landscape,
+        env.options.screen_scale() as CGFloat,
+    )
+}
+
+fn new_trait_collection(
+    env: &mut Environment,
+    traits: (NSInteger, NSInteger, NSInteger, CGFloat),
+) -> id {
+    let (idiom, horizontal, vertical, scale) = traits;
+    let class = env.objc.get_known_class("UITraitCollection", &mut env.mem);
+    let collection = env.objc.alloc_object(
+        class,
+        Box::new(UITraitCollectionHostObject {
+            idiom,
+            horizontal,
+            vertical,
+            scale,
+        }),
+        &mut env.mem,
+    );
+    autorelease(env, collection)
 }
 
 pub const CLASSES: ClassExports = objc_classes! {
@@ -61,6 +127,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)autorelease { this }
 
 // TODO: more accessors
+
+- (id)traitCollection {
+    let traits = current_screen_traits(env);
+    new_trait_collection(env, traits)
+}
 
 - (CGRect)bounds {
     // While Apple's documentation says this changes with the interface
@@ -151,6 +222,42 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
+@implementation UITraitCollection: NSObject
+
++ (id)currentTraitCollection {
+    let traits = current_screen_traits(env);
+    new_trait_collection(env, traits)
+}
+
++ (id)traitCollectionWithUserInterfaceIdiom:(NSInteger)idiom {
+    let (_, _, _, scale) = current_screen_traits(env);
+    let (horizontal, vertical) = if idiom == IDIOM_PAD {
+        (SIZE_REGULAR, SIZE_REGULAR)
+    } else {
+        (SIZE_COMPACT, SIZE_REGULAR)
+    };
+    new_trait_collection(env, (idiom, horizontal, vertical, scale))
+}
+
++ (id)traitCollectionWithHorizontalSizeClass:(NSInteger)horizontal verticalSizeClass:(NSInteger)vertical {
+    let (idiom, _, _, scale) = current_screen_traits(env);
+    new_trait_collection(env, (idiom, horizontal, vertical, scale))
+}
+
++ (id)traitCollectionWithDisplayScale:(CGFloat)scale {
+    let (idiom, horizontal, vertical, _) = current_screen_traits(env);
+    new_trait_collection(env, (idiom, horizontal, vertical, scale))
+}
+
+- (NSInteger)userInterfaceIdiom { env.objc.borrow::<UITraitCollectionHostObject>(this).idiom }
+- (NSInteger)horizontalSizeClass { env.objc.borrow::<UITraitCollectionHostObject>(this).horizontal }
+- (NSInteger)verticalSizeClass { env.objc.borrow::<UITraitCollectionHostObject>(this).vertical }
+- (CGFloat)displayScale { env.objc.borrow::<UITraitCollectionHostObject>(this).scale }
+- (NSInteger)forceTouchCapability { 1 }
+- (NSInteger)layoutDirection { 0 }
+
+@end
+
 @implementation UIScreenMode: NSObject
 
 - (id)retain { this }
@@ -190,5 +297,18 @@ mod tests {
             }
         );
         assert_eq!(native_bounds(bounds, 1.0), bounds);
+    }
+
+    #[test]
+    fn trait_size_classes_follow_device_and_orientation() {
+        assert_eq!(
+            screen_traits(DeviceFamily::iPhone, false, 2.0),
+            (0, 1, 2, 2.0)
+        );
+        assert_eq!(
+            screen_traits(DeviceFamily::iPhone, true, 2.0),
+            (0, 1, 1, 2.0)
+        );
+        assert_eq!(screen_traits(DeviceFamily::iPad, true, 1.0), (1, 2, 2, 1.0));
     }
 }
