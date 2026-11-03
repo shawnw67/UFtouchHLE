@@ -121,6 +121,8 @@ pub fn CGBitmapContextCreate(
         // TODO: is this the correct default?
         rgb_stroke_color: (0.0, 0.0, 0.0, 1.0),
         alpha: 1.0,
+        fill_color_model: super::cg_color_space::kCGColorSpaceModelRGB,
+        stroke_color_model: super::cg_color_space::kCGColorSpaceModelRGB,
         line_width: 1.0,
     };
     let isa = env.objc.get_known_class("_Podroid_CGContext", &mut env.mem);

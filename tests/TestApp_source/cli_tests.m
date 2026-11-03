@@ -79,6 +79,15 @@ extern void CGContextSetStrokeColorWithColor(CGContextRef context,
                                              CGColorRef color);
 extern void CGContextStrokeRect(CGContextRef context, CGRect rect);
 extern void CGContextSetAlpha(CGContextRef context, CGFloat alpha);
+extern CGColorSpaceRef CGColorSpaceCreateDeviceGray(void);
+extern void CGContextSetFillColorSpace(CGContextRef context,
+                                       CGColorSpaceRef space);
+extern void CGContextSetStrokeColorSpace(CGContextRef context,
+                                         CGColorSpaceRef space);
+extern void CGContextSetFillColor(CGContextRef context,
+                                  const CGFloat *components);
+extern void CGContextSetStrokeColor(CGContextRef context,
+                                    const CGFloat *components);
 
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
@@ -410,6 +419,30 @@ int test_CGContext_global_alpha(void) {
                pixels[11] <= 128;
   CGContextRelease(context);
   CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
+}
+
+int test_CGContext_color_components(void) {
+  unsigned char pixels[2 * 4] = {0};
+  CGColorSpaceRef rgb = CGColorSpaceCreateDeviceRGB();
+  CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
+  CGContextRef context = CGBitmapContextCreate(pixels, 2, 1, 8, 2 * 4, rgb,
+                                               kCGImageAlphaPremultipliedLast);
+  CGFloat components[] = {0.5, 1};
+  CGContextSetFillColorSpace(context, gray);
+  CGContextSetStrokeColorSpace(context, gray);
+  CGContextSetStrokeColor(context, components);
+  CGContextSaveGState(context);
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  CGContextRestoreGState(context);
+  CGContextSetFillColor(context, components);
+  CGContextFillRect(context, CGRectMake(0, 0, 2, 1));
+  int passed = pixels[0] > 0 && pixels[0] == pixels[1] &&
+               pixels[1] == pixels[2] && pixels[3] == 255 &&
+               pixels[4] == pixels[0];
+  CGContextRelease(context);
+  CGColorSpaceRelease(gray);
+  CGColorSpaceRelease(rgb);
   return passed ? 0 : -1;
 }
 
@@ -9363,6 +9396,7 @@ struct {
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),
     FUNC_DEF(test_CGContext_global_alpha),
+    FUNC_DEF(test_CGContext_color_components),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),

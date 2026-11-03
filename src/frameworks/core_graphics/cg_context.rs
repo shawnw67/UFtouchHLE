@@ -81,6 +81,8 @@ type ContextState = (
     (CGFloat, CGFloat, CGFloat, CGFloat), // RGB stroke color
     CGFloat,                              // line width
     CGFloat,                              // global alpha
+    i32,                                  // fill color space model
+    i32,                                  // stroke color space model
 );
 
 pub(super) struct CGContextHostObject {
@@ -103,6 +105,8 @@ pub(super) struct CGContextHostObject {
     pub(super) rgb_stroke_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     pub(super) line_width: CGFloat,
     pub(super) alpha: CGFloat,
+    pub(super) fill_color_model: i32,
+    pub(super) stroke_color_model: i32,
 }
 impl HostObject for CGContextHostObject {}
 
@@ -137,12 +141,74 @@ fn CGContextSetAlpha(env: &mut Environment, context: CGContextRef, alpha: CGFloa
 
 fn CGContextSetFillColorSpace(
     env: &mut Environment,
-    _context: CGContextRef,
+    context: CGContextRef,
     space: CGColorSpaceRef,
 ) {
     let color_model = CGColorSpaceGetModel(env, space);
     assert!(color_model == kCGColorSpaceModelMonochrome || color_model == kCGColorSpaceModelRGB);
-    // TODO
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .fill_color_model = color_model;
+}
+
+fn CGContextSetStrokeColorSpace(
+    env: &mut Environment,
+    context: CGContextRef,
+    space: CGColorSpaceRef,
+) {
+    let model = CGColorSpaceGetModel(env, space);
+    assert!(model == kCGColorSpaceModelMonochrome || model == kCGColorSpaceModelRGB);
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .stroke_color_model = model;
+}
+
+fn components_to_rgba(
+    env: &mut Environment,
+    components: ConstPtr<CGFloat>,
+    model: i32,
+) -> (CGFloat, CGFloat, CGFloat, CGFloat) {
+    let first = env.mem.read(components);
+    if model == kCGColorSpaceModelMonochrome {
+        (first, first, first, env.mem.read(components + 1))
+    } else {
+        (
+            first,
+            env.mem.read(components + 1),
+            env.mem.read(components + 2),
+            env.mem.read(components + 3),
+        )
+    }
+}
+
+fn CGContextSetFillColor(
+    env: &mut Environment,
+    context: CGContextRef,
+    components: ConstPtr<CGFloat>,
+) {
+    let model = env
+        .objc
+        .borrow::<CGContextHostObject>(context)
+        .fill_color_model;
+    let color = components_to_rgba(env, components, model);
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .rgb_fill_color = color;
+}
+
+fn CGContextSetStrokeColor(
+    env: &mut Environment,
+    context: CGContextRef,
+    components: ConstPtr<CGFloat>,
+) {
+    let model = env
+        .objc
+        .borrow::<CGContextHostObject>(context)
+        .stroke_color_model;
+    let color = components_to_rgba(env, components, model);
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .rgb_stroke_color = color;
 }
 
 fn CGContextSetFillColorWithColor(env: &mut Environment, context: CGContextRef, color: CGColorRef) {
@@ -168,9 +234,9 @@ pub fn CGContextSetRGBFillColor(
     alpha: CGFloat,
 ) {
     let color = (red, green, blue, alpha);
-    env.objc
-        .borrow_mut::<CGContextHostObject>(context)
-        .rgb_fill_color = color;
+    let host = env.objc.borrow_mut::<CGContextHostObject>(context);
+    host.rgb_fill_color = color;
+    host.fill_color_model = kCGColorSpaceModelRGB;
 }
 
 fn CGContextSetGrayFillColor(
@@ -180,9 +246,9 @@ fn CGContextSetGrayFillColor(
     alpha: CGFloat,
 ) {
     let color = (gray, gray, gray, alpha);
-    env.objc
-        .borrow_mut::<CGContextHostObject>(context)
-        .rgb_fill_color = color;
+    let host = env.objc.borrow_mut::<CGContextHostObject>(context);
+    host.rgb_fill_color = color;
+    host.fill_color_model = kCGColorSpaceModelMonochrome;
 }
 
 fn CGContextSetGrayStrokeColor(
@@ -191,9 +257,9 @@ fn CGContextSetGrayStrokeColor(
     gray: CGFloat,
     alpha: CGFloat,
 ) {
-    env.objc
-        .borrow_mut::<CGContextHostObject>(context)
-        .rgb_stroke_color = (gray, gray, gray, alpha);
+    let host = env.objc.borrow_mut::<CGContextHostObject>(context);
+    host.rgb_stroke_color = (gray, gray, gray, alpha);
+    host.stroke_color_model = kCGColorSpaceModelMonochrome;
 }
 fn CGContextSetRGBStrokeColor(
     env: &mut Environment,
@@ -203,9 +269,9 @@ fn CGContextSetRGBStrokeColor(
     b: CGFloat,
     a: CGFloat,
 ) {
-    env.objc
-        .borrow_mut::<CGContextHostObject>(context)
-        .rgb_stroke_color = (r, g, b, a);
+    let host = env.objc.borrow_mut::<CGContextHostObject>(context);
+    host.rgb_stroke_color = (r, g, b, a);
+    host.stroke_color_model = kCGColorSpaceModelRGB;
 }
 
 fn CGContextSetShadowWithColor(
@@ -308,6 +374,8 @@ fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) {
         host_obj.rgb_stroke_color,
         host_obj.line_width,
         host_obj.alpha,
+        host_obj.fill_color_model,
+        host_obj.stroke_color_model,
     ));
     CGFontRetain(env, env.objc.borrow::<CGContextHostObject>(context).font);
 }
@@ -330,6 +398,8 @@ fn CGContextRestoreGState(env: &mut Environment, context: CGContextRef) {
     host_obj.rgb_stroke_color = state.6;
     host_obj.line_width = state.7;
     host_obj.alpha = state.8;
+    host_obj.fill_color_model = state.9;
+    host_obj.stroke_color_model = state.10;
 }
 
 fn CGContextSetInterpolationQuality(
@@ -994,6 +1064,9 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSetBlendMode(_, _)),
     export_c_func!(CGContextSetAlpha(_, _)),
     export_c_func!(CGContextSetFillColorSpace(_, _)),
+    export_c_func!(CGContextSetStrokeColorSpace(_, _)),
+    export_c_func!(CGContextSetFillColor(_, _)),
+    export_c_func!(CGContextSetStrokeColor(_, _)),
     export_c_func!(CGContextSetFillColorWithColor(_, _)),
     export_c_func!(CGContextSetStrokeColorWithColor(_, _)),
     export_c_func!(CGContextSetRGBFillColor(_, _, _, _, _)),
