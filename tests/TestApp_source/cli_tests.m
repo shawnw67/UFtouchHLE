@@ -94,6 +94,8 @@ extern void CGContextSetStrokeColor(CGContextRef context,
                                     const CGFloat *components);
 typedef const void *TestCTFontRef;
 typedef const void *TestCFReadStreamRef;
+extern TestCFReadStreamRef CFReadStreamCreateWithFile(CFAllocatorRef allocator,
+                                                      CFURLRef url);
 extern TestCFReadStreamRef
 CFReadStreamCreateWithBytesNoCopy(CFAllocatorRef allocator, const UInt8 *bytes,
                                   CFIndex length,
@@ -163,6 +165,26 @@ int test_CFAttributedString_basic(void) {
   passed = passed && CFAttributedStringGetLength(copy) == 5;
   CFRelease(copy);
   CFRelease(text);
+  return passed ? 0 : -1;
+}
+
+int test_CFReadStream_file(void) {
+  CFURLRef bundle = CFBundleCopyBundleURL(CFBundleGetMainBundle());
+  CFStringRef filename =
+      CFStringCreateWithCString(NULL, "Info.plist", kCFStringEncodingUTF8);
+  CFURLRef file =
+      CFURLCreateCopyAppendingPathComponent(NULL, bundle, filename, false);
+  TestCFReadStreamRef stream = CFReadStreamCreateWithFile(NULL, file);
+  UInt8 bytes[16] = {0};
+  int passed = stream && CFReadStreamOpen(stream) &&
+               CFReadStreamRead(stream, bytes, 16) > 0;
+  if (stream) {
+    CFReadStreamClose(stream);
+    CFRelease(stream);
+  }
+  CFRelease(file);
+  CFRelease(filename);
+  CFRelease(bundle);
   return passed ? 0 : -1;
 }
 
@@ -9615,6 +9637,7 @@ struct {
     FUNC_DEF(test_CTFont_graphics_font_round_trip),
     FUNC_DEF(test_CFAttributedString_basic),
     FUNC_DEF(test_CFReadStream_memory),
+    FUNC_DEF(test_CFReadStream_file),
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),

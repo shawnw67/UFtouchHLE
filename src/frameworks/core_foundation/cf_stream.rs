@@ -8,8 +8,10 @@
 use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::{CFIndex, CFTypeRef};
 use crate::dyld::{export_c_func, FunctionExports};
+use crate::frameworks::foundation::ns_string;
+use crate::fs::GuestPath;
 use crate::mem::{ConstPtr, MutPtr};
-use crate::objc::{nil, objc_classes, ClassExports, HostObject};
+use crate::objc::{id, msg, nil, objc_classes, ClassExports, HostObject};
 use crate::Environment;
 
 type CFReadStreamRef = CFTypeRef;
@@ -17,6 +19,7 @@ const NOT_OPEN: i32 = 0;
 const OPEN: i32 = 2;
 const AT_END: i32 = 5;
 const CLOSED: i32 = 6;
+const ERROR: i32 = 7;
 
 struct MemoryReadStream {
     bytes: ConstPtr<u8>,
@@ -24,6 +27,7 @@ struct MemoryReadStream {
     offset: u32,
     owns_bytes: bool,
     status: i32,
+    file_path: Option<String>,
 }
 impl HostObject for MemoryReadStream {}
 
@@ -75,16 +79,73 @@ fn CFReadStreamCreateWithBytesNoCopy(
             offset: 0,
             owns_bytes,
             status: NOT_OPEN,
+            file_path: None,
+        }),
+        &mut env.mem,
+    )
+}
+
+fn CFReadStreamCreateWithFile(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    url: id,
+) -> CFReadStreamRef {
+    if url.is_null()
+        || !(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default())
+    {
+        return nil;
+    }
+    let is_file: bool = msg![env; url isFileURL];
+    if !is_file {
+        return nil;
+    }
+    let path: id = msg![env; url path];
+    if path.is_null() {
+        return nil;
+    }
+    let path = ns_string::to_rust_string(env, path).into_owned();
+    let class = env
+        .objc
+        .get_known_class("_Podroid_CFMemoryReadStream", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(MemoryReadStream {
+            bytes: ConstPtr::null(),
+            length: 0,
+            offset: 0,
+            owns_bytes: false,
+            status: NOT_OPEN,
+            file_path: Some(path),
         }),
         &mut env.mem,
     )
 }
 
 fn CFReadStreamOpen(env: &mut Environment, stream: CFReadStreamRef) -> bool {
-    let host = env.objc.borrow_mut::<MemoryReadStream>(stream);
+    let host = env.objc.borrow::<MemoryReadStream>(stream);
     if host.status != NOT_OPEN {
         return false;
     }
+    let path = host.file_path.clone();
+    if let Some(path) = path {
+        let Ok(data) = env.fs.read(GuestPath::new(&path)) else {
+            env.objc.borrow_mut::<MemoryReadStream>(stream).status = ERROR;
+            return false;
+        };
+        let Ok(length) = u32::try_from(data.len()) else {
+            env.objc.borrow_mut::<MemoryReadStream>(stream).status = ERROR;
+            return false;
+        };
+        if length > 0 {
+            let bytes: MutPtr<u8> = env.mem.alloc(length).cast();
+            env.mem.bytes_at_mut(bytes, length).copy_from_slice(&data);
+            let host = env.objc.borrow_mut::<MemoryReadStream>(stream);
+            host.bytes = bytes.cast_const();
+            host.length = length;
+            host.owns_bytes = true;
+        }
+    }
+    let host = env.objc.borrow_mut::<MemoryReadStream>(stream);
     host.status = OPEN;
     true
 }
@@ -182,6 +243,7 @@ fn CFReadStreamRead(
 
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFReadStreamCreateWithBytesNoCopy(_, _, _, _)),
+    export_c_func!(CFReadStreamCreateWithFile(_, _)),
     export_c_func!(CFReadStreamOpen(_)),
     export_c_func!(CFReadStreamClose(_)),
     export_c_func!(CFReadStreamGetStatus(_)),
