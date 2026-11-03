@@ -537,6 +537,9 @@ pub fn is_supported_audio_format(format: &AudioStreamBasicDescription) -> bool {
             // TODO: support more PCM formats
             (channels_per_frame == 1 || channels_per_frame == 2)
                 && (bits_per_channel == 8 || bits_per_channel == 16 || bits_per_channel == 32)
+                && (bits_per_channel != 32
+                    || format_flags & (kAudioFormatFlagIsFloat | kAudioFormatFlagIsSignedInteger)
+                        != 0)
                 && ((format_flags & kAudioFormatFlagIsPacked) != 0
                     || ((bits_per_channel / 8) * channels_per_frame) == bytes_per_frame)
                 && (format_flags & kAudioFormatFlagIsBigEndian) == 0
@@ -679,21 +682,14 @@ pub fn decode_buffer(
                 (1, 16) => al::AL_FORMAT_MONO16,
                 (2, 8) => al::AL_FORMAT_STEREO8,
                 (2, 16) => al::AL_FORMAT_STEREO16,
-                (2, 32) => {
-                    assert!((format.format_flags & kAudioFormatFlagIsSignedInteger) != 0);
-                    assert!(processed_data.len().is_multiple_of(4));
-                    let new_size = (processed_data.len() / 4) * 2; // size from 32-bit to 16-bit
-                    let mut new_processed_data = Vec::<u8>::with_capacity(new_size);
-                    for chunk in processed_data.chunks(4) {
-                        let val: i32 = i32::from_le_bytes(chunk.try_into().unwrap());
-                        let new_val: i16 = (val >> 16) as i16;
-                        new_processed_data.extend(new_val.to_le_bytes());
-                    }
-                    return (
-                        al::AL_FORMAT_STEREO16,
-                        format.sample_rate as ALsizei,
-                        new_processed_data,
-                    );
+                (channels @ (1 | 2), 32) => {
+                    let data = signed_pcm32_to_i16(&processed_data);
+                    let format_id = if channels == 1 {
+                        al::AL_FORMAT_MONO16
+                    } else {
+                        al::AL_FORMAT_STEREO16
+                    };
+                    return (format_id, format.sample_rate as ALsizei, data);
                 }
                 _ => unreachable!(),
             };
@@ -701,6 +697,14 @@ pub fn decode_buffer(
         }
         _ => unreachable!(),
     }
+}
+
+fn signed_pcm32_to_i16(input: &[u8]) -> Vec<u8> {
+    let mut output = Vec::with_capacity(input.len() / 2);
+    for &sample in input.as_chunks::<4>().0 {
+        output.extend_from_slice(&((i32::from_le_bytes(sample) >> 16) as i16).to_le_bytes());
+    }
+    output
 }
 
 pub(super) fn float_pcm_to_i16(input: &[u8]) -> Vec<u8> {
@@ -731,6 +735,23 @@ fn float_pcm_conversion_handles_clipping_and_nan() {
         .map(|bytes| i16::from_le_bytes(bytes.try_into().unwrap()))
         .collect();
     assert_eq!(samples, [-32767, -16384, 0, 16384, 32767, 0]);
+}
+
+#[cfg(test)]
+#[test]
+fn signed_pcm32_conversion_preserves_sample_sign() {
+    let input: Vec<u8> = [i32::MIN, -65536, 0, 65536, i32::MAX]
+        .into_iter()
+        .flat_map(i32::to_le_bytes)
+        .collect();
+    let converted = signed_pcm32_to_i16(&input);
+    let samples: Vec<i16> = converted
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|bytes| i16::from_le_bytes(*bytes))
+        .collect();
+    assert_eq!(samples, [i16::MIN, -1, 0, 1, i16::MAX]);
 }
 
 /// Guesses whether 16-bit samples are big endian, by which byte order makes
