@@ -717,6 +717,18 @@ int test_CFAttributedString_attributes(void) {
   CFTypeRef found = CFAttributedStringGetAttribute(copy, 2, key, &range);
   int passed = found && CFEqual(found, value) && range.location == 0 &&
                range.length == 5;
+  CFRange limit = CFRangeMake(1, 3);
+  found = CFAttributedStringGetAttributeAndLongestEffectiveRange(copy, 2, key,
+                                                                 limit, &range);
+  passed = passed && found && CFEqual(found, value) && range.location == 1 &&
+           range.length == 3;
+  CFDictionaryRef limited =
+      CFAttributedStringGetAttributesAndLongestEffectiveRange(copy, 3, limit,
+                                                              &range);
+  passed = passed && limited &&
+           CFEqual(CFDictionaryGetValue(limited, key), value) &&
+           range.location == 1 && range.length == 3 &&
+           CFAttributedStringGetTypeID() != 0;
   CFRelease(copy);
   CFRelease(value);
   CFRelease(key);

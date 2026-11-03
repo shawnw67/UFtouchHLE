@@ -12,7 +12,7 @@ use super::{CFIndex, CFRange, CFTypeRef};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::foundation::{NSRange, NSUInteger};
 use crate::mem::MutPtr;
-use crate::objc::{id, msg, msg_class, nil};
+use crate::objc::{id, msg, msg_class, nil, Class};
 use crate::Environment;
 
 pub(crate) type CFAttributedStringRef = CFTypeRef;
@@ -135,6 +135,67 @@ fn CFAttributedStringGetAttribute(
     msg![env; attributes objectForKey:name]
 }
 
+fn limited_range(length: CFIndex, location: CFIndex, limit: CFRange) -> Option<CFRange> {
+    let end = limit.location.checked_add(limit.length)?;
+    if limit.location < 0
+        || limit.length < 0
+        || end > length
+        || location < limit.location
+        || location >= end
+    {
+        return None;
+    }
+    Some(limit)
+}
+
+fn CFAttributedStringGetAttributesAndLongestEffectiveRange(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+    location: CFIndex,
+    limit: CFRange,
+    effective_range: MutPtr<CFRange>,
+) -> CFDictionaryRef {
+    let Some(range) = limited_range(CFAttributedStringGetLength(env, string), location, limit)
+    else {
+        return nil;
+    };
+    let attrs = CFAttributedStringGetAttributes(env, string, location, MutPtr::null());
+    if !effective_range.is_null() {
+        env.mem.write(effective_range, range);
+    }
+    attrs
+}
+
+fn CFAttributedStringGetAttributeAndLongestEffectiveRange(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+    location: CFIndex,
+    name: CFStringRef,
+    limit: CFRange,
+    effective_range: MutPtr<CFRange>,
+) -> CFTypeRef {
+    if name.is_null() {
+        return nil;
+    }
+    let attrs = CFAttributedStringGetAttributesAndLongestEffectiveRange(
+        env,
+        string,
+        location,
+        limit,
+        effective_range,
+    );
+    if attrs.is_null() {
+        nil
+    } else {
+        msg![env; attrs objectForKey:name]
+    }
+}
+
+fn CFAttributedStringGetTypeID(env: &mut Environment) -> u32 {
+    let class: Class = msg_class![env; NSAttributedString class];
+    class.to_bits()
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFAttributedStringCreate(_, _, _)),
     export_c_func!(CFAttributedStringCreateCopy(_, _)),
@@ -143,4 +204,18 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFAttributedStringGetString(_)),
     export_c_func!(CFAttributedStringGetAttributes(_, _, _)),
     export_c_func!(CFAttributedStringGetAttribute(_, _, _, _)),
+    export_c_func!(CFAttributedStringGetAttributesAndLongestEffectiveRange(
+        _,
+        _,
+        _,
+        _
+    )),
+    export_c_func!(CFAttributedStringGetAttributeAndLongestEffectiveRange(
+        _,
+        _,
+        _,
+        _,
+        _
+    )),
+    export_c_func!(CFAttributedStringGetTypeID()),
 ];
