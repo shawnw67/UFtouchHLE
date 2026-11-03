@@ -10902,6 +10902,8 @@ extern int AUGraphOpen(void *);
 extern int AUGraphClose(void *);
 extern int AUGraphInitialize(void *);
 extern int AUGraphUninitialize(void *);
+extern int AUGraphStart(void *);
+extern int AUGraphStop(void *);
 extern int AUGraphIsOpen(void *, unsigned char *);
 extern int AUGraphIsInitialized(void *, unsigned char *);
 extern int AUGraphUpdate(void *, unsigned char *);
@@ -10917,6 +10919,8 @@ typedef int (*TestRenderNotify)(void *, uint32_t *, const void *, uint32_t,
                                 uint32_t, void *);
 extern int AudioUnitAddRenderNotify(void *, TestRenderNotify, void *);
 extern int AudioUnitRemoveRenderNotify(void *, TestRenderNotify, void *);
+extern int AUGraphAddRenderNotify(void *, TestRenderNotify, void *);
+extern int AUGraphRemoveRenderNotify(void *, TestRenderNotify, void *);
 static int test_render_notify(void *context, uint32_t *flags,
                               const void *timestamp, uint32_t bus,
                               uint32_t frames, void *data) {
@@ -11047,10 +11051,34 @@ int test_audio_planar_render_callbacks(void) {
   CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
   if (AudioOutputUnitStop(unit) || AudioComponentInstanceDispose(unit))
     return -2;
-  return state.bad == 0 && state.pre == 1 && state.render == 1 &&
-                 state.post == 1
+  if (state.bad || state.pre != 1 || state.render != 1 || state.post != 1)
+    return -3;
+  const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
+                                                       0x6170706c, 0, 0};
+  void *graph = NULL;
+  int node = 0;
+  state = (struct TestRenderState){0};
+  if (NewAUGraph(&graph) || AUGraphAddNode(graph, &output, &node) ||
+      AUGraphAddRenderNotify(graph, test_audio_render_phase, &state) ||
+      AUGraphOpen(graph) || AUGraphNodeInfo(graph, node, NULL, &unit) ||
+      AudioUnitSetProperty(unit, 8, 1, 0, &format, sizeof(format)) ||
+      AudioUnitSetProperty(unit, 23, 0, 0, &callback, sizeof(callback)) ||
+      AUGraphInitialize(graph) || AUGraphStart(graph) ||
+      nanosleep(&pause, NULL))
+    return -4;
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  if (state.bad || state.pre != 1 || state.render != 1 || state.post != 1 ||
+      AudioUnitAddRenderNotify(unit, test_audio_render_phase, &state) ||
+      AUGraphRemoveRenderNotify(graph, test_audio_render_phase, &state) ||
+      nanosleep(&pause, NULL))
+    return -5;
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  if (AUGraphStop(graph) || DisposeAUGraph(graph))
+    return -6;
+  return state.bad == 0 && state.pre == 2 && state.render == 2 &&
+                 state.post == 2
              ? 0
-             : -3;
+             : -7;
 }
 
 int test_augraph_single_output_lifecycle(void) {
@@ -11063,7 +11091,9 @@ int test_augraph_single_output_lifecycle(void) {
   int output_node = 0, mixer_node = 0;
   uint32_t count = 0;
   unsigned char state = 0;
-  if (NewAUGraph(&graph) || AUGraphAddNode(graph, &output, &output_node) ||
+  if (NewAUGraph(&graph) ||
+      AUGraphAddRenderNotify(graph, test_render_notify, NULL) ||
+      AUGraphAddNode(graph, &output, &output_node) ||
       AUGraphAddNode(graph, &mixer, &mixer_node) ||
       AUGraphCountNodes(graph, &count) || count != 2 ||
       AUGraphConnectNodeInput(graph, mixer_node, 0, output_node, 0) ||
@@ -11073,6 +11103,7 @@ int test_augraph_single_output_lifecycle(void) {
       AUGraphIsOpen(graph, &state) || state != 1 ||
       AUGraphUpdate(graph, &state) || state != 0 ||
       AUGraphNodeInfo(graph, output_node, &returned, &unit) || !unit ||
+      AUGraphRemoveRenderNotify(graph, test_render_notify, NULL) ||
       returned.subtype != output.subtype || AUGraphInitialize(graph) ||
       AUGraphIsInitialized(graph, &state) || state != 1 ||
       AUGraphUninitialize(graph) || AUGraphClose(graph) ||

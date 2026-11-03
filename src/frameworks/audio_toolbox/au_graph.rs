@@ -8,11 +8,12 @@
 use std::collections::{BTreeMap, HashMap};
 
 use super::{audio_components, audio_unit};
+use crate::abi::GuestFunction;
 use crate::dyld::FunctionExports;
 use crate::environment::Environment;
 use crate::export_c_func;
 use crate::frameworks::carbon_core::{paramErr, OSStatus};
-use crate::mem::{ConstPtr, MutPtr, SafeRead};
+use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, SafeRead};
 use audio_unit::AudioUnit;
 
 #[repr(C, packed)]
@@ -49,6 +50,7 @@ struct Graph {
     next_node: AUNode,
     unit: Option<AudioUnit>,
     initialized: bool,
+    render_notifies: Vec<(GuestFunction, ConstVoidPtr)>,
 }
 
 #[derive(Default)]
@@ -306,7 +308,11 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
     {
         return paramErr;
     }
+    let callbacks = state.render_notifies.clone();
     let unit = audio_components::create_audio_unit_instance(env);
+    for (callback, context) in callbacks {
+        audio_unit::add_render_notify(env, unit, callback, context, graph.to_bits());
+    }
     env.framework_state
         .audio_toolbox
         .au_graph
@@ -555,6 +561,67 @@ fn AUGraphUpdate(env: &mut Environment, graph: AUGraph, out_updated: MutPtr<u8>)
     0
 }
 
+fn AUGraphAddRenderNotify(
+    env: &mut Environment,
+    graph: AUGraph,
+    callback: GuestFunction,
+    context: ConstVoidPtr,
+) -> OSStatus {
+    if callback.to_ptr().is_null() {
+        return paramErr;
+    }
+    let Some(state) = env
+        .framework_state
+        .audio_toolbox
+        .au_graph
+        .graphs
+        .get_mut(&graph)
+    else {
+        return paramErr;
+    };
+    let unit = state.unit;
+    if let Some(unit) = unit {
+        let result = audio_unit::add_render_notify(env, unit, callback, context, graph.to_bits());
+        if result != 0 {
+            return result;
+        }
+    }
+    env.framework_state
+        .audio_toolbox
+        .au_graph
+        .graphs
+        .get_mut(&graph)
+        .unwrap()
+        .render_notifies
+        .push((callback, context));
+    0
+}
+
+fn AUGraphRemoveRenderNotify(
+    env: &mut Environment,
+    graph: AUGraph,
+    callback: GuestFunction,
+    context: ConstVoidPtr,
+) -> OSStatus {
+    let Some(state) = env
+        .framework_state
+        .audio_toolbox
+        .au_graph
+        .graphs
+        .get_mut(&graph)
+    else {
+        return paramErr;
+    };
+    state.render_notifies.retain(|(registered, refcon)| {
+        registered.to_ptr() != callback.to_ptr() || *refcon != context
+    });
+    let unit = state.unit;
+    if let Some(unit) = unit {
+        return audio_unit::remove_render_notify(env, unit, callback, context, graph.to_bits());
+    }
+    0
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(NewAUGraph(_)),
     export_c_func!(DisposeAUGraph(_)),
@@ -572,6 +639,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AUGraphIsInitialized(_, _)),
     export_c_func!(AUGraphIsRunning(_, _)),
     export_c_func!(AUGraphUpdate(_, _)),
+    export_c_func!(AUGraphAddRenderNotify(_, _, _)),
+    export_c_func!(AUGraphRemoveRenderNotify(_, _, _)),
     export_c_func!(AUGraphSetNodeInputCallback(_, _, _, _)),
     export_c_func!(AUGraphGetIndNode(_, _, _)),
     export_c_func!(AUGraphConnectNodeInput(_, _, _, _, _)),

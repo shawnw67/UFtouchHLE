@@ -152,11 +152,21 @@ fn AudioUnitRemovePropertyListenerWithUserData(
     remove_property_listener(env, unit, property, callback, Some(context))
 }
 
-fn AudioUnitAddRenderNotify(
+pub(super) fn AudioUnitAddRenderNotify(
     env: &mut Environment,
     unit: AudioUnit,
     callback: GuestFunction,
     context: ConstVoidPtr,
+) -> OSStatus {
+    add_render_notify(env, unit, callback, context, 0)
+}
+
+pub(super) fn add_render_notify(
+    env: &mut Environment,
+    unit: AudioUnit,
+    callback: GuestFunction,
+    context: ConstVoidPtr,
+    owner: u32,
 ) -> OSStatus {
     if callback.to_ptr().is_null() {
         return paramErr;
@@ -167,15 +177,25 @@ fn AudioUnitAddRenderNotify(
     else {
         return paramErr;
     };
-    object.render_notifies.push((callback, context));
+    object.render_notifies.push((callback, context, owner));
     0
 }
 
-fn AudioUnitRemoveRenderNotify(
+pub(super) fn AudioUnitRemoveRenderNotify(
     env: &mut Environment,
     unit: AudioUnit,
     callback: GuestFunction,
     context: ConstVoidPtr,
+) -> OSStatus {
+    remove_render_notify(env, unit, callback, context, 0)
+}
+
+pub(super) fn remove_render_notify(
+    env: &mut Environment,
+    unit: AudioUnit,
+    callback: GuestFunction,
+    context: ConstVoidPtr,
+    owner: u32,
 ) -> OSStatus {
     let Some(object) = audio_components::State::get(&mut env.framework_state)
         .audio_component_instances
@@ -183,9 +203,13 @@ fn AudioUnitRemoveRenderNotify(
     else {
         return paramErr;
     };
-    object.render_notifies.retain(|(registered, refcon)| {
-        registered.to_ptr() != callback.to_ptr() || *refcon != context
-    });
+    object
+        .render_notifies
+        .retain(|(registered, refcon, registration_owner)| {
+            registered.to_ptr() != callback.to_ptr()
+                || *refcon != context
+                || *registration_owner != owner
+        });
     0
 }
 
@@ -984,7 +1008,7 @@ fn call_render_notifies(env: &mut Environment, call: &RenderNotification, phase:
         .get(&call.unit)
         .map(|unit| unit.render_notifies.clone())
         .unwrap_or_default();
-    for (callback, context) in callbacks {
+    for (callback, context, _) in callbacks {
         if !render_is_active(env, call) {
             break;
         }
