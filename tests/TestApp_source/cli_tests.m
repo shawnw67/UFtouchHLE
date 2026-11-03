@@ -59,6 +59,18 @@ extern kern_return_t thread_info(mach_port_t target_act, natural_t flavor,
 extern void OSSpinLockLock(volatile int *lock);
 extern void OSSpinLockUnlock(volatile int *lock);
 extern bool OSSpinLockTry(volatile int *lock);
+extern const void *dispatch_get_main_queue(void);
+extern void dispatch_async_f(const void *queue, void *context,
+                             void (*fn)(void *));
+extern void dispatch_sync_f(const void *queue, void *context,
+                            void (*fn)(void *));
+extern void dispatch_after_f(unsigned long long time, const void *queue,
+                             void *context, void (*fn)(void *));
+extern void dispatch_once_f(int *predicate, void *context, void (*fn)(void *));
+extern void dispatch_apply_f(unsigned int count, const void *queue,
+                             void *context, void (*fn)(void *, unsigned int));
+extern void *dispatch_semaphore_create(int value);
+extern int dispatch_semaphore_wait(void *semaphore, unsigned long long timeout);
 struct TestSplitComplex {
   float *realp;
   float *imagp;
@@ -6442,6 +6454,26 @@ int test_CGImage_bitmap_data(void) {
   return passed ? 0 : -1;
 }
 
+static void test_dispatch_add_one(void *context) { *(int *)context += 1; }
+static void test_dispatch_add_index(void *context, unsigned int index) {
+  *(int *)context += index;
+}
+int test_dispatch_function_calls(void) {
+  const void *queue = dispatch_get_main_queue();
+  int value = 0, once = 0;
+  dispatch_sync_f(queue, &value, test_dispatch_add_one);
+  dispatch_once_f(&once, &value, test_dispatch_add_one);
+  dispatch_once_f(&once, &value, test_dispatch_add_one);
+  dispatch_apply_f(4, queue, &value, test_dispatch_add_index);
+  dispatch_async_f(queue, &value, test_dispatch_add_one);
+  dispatch_after_f(0, queue, &value, test_dispatch_add_one);
+  if (value != 8)
+    return -1;
+  void *semaphore = dispatch_semaphore_create(0);
+  dispatch_semaphore_wait(semaphore, 0); // Drains the main dispatch queue.
+  return value == 10 ? 0 : -2;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10715,6 +10747,7 @@ struct {
     FUNC_DEF(test_CGImage_transform_helpers),
     FUNC_DEF(test_CGImage_packed_mask),
     FUNC_DEF(test_CGImage_bitmap_data),
+    FUNC_DEF(test_dispatch_function_calls),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),

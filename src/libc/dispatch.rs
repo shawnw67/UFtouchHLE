@@ -38,9 +38,9 @@ pub struct State {
     main_queue: MutVoidPtr,
     global_queue: MutVoidPtr,
     source_type_timer: MutVoidPtr,
-    pending: VecDeque<MutVoidPtr>,
+    pending: VecDeque<DispatchWork>,
     /// Blocks from `dispatch_after`, and when to run them.
-    delayed: Vec<(Instant, MutVoidPtr)>,
+    delayed: Vec<(Instant, DispatchWork)>,
     /// Host state for dispatch objects other than queues.
     objects: HashMap<MutVoidPtr, DispatchObject>,
     /// Reference point for `dispatch_time_t` values.
@@ -49,6 +49,14 @@ pub struct State {
     /// Heap-promoted __block cells: one stack owner plus each copied Block.
     byrefs: HashMap<MutVoidPtr, u32>,
     draining: bool,
+}
+
+enum DispatchWork {
+    Block(MutVoidPtr),
+    Function {
+        context: MutVoidPtr,
+        function: GuestFunction,
+    },
 }
 
 enum DispatchObject {
@@ -311,9 +319,115 @@ fn dispatch_get_global_queue(env: &mut Environment, _identifier: i32, _flags: u3
     env.libc_state.dispatch.global_queue.cast_const()
 }
 
+fn dispatch_get_main_queue(env: &mut Environment) -> ConstVoidPtr {
+    main_queue(env)
+}
+
+fn dispatch_async_f(
+    env: &mut Environment,
+    _queue: ConstVoidPtr,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    env.libc_state
+        .dispatch
+        .pending
+        .push_back(DispatchWork::Function { context, function });
+}
+fn dispatch_sync_f(
+    env: &mut Environment,
+    _queue: ConstVoidPtr,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    let _: () = function.call_from_host(env, (context,));
+}
+fn dispatch_after_f(
+    env: &mut Environment,
+    when: dispatch_time_t,
+    _queue: ConstVoidPtr,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    if let Some(when) = time_to_instant(env, when) {
+        env.libc_state
+            .dispatch
+            .delayed
+            .push((when, DispatchWork::Function { context, function }));
+    }
+}
+fn dispatch_once_f(
+    env: &mut Environment,
+    predicate: MutPtr<i32>,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    if env.mem.read(predicate) == !0 {
+        return;
+    }
+    env.mem.write(predicate, !0);
+    let _: () = function.call_from_host(env, (context,));
+}
+fn dispatch_apply_f(
+    env: &mut Environment,
+    iterations: u32,
+    _queue: ConstVoidPtr,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    for index in 0..iterations {
+        let _: () = function.call_from_host(env, (context, index));
+    }
+}
+fn dispatch_apply(
+    env: &mut Environment,
+    iterations: u32,
+    _queue: ConstVoidPtr,
+    block: ConstVoidPtr,
+) {
+    let function = block_invoke_function(env, block);
+    for index in 0..iterations {
+        let _: () = function.call_from_host(env, (block, index));
+    }
+}
+fn dispatch_group_async_f(
+    env: &mut Environment,
+    _group: MutVoidPtr,
+    queue: ConstVoidPtr,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    dispatch_sync_f(env, queue, context, function);
+}
+fn dispatch_barrier_async(env: &mut Environment, queue: ConstVoidPtr, block: ConstVoidPtr) {
+    dispatch_async(env, queue, block);
+}
+fn dispatch_barrier_sync(env: &mut Environment, queue: ConstVoidPtr, block: ConstVoidPtr) {
+    dispatch_sync(env, queue, block);
+}
+fn dispatch_barrier_async_f(
+    env: &mut Environment,
+    queue: ConstVoidPtr,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    dispatch_async_f(env, queue, context, function);
+}
+fn dispatch_barrier_sync_f(
+    env: &mut Environment,
+    queue: ConstVoidPtr,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    dispatch_sync_f(env, queue, context, function);
+}
+
 fn dispatch_async(env: &mut Environment, _queue: ConstVoidPtr, block: ConstVoidPtr) {
     let block = _Block_copy(env, block);
-    env.libc_state.dispatch.pending.push_back(block);
+    env.libc_state
+        .dispatch
+        .pending
+        .push_back(DispatchWork::Block(block));
     crate::network_trace::scheduled(env, block.to_bits(), "dispatch_async");
 }
 
@@ -331,7 +445,10 @@ fn dispatch_after(
         return;
     };
     let block = _Block_copy(env, block);
-    env.libc_state.dispatch.delayed.push((when, block));
+    env.libc_state
+        .dispatch
+        .delayed
+        .push((when, DispatchWork::Block(block)));
     crate::network_trace::scheduled(env, block.to_bits(), "dispatch_after");
 }
 
@@ -482,7 +599,10 @@ fn dispatch_source_cancel(env: &mut Environment, source: MutVoidPtr) {
     timer.cancelled = true;
     let cancel_handler = std::mem::take(&mut timer.cancel_handler);
     if !cancel_handler.is_null() {
-        env.libc_state.dispatch.pending.push_back(cancel_handler);
+        env.libc_state
+            .dispatch
+            .pending
+            .push_back(DispatchWork::Block(cancel_handler));
     }
 }
 
@@ -544,7 +664,10 @@ fn queue_due_work(env: &mut Environment) {
     }
     for handler in handlers {
         let handler = _Block_copy(env, handler.cast_const());
-        env.libc_state.dispatch.pending.push_back(handler);
+        env.libc_state
+            .dispatch
+            .pending
+            .push_back(DispatchWork::Block(handler));
     }
 }
 
@@ -560,13 +683,20 @@ pub fn drain_main_queue(env: &mut Environment) {
     crate::frameworks::foundation::ns_url_connection::pump(env);
     queue_due_work(env);
     let pending = std::mem::take(&mut env.libc_state.dispatch.pending);
-    for block in pending {
-        let invoke =
-            GuestFunction::from_addr_with_thumb_bit(block_word(env, block.cast_const(), 3));
-        let trace = crate::network_trace::callback_begin(env, block.to_bits());
-        let _: () = invoke.call_from_host(env, (block,));
-        crate::network_trace::end(env, trace);
-        _Block_release(env, block);
+    for work in pending {
+        match work {
+            DispatchWork::Block(block) => {
+                let invoke =
+                    GuestFunction::from_addr_with_thumb_bit(block_word(env, block.cast_const(), 3));
+                let trace = crate::network_trace::callback_begin(env, block.to_bits());
+                let _: () = invoke.call_from_host(env, (block,));
+                crate::network_trace::end(env, trace);
+                _Block_release(env, block);
+            }
+            DispatchWork::Function { context, function } => {
+                let _: () = function.call_from_host(env, (context,));
+            }
+        }
     }
     env.libc_state.dispatch.draining = false;
 }
@@ -582,6 +712,18 @@ pub const CONSTANTS: ConstantExports = &[
     ),
 ];
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(dispatch_get_main_queue()),
+    export_c_func!(dispatch_async_f(_, _, _)),
+    export_c_func!(dispatch_sync_f(_, _, _)),
+    export_c_func!(dispatch_after_f(_, _, _, _)),
+    export_c_func!(dispatch_once_f(_, _, _)),
+    export_c_func!(dispatch_apply_f(_, _, _, _)),
+    export_c_func!(dispatch_apply(_, _, _)),
+    export_c_func!(dispatch_group_async_f(_, _, _, _)),
+    export_c_func!(dispatch_barrier_async(_, _)),
+    export_c_func!(dispatch_barrier_sync(_, _)),
+    export_c_func!(dispatch_barrier_async_f(_, _, _)),
+    export_c_func!(dispatch_barrier_sync_f(_, _, _)),
     export_c_func!(dispatch_get_global_queue(_, _)),
     export_c_func!(dispatch_async(_, _)),
     export_c_func!(dispatch_sync(_, _)),
