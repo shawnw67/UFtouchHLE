@@ -535,6 +535,26 @@ fn AUGraphSetNodeInputCallback(
     0
 }
 
+fn AUGraphUpdate(env: &mut Environment, graph: AUGraph, out_updated: MutPtr<u8>) -> OSStatus {
+    let Some(state) = env
+        .framework_state
+        .audio_toolbox
+        .au_graph
+        .graphs
+        .get(&graph)
+    else {
+        return paramErr;
+    };
+    if state.unit.is_none() {
+        return paramErr;
+    }
+    // Changes to an open graph are currently rejected, so none are pending.
+    if !out_updated.is_null() {
+        env.mem.write(out_updated, 0);
+    }
+    0
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(NewAUGraph(_)),
     export_c_func!(DisposeAUGraph(_)),
@@ -551,6 +571,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AUGraphIsOpen(_, _)),
     export_c_func!(AUGraphIsInitialized(_, _)),
     export_c_func!(AUGraphIsRunning(_, _)),
+    export_c_func!(AUGraphUpdate(_, _)),
     export_c_func!(AUGraphSetNodeInputCallback(_, _, _, _)),
     export_c_func!(AUGraphGetIndNode(_, _, _)),
     export_c_func!(AUGraphConnectNodeInput(_, _, _, _, _)),

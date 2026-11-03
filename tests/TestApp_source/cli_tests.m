@@ -10904,6 +10904,7 @@ extern int AUGraphInitialize(void *);
 extern int AUGraphUninitialize(void *);
 extern int AUGraphIsOpen(void *, unsigned char *);
 extern int AUGraphIsInitialized(void *, unsigned char *);
+extern int AUGraphUpdate(void *, unsigned char *);
 extern int AUGraphConnectNodeInput(void *, int, uint32_t, int, uint32_t);
 extern int AUGraphDisconnectNodeInput(void *, int, uint32_t);
 extern void *
@@ -10980,6 +10981,7 @@ int test_augraph_single_output_lifecycle(void) {
       AUGraphDisconnectNodeInput(graph, output_node, 0) ||
       AUGraphRemoveNode(graph, mixer_node) || AUGraphOpen(graph) ||
       AUGraphIsOpen(graph, &state) || state != 1 ||
+      AUGraphUpdate(graph, &state) || state != 0 ||
       AUGraphNodeInfo(graph, output_node, &returned, &unit) || !unit ||
       returned.subtype != output.subtype || AUGraphInitialize(graph) ||
       AUGraphIsInitialized(graph, &state) || state != 1 ||
