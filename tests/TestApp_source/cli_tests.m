@@ -90,6 +90,13 @@ extern void CGContextSetFillColor(CGContextRef context,
 extern void CGContextSetStrokeColor(CGContextRef context,
                                     const CGFloat *components);
 typedef const void *TestCTFontRef;
+typedef const void *TestCTLineRef;
+extern const CFStringRef kCTFontAttributeName;
+extern TestCTLineRef
+CTLineCreateWithAttributedString(CFAttributedStringRef string);
+extern CFIndex CTLineGetGlyphCount(TestCTLineRef line);
+extern double CTLineGetTypographicBounds(TestCTLineRef line, CGFloat *ascent,
+                                         CGFloat *descent, CGFloat *leading);
 extern TestCTFontRef CTFontCreateWithName(CFStringRef name, CGFloat size,
                                           const CGAffineTransform *matrix);
 extern CGFontRef CTFontCopyGraphicsFont(TestCTFontRef font, void *attributes);
@@ -134,6 +141,33 @@ int test_CFAttributedString_basic(void) {
   passed = passed && CFAttributedStringGetLength(copy) == 5;
   CFRelease(copy);
   CFRelease(text);
+  return passed ? 0 : -1;
+}
+
+int test_CTLine_typographic_bounds(void) {
+  CFStringRef name =
+      CFStringCreateWithCString(NULL, "Helvetica", kCFStringEncodingUTF8);
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "hello", kCFStringEncodingUTF8);
+  TestCTFontRef font = CTFontCreateWithName(name, 20, NULL);
+  const void *keys[] = {kCTFontAttributeName};
+  const void *values[] = {font};
+  CFDictionaryRef attrs =
+      CFDictionaryCreate(NULL, keys, values, 1, &kCFTypeDictionaryKeyCallBacks,
+                         &kCFTypeDictionaryValueCallBacks);
+  CFAttributedStringRef attributed =
+      CFAttributedStringCreate(NULL, text, attrs);
+  TestCTLineRef line = CTLineCreateWithAttributedString(attributed);
+  CFRelease(attributed);
+  CFRelease(attrs);
+  CFRelease(font);
+  CGFloat ascent = 0, descent = 0, leading = 0;
+  double width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
+  int passed = CTLineGetGlyphCount(line) == 5 && width > 0 && ascent > 17 &&
+               ascent < 18 && descent > 2 && descent < 3;
+  CFRelease(line);
+  CFRelease(text);
+  CFRelease(name);
   return passed ? 0 : -1;
 }
 
@@ -9487,6 +9521,7 @@ struct {
     FUNC_DEF(test_CTFont_graphics_font_round_trip),
     FUNC_DEF(test_CFAttributedString_basic),
     FUNC_DEF(test_CFAttributedString_attributes),
+    FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),

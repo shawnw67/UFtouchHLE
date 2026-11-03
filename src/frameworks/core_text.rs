@@ -11,7 +11,7 @@
 //! both cover Latin text). Glyphs missing from the first are taken from the
 //! second; their glyph IDs are marked with [FALLBACK_GLYPH].
 
-use crate::dyld::{export_c_func, FunctionExports, HostDylib};
+use crate::dyld::{export_c_func, FunctionExports, HostConstant, HostDylib};
 use crate::font::Font;
 use crate::frameworks::core_foundation::{CFIndex, CFRelease, CFTypeRef};
 use crate::frameworks::core_graphics::cg_affine_transform::CGAffineTransform;
@@ -20,16 +20,16 @@ use crate::frameworks::core_graphics::cg_font::{
     from_font, CGFontHostObject, CGFontRef, CGFontRetain, CGGlyph,
 };
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
-use crate::frameworks::foundation::{ns_string, unichar};
+use crate::frameworks::foundation::{ns_string, unichar, NSRange, NSUInteger};
 use crate::mem::{ConstPtr, GuestUSize, MutPtr};
-use crate::objc::{id, objc_classes, ClassExports, HostObject};
+use crate::objc::{id, msg, nil, objc_classes, release, retain, ClassExports, HostObject};
 use crate::Environment;
 
 pub const DYLIB: HostDylib = HostDylib {
     path: "/System/Library/Frameworks/CoreText.framework/CoreText",
     aliases: &[],
     class_exports: &[CLASSES],
-    constant_exports: &[],
+    constant_exports: &[&[("_kCTFontAttributeName", HostConstant::NSString("NSFont"))]],
     function_exports: &[FUNCTIONS],
 };
 
@@ -42,6 +42,12 @@ struct CTFontHostObject {
     size: CGFloat,
     uses_fallback: bool,
 }
+
+struct CTLineHostObject {
+    text: id,
+    font: CTFontRef,
+}
+impl HostObject for CTLineHostObject {}
 
 /// Bit set in glyph IDs from the fallback font. Both fonts have fewer than
 /// 0x8000 glyphs.
@@ -62,6 +68,16 @@ const CLASSES: ClassExports = objc_classes! {
     env.objc.dealloc_object(this, &mut env.mem)
 }
 
+@end
+
+@implementation _Podroid_CTLine: NSObject
+- (())dealloc {
+    let host = env.objc.borrow::<CTLineHostObject>(this);
+    let (text, font) = (host.text, host.font);
+    release(env, text);
+    release(env, font);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
 @end
 
 };
@@ -157,6 +173,92 @@ fn CTFontGetDescent(env: &mut Environment, font: CTFontRef) -> CGFloat {
 fn CTFontGetLeading(env: &mut Environment, font: CTFontRef) -> CGFloat {
     let (face, size) = font_and_size(env, font);
     face.line_gap(size)
+}
+
+fn CTLineCreateWithAttributedString(env: &mut Environment, attributed: id) -> id {
+    if attributed.is_null() {
+        return nil;
+    }
+    let source: id = msg![env; attributed string];
+    let text: id = msg![env; source copy];
+    let length: NSUInteger = msg![env; source length];
+    let mut font = nil;
+    if length != 0 {
+        let range: MutPtr<NSRange> = MutPtr::null();
+        let attrs: id =
+            msg![env; attributed attributesAtIndex:(0 as NSUInteger) effectiveRange:range];
+        let key = ns_string::get_static_str(env, "NSFont");
+        let candidate: id = msg![env; attrs objectForKey:key];
+        if !candidate.is_null() {
+            let class = env.objc.get_known_class("_Podroid_CTFont", &mut env.mem);
+            let is_ct_font: bool = msg![env; candidate isKindOfClass:class];
+            if is_ct_font {
+                font = retain(env, candidate);
+            }
+        }
+    }
+    if font.is_null() {
+        font = CTFontCreateWithName(env, nil, 12.0, ConstPtr::null());
+    }
+    let class = env.objc.get_known_class("_Podroid_CTLine", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CTLineHostObject { text, font }),
+        &mut env.mem,
+    )
+}
+
+fn CTLineGetGlyphCount(env: &mut Environment, line: id) -> CFIndex {
+    let text = env.objc.borrow::<CTLineHostObject>(line).text;
+    let length: NSUInteger = msg![env; text length];
+    length.try_into().unwrap_or(CFIndex::MAX)
+}
+
+fn CTLineGetTypographicBounds(
+    env: &mut Environment,
+    line: id,
+    ascent: MutPtr<CGFloat>,
+    descent: MutPtr<CGFloat>,
+    leading: MutPtr<CGFloat>,
+) -> f64 {
+    let host = env.objc.borrow::<CTLineHostObject>(line);
+    let (text, font) = (host.text, host.font);
+    let (ascent_value, descent_value, leading_value) = (
+        CTFontGetAscent(env, font),
+        CTFontGetDescent(env, font),
+        CTFontGetLeading(env, font),
+    );
+    if !ascent.is_null() {
+        env.mem.write(ascent, ascent_value);
+    }
+    if !descent.is_null() {
+        env.mem.write(descent, descent_value);
+    }
+    if !leading.is_null() {
+        env.mem.write(leading, leading_value);
+    }
+    let mut units = Vec::new();
+    ns_string::for_each_code_unit(env, text, |_, unit| units.push(unit));
+    let size = env.objc.borrow::<CTFontHostObject>(font).size;
+    let fonts = env.objc.borrow::<CTFontHostObject>(font).cg_fonts;
+    let mut total = 0.0f64;
+    for unit in units {
+        if (0xd800..=0xdfff).contains(&unit) {
+            continue;
+        }
+        let first = &env.objc.borrow::<CGFontHostObject>(fonts[0]).font;
+        let mut glyph = first.glyph_id_for_char(unit).0;
+        let mut selected = fonts[0];
+        if glyph == 0 {
+            let fallback = &env.objc.borrow::<CGFontHostObject>(fonts[1]).font;
+            glyph = fallback.glyph_id_for_char(unit).0;
+            selected = fonts[1];
+        }
+        let face = &env.objc.borrow::<CGFontHostObject>(selected).font;
+        total += face.glyph_hor_advance(glyph).unwrap_or(0) as f64 * size as f64
+            / face.units_per_em() as f64;
+    }
+    total
 }
 
 fn CTFontCopyGraphicsFont(
@@ -370,6 +472,9 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(CTFontGetAscent(_)),
     export_c_func!(CTFontGetDescent(_)),
     export_c_func!(CTFontGetLeading(_)),
+    export_c_func!(CTLineCreateWithAttributedString(_)),
+    export_c_func!(CTLineGetGlyphCount(_)),
+    export_c_func!(CTLineGetTypographicBounds(_, _, _, _)),
     export_c_func!(CTFontCopyGraphicsFont(_, _)),
     export_c_func!(CTFontCreateWithGraphicsFont(_, _, _, _)),
     export_c_func!(CTFontGetGlyphsForCharacters(_, _, _, _)),
