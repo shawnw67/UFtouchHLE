@@ -193,10 +193,35 @@ const kCCUnimplemented: CCCryptorStatus = -4305;
 const kCCEncrypt: u32 = 0;
 const kCCDecrypt: u32 = 1;
 const kCCAlgorithmAES: u32 = 0;
+const kCCAlgorithmRC4: u32 = 4;
 const kCCOptionPKCS7Padding: u32 = 1;
 const kCCOptionECBMode: u32 = 2;
 
 const AES_BLOCK: usize = 16;
+
+fn rc4_crypt(key: &[u8], input: &[u8]) -> Vec<u8> {
+    let mut state = [0u8; 256];
+    for (i, byte) in state.iter_mut().enumerate() {
+        *byte = i as u8;
+    }
+    let mut j = 0u8;
+    for i in 0..256 {
+        j = j.wrapping_add(state[i]).wrapping_add(key[i % key.len()]);
+        state.swap(i, j as usize);
+    }
+    let mut i = 0u8;
+    j = 0;
+    input
+        .iter()
+        .map(|byte| {
+            i = i.wrapping_add(1);
+            j = j.wrapping_add(state[i as usize]);
+            state.swap(i as usize, j as usize);
+            let index = state[i as usize].wrapping_add(state[j as usize]);
+            byte ^ state[index as usize]
+        })
+        .collect()
+}
 
 #[derive(Clone)]
 enum AesCipher {
@@ -286,7 +311,7 @@ fn aes_crypt(
     Ok(data)
 }
 
-/// One-shot symmetric encryption from CommonCrypto. Only AES is supported.
+/// One-shot AES or RC4 encryption from CommonCrypto.
 #[allow(clippy::too_many_arguments)]
 fn CCCrypt(
     env: &mut Environment,
@@ -302,12 +327,37 @@ fn CCCrypt(
     data_out_available: GuestUSize,
     data_out_moved: MutPtr<GuestUSize>,
 ) -> CCCryptorStatus {
-    if alg != kCCAlgorithmAES {
+    if alg != kCCAlgorithmAES && alg != kCCAlgorithmRC4 {
         log!("TODO: CCCrypt() with algorithm {}", alg);
         return kCCUnimplemented;
     }
     if op != kCCEncrypt && op != kCCDecrypt {
         return kCCParamError;
+    }
+    if alg == kCCAlgorithmRC4 {
+        if key.is_null()
+            || !(1..=512).contains(&key_length)
+            || options != 0
+            || (data_in_length != 0 && (data_in.is_null() || data_out.is_null()))
+        {
+            return kCCParamError;
+        }
+        if !data_out_moved.is_null() {
+            env.mem.write(data_out_moved, data_in_length);
+        }
+        if data_in_length > data_out_available {
+            return kCCBufferTooSmall;
+        }
+        if data_in_length != 0 {
+            let output = rc4_crypt(
+                env.mem.bytes_at(key.cast(), key_length),
+                env.mem.bytes_at(data_in.cast(), data_in_length),
+            );
+            env.mem
+                .bytes_at_mut(data_out.cast(), data_in_length)
+                .copy_from_slice(&output);
+        }
+        return kCCSuccess;
     }
     // ---- MHP2G save analysis instrumentation ----
     if crate::save_research::enabled() && (data_in_length >= 1_000_000 || key_length >= 8) {
@@ -759,6 +809,16 @@ pub const FUNCTIONS: FunctionExports = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rc4_known_answer_and_round_trip() {
+        let ciphertext = rc4_crypt(b"Key", b"Plaintext");
+        assert_eq!(
+            ciphertext,
+            [0xbb, 0xf3, 0x16, 0xe8, 0xd9, 0x40, 0xaf, 0x0a, 0xd3]
+        );
+        assert_eq!(rc4_crypt(b"Key", &ciphertext), b"Plaintext");
+    }
 
     // FIPS-197 appendix C.1 (one block, so CBC with a zero IV is the same).
     #[test]

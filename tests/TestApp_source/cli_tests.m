@@ -197,6 +197,10 @@ extern int CCCryptorUpdate(void *cryptor, const void *input,
 extern int CCCryptorFinal(void *cryptor, void *output,
                           unsigned int output_length, unsigned int *moved);
 extern int CCCryptorRelease(void *cryptor);
+extern int CCCrypt(unsigned int op, unsigned int algorithm,
+                   unsigned int options, const void *key, size_t key_length,
+                   const void *iv, const void *input, size_t input_length,
+                   void *output, size_t output_length, size_t *moved);
 extern void *CGPathCreateMutable(void);
 extern void CGPathAddRect(void *path, const void *transform, CGRect rect);
 extern bool CGPathContainsPoint(const void *path, const void *transform,
@@ -879,6 +883,23 @@ int test_CCKeyDerivationPBKDF(void) {
                                     sizeof(output));
   return result == 0 && memcmp(output, expected, sizeof(expected)) == 0 ? 0
                                                                         : -1;
+}
+
+int test_CCCrypt_rc4(void) {
+  const unsigned char expected[] = {0xbb, 0xf3, 0x16, 0xe8, 0xd9,
+                                    0x40, 0xaf, 0x0a, 0xd3};
+  unsigned char buffer[9] = {0};
+  size_t moved = 0;
+  if (CCCrypt(0, 4, 0, "Key", 3, NULL, "Plaintext", 9, buffer, 8, &moved) !=
+          -4301 ||
+      CCCrypt(0, 4, 0, "Key", 3, NULL, "Plaintext", 9, buffer, sizeof(buffer),
+              &moved) ||
+      moved != 9 || memcmp(buffer, expected, 9) ||
+      CCCrypt(1, 4, 0, "Key", 3, NULL, buffer, 9, buffer, sizeof(buffer),
+              &moved) ||
+      memcmp(buffer, "Plaintext", 9))
+    return -1;
+  return 0;
 }
 
 int test_CCCryptor_stream(void) {
@@ -11595,6 +11616,7 @@ struct {
     FUNC_DEF(test_CC_SHA256),
     FUNC_DEF(test_CCKeyDerivationPBKDF),
     FUNC_DEF(test_CCCryptor_stream),
+    FUNC_DEF(test_CCCrypt_rc4),
     FUNC_DEF(test_CCCryptor_padded_cbc),
     FUNC_DEF(test_CFURL_path_extensions),
     FUNC_DEF(test_CFURL_authority),
