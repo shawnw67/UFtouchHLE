@@ -82,29 +82,40 @@ fn vm_deallocate(
     if end > (1u64 << 32) {
         return KERN_INVALID_ADDRESS;
     }
-    let region = env
+    let mut regions: Vec<(u32, u64)> = env
         .libc_state
         .mach_vm
         .allocations
         .iter()
-        .find_map(|(&base, &length)| {
+        .filter_map(|(&base, &length)| {
             let region_end = u64::from(base) + u64::from(length);
-            (base <= start && end <= region_end).then_some((base, region_end))
-        });
-    let Some((base, region_end)) = region else {
+            (u64::from(base) < end && region_end > u64::from(start)).then_some((base, region_end))
+        })
+        .collect();
+    regions.sort_unstable();
+    let mut covered = u64::from(start);
+    for &(base, region_end) in &regions {
+        if u64::from(base) > covered {
+            break;
+        }
+        covered = covered.max(region_end);
+    }
+    if covered < end {
         return KERN_INVALID_ADDRESS;
-    };
+    }
     let Ok(length) = u32::try_from(end - u64::from(start)) else {
         return KERN_INVALID_ADDRESS;
     };
     env.mem.vm_free(Ptr::from_bits(start), length);
     let allocations = &mut env.libc_state.mach_vm.allocations;
-    allocations.remove(&base);
-    if start > base {
-        allocations.insert(base, start - base);
-    }
-    if end < region_end {
-        allocations.insert(end as u32, (region_end - end) as u32);
+    for (base, region_end) in regions {
+        allocations.remove(&base);
+        if start > base {
+            allocations.insert(base, start - base);
+        }
+        if end < region_end {
+            allocations.insert(end as u32, (region_end - end) as u32);
+        }
     }
 
     KERN_SUCCESS

@@ -11206,9 +11206,7 @@ int test_mach_vm_partial_deallocation(void) {
     return -2;
   reuse = base + page;
   if (vm_allocate(task, &reuse, page, 0) || reuse != base + page ||
-      vm_deallocate(task, reuse, page) || vm_deallocate(task, base, page) ||
-      vm_deallocate(task, base + 2 * page, page) ||
-      !vm_deallocate(task, base, page))
+      vm_deallocate(task, base, page * 3) || !vm_deallocate(task, base, page))
     return -3;
   return 0;
 }
