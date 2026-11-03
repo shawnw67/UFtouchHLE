@@ -10995,16 +10995,26 @@ extern int semaphore_destroy(uint32_t, void *);
 extern int semaphore_signal(void *);
 extern int semaphore_trywait(void *);
 extern int semaphore_timedwait(void *, struct TestMachTimespec);
+static void *test_mach_semaphore_signal_thread(void *semaphore) {
+  struct timespec pause = {0, 2000000};
+  nanosleep(&pause, NULL);
+  return (void *)(uintptr_t)semaphore_signal(semaphore);
+}
 int test_mach_semaphore_timedwait(void) {
   const uint32_t task = 0x7461736b;
-  struct TestMachTimespec now = {0, 0}, short_wait = {0, 2000000};
+  struct TestMachTimespec now = {0, 0}, short_wait = {0, 2000000},
+                          longer_wait = {0, 200000000};
   void *semaphore = NULL;
+  pthread_t thread;
   if (semaphore_create(task, &semaphore, 0, 1) ||
       semaphore_timedwait(semaphore, now) ||
       semaphore_trywait(semaphore) != 49 ||
       semaphore_timedwait(semaphore, short_wait) != 49 ||
       semaphore_signal(semaphore) || semaphore_timedwait(semaphore, now) ||
-      semaphore_destroy(task, semaphore))
+      pthread_create(&thread, NULL, test_mach_semaphore_signal_thread,
+                     semaphore) ||
+      semaphore_timedwait(semaphore, longer_wait) ||
+      pthread_join(thread, NULL) || semaphore_destroy(task, semaphore))
     return -1;
   return 0;
 }
