@@ -771,6 +771,33 @@ fn planar_stereo_is_not_misidentified_as_interleaved() {
     assert!(!is_supported_audio_format(&format));
 }
 
+#[cfg(test)]
+#[test]
+fn mono_pcm32_decodes_to_mono16() {
+    let format = AudioStreamBasicDescription {
+        sample_rate: 44100.0,
+        format_id: kAudioFormatLinearPCM,
+        format_flags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+        bytes_per_packet: 4,
+        frames_per_packet: 1,
+        bytes_per_frame: 4,
+        channels_per_frame: 1,
+        bits_per_channel: 32,
+        _reserved: 0,
+    };
+    let mut mem = Mem::new();
+    mem.set_null_segment_size(crate::mem::PAGE_SIZE);
+    let data = mem.alloc(8);
+    mem.bytes_at_mut(data.cast(), 8)
+        .copy_from_slice(&[0, 0, 0, 128, 0, 0, 255, 127]);
+    assert!(is_supported_audio_format(&format));
+    let (output_format, rate, decoded) = decode_buffer(&mem, &format, data.cast(), 8);
+    assert_eq!(output_format, al::AL_FORMAT_MONO16);
+    assert_eq!(rate, 44100);
+    assert_eq!(decoded, [0, 128, 255, 127]);
+    mem.free(data);
+}
+
 /// Guesses whether 16-bit samples are big endian, by which byte order makes
 /// consecutive samples closer to each other: audio is a fairly smooth signal,
 /// but with the wrong byte order it looks like noise.
