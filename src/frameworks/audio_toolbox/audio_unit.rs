@@ -10,7 +10,7 @@
 use std::time::Instant;
 
 use crate::audio::openal::al_types::{ALuint, ALvoid};
-use crate::audio::openal::{AL_BUFFERS_PROCESSED, AL_PLAYING, AL_SOURCE_STATE};
+use crate::audio::openal::{AL_BUFFERS_PROCESSED, AL_BUFFERS_QUEUED, AL_PLAYING, AL_SOURCE_STATE};
 
 use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::FunctionExports;
@@ -503,6 +503,14 @@ pub(super) fn AudioOutputUnitStop(env: &mut Environment, ci: AudioUnit) -> OSSta
 
         if let Some(al_source) = audio_unit_state.al_source {
             unsafe {
+                context.SourceStop(al_source);
+                let mut queued = 0;
+                context.GetSourcei(al_source, AL_BUFFERS_QUEUED, &mut queued);
+                if queued > 0 {
+                    let mut buffers = vec![0; queued as usize];
+                    context.SourceUnqueueBuffers(al_source, queued, buffers.as_mut_ptr());
+                    context.DeleteBuffers(queued, buffers.as_ptr());
+                }
                 context.DeleteSources(1, &al_source);
                 assert_eq!(context.GetError(), 0);
             }
@@ -543,10 +551,12 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     } = at_state.audio_session;
 
     let audio_components_state = &mut at_state.audio_components;
-    let audio_unit_host_object = audio_components_state
+    let Some(audio_unit_host_object) = audio_components_state
         .audio_component_instances
         .get_mut(&audio_unit)
-        .unwrap();
+    else {
+        return;
+    };
 
     if !audio_unit_host_object.started {
         return;
