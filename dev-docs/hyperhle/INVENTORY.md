@@ -205,7 +205,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/dyld/dylib_list.rs` | both-modified | — | pending |
 | `src/dyld/swift_runtime.rs` | hyper-added | — | pending |
 | `src/env_flags.rs` | hyper-added | — | ported: ES2/ES3 batch |
-| `src/environment.rs` | both-modified | — | pending |
+| `src/environment.rs` | both-modified | — | partial (Geometry Dash streamed-music memory policy; other differences remain) |
 | `src/environment/app_picker.rs` | both-modified | — | pending |
 | `src/environment/app_picker/access_prompt.rs` | hyper-added | — | pending |
 | `src/environment/app_picker/archive_store.rs` | hyper-added | — | pending |
@@ -644,7 +644,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/log.rs` | both-modified | — | partial: ES2/ES3 batch (GL contexts, GLES options, helpers) |
 | `src/mach_o.rs` | both-modified | — | pending |
 | `src/matrix.rs` | hyper-modified | — | pending |
-| `src/mem.rs` | both-modified | — | partial: ES2/ES3 batch and GL host-pointer hardening |
+| `src/mem.rs` | both-modified | — | partial: ES2/ES3, GL host-pointer hardening, and Geometry Dash audio buffer lifetime |
 | `src/mem/alloc_probe_tests.rs` | hyper-added | — | pending |
 | `src/mem/allocator.rs` | both-modified | — | pending |
 | `src/mem/host.rs` | both-modified | — | pending |

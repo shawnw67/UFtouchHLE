@@ -455,8 +455,17 @@ impl Environment {
         let is_dead_rising = bundle
             .bundle_identifier()
             .starts_with("jp.co.capcom.deadrising");
+        let is_geometry_dash = bundle
+            .bundle_identifier()
+            .starts_with("com.robtop.geometryjump");
         // We always reset this flag depending on which game is launched.
-        mem.zero_memory_on_free = !is_spore && !is_critter_crunch && !is_dead_rising;
+        mem.zero_memory_on_free =
+            !is_spore && !is_critter_crunch && !is_dead_rising && !is_geometry_dash;
+        mem.preserve_large_freed_memory = is_geometry_dash;
+        if is_geometry_dash {
+            // FMOD can stream music from a buffer after the game frees it.
+            log!("Applying Geometry Dash memory compatibility for streamed music.");
+        }
         if is_spore {
             log!("Applying game-specific hack for Spore Origins: zeroing memory on alloc instead of free.");
         }

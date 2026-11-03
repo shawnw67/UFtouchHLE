@@ -253,6 +253,7 @@ pub struct Mem {
     /// Right now only one game, Spore Origin, is setting this value to `false`
     /// via a game-specific hack. See [crate::Environment] for more info.
     pub(super) zero_memory_on_free: bool,
+    pub(super) preserve_large_freed_memory: bool,
 }
 
 impl Drop for Mem {
@@ -299,6 +300,7 @@ impl Mem {
             vm_allocator,
             heap_allocator: None,
             zero_memory_on_free: true,
+            preserve_large_freed_memory: false,
         }
     }
 
@@ -588,6 +590,8 @@ impl Mem {
         if !self.zero_memory_on_free && alloc.size.get() <= HeapAllocator::HEAP_ALLOCATION_THRESHOLD
         {
             self.bytes_at_mut(ptr.cast(), size).fill(0);
+        } else if self.preserve_large_freed_memory {
+            self.bytes_at_mut(ptr.cast(), alloc.size.get()).fill(0);
         }
         log_dbg!("Allocated {:?} ({:#x} bytes)", ptr, size);
         Some(ptr)
@@ -683,6 +687,8 @@ impl Mem {
         if !self.zero_memory_on_free && alloc.size.get() <= HeapAllocator::HEAP_ALLOCATION_THRESHOLD
         {
             self.bytes_at_mut(ptr.cast(), size).fill(0);
+        } else if self.preserve_large_freed_memory {
+            self.bytes_at_mut(ptr.cast(), alloc.size.get()).fill(0);
         }
         Some(ptr)
     }
@@ -760,7 +766,7 @@ impl Mem {
         let is_vm_allocation = heap.is_vm_allocation(ptr.to_bits());
         let size = heap.free(vm, ptr.to_bits());
 
-        if is_vm_allocation {
+        if is_vm_allocation && !self.preserve_large_freed_memory {
             // VM allocations are always 0 initialized.
             // TODO: Can this be done with vm_advise/equivalents
             self.bytes_at_mut(ptr.cast(), size).fill(0);
@@ -982,6 +988,29 @@ mod allocation_tests {
             .bytes_at(reused.cast_const().cast(), 17)
             .iter()
             .all(|&byte| byte == 0));
+        mem.free(reused);
+    }
+
+    #[test]
+    fn geometry_dash_large_freed_buffer_survives_until_reuse() {
+        let mut mem = Mem::new();
+        mem.set_null_segment_size(PAGE_SIZE);
+        mem.zero_memory_on_free = false;
+        mem.preserve_large_freed_memory = true;
+        let size = PAGE_SIZE * 5;
+        let ptr = mem.alloc(size);
+        mem.bytes_at_mut(ptr.cast(), size).fill(0x5a);
+        mem.free(ptr);
+        assert!(mem
+            .bytes_at(ptr.cast_const().cast(), size)
+            .iter()
+            .all(|&b| b == 0x5a));
+        let reused = mem.alloc(size);
+        assert_eq!(reused, ptr);
+        assert!(mem
+            .bytes_at(reused.cast_const().cast(), size)
+            .iter()
+            .all(|&b| b == 0));
         mem.free(reused);
     }
 
