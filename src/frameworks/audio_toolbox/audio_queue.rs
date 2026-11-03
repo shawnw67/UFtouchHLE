@@ -17,8 +17,9 @@ use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::carbon_core::OSStatus;
 use crate::frameworks::core_audio_types::{
     debug_fourcc, fourcc, kAudioFormatAppleIMA4, kAudioFormatFlagIsBigEndian,
-    kAudioFormatFlagIsFloat, kAudioFormatFlagIsPacked, kAudioFormatFlagIsSignedInteger,
-    kAudioFormatLinearPCM, AudioStreamBasicDescription, AudioTimeStamp,
+    kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved, kAudioFormatFlagIsPacked,
+    kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, AudioStreamBasicDescription,
+    AudioTimeStamp,
 };
 use crate::frameworks::core_foundation::cf_run_loop::{
     kCFRunLoopCommonModes, CFRunLoopGetMain, CFRunLoopMode, CFRunLoopRef,
@@ -542,7 +543,8 @@ pub fn is_supported_audio_format(format: &AudioStreamBasicDescription) -> bool {
                 && ((format_flags & kAudioFormatFlagIsFloat) == 0
                     || (bits_per_channel == 32
                         && bytes_per_frame == channels_per_frame * 4
-                        && (channels_per_frame == 1 || format_flags & (1 << 5) == 0)))
+                        && (channels_per_frame == 1
+                            || format_flags & kAudioFormatFlagIsNonInterleaved == 0)))
         }
         _ => false,
     }
@@ -701,7 +703,7 @@ pub fn decode_buffer(
     }
 }
 
-fn float_pcm_to_i16(input: &[u8]) -> Vec<u8> {
+pub(super) fn float_pcm_to_i16(input: &[u8]) -> Vec<u8> {
     let mut output = Vec::with_capacity(input.len() / 2);
     for &sample in input.as_chunks::<4>().0 {
         let value = f32::from_le_bytes(sample);

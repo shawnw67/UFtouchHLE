@@ -10,7 +10,9 @@
 use std::time::Instant;
 
 use crate::audio::openal::al_types::{ALuint, ALvoid};
-use crate::audio::openal::{AL_BUFFERS_PROCESSED, AL_BUFFERS_QUEUED, AL_PLAYING, AL_SOURCE_STATE};
+use crate::audio::openal::{
+    AL_BUFFERS_PROCESSED, AL_BUFFERS_QUEUED, AL_FORMAT_STEREO16, AL_PLAYING, AL_SOURCE_STATE,
+};
 
 use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::FunctionExports;
@@ -21,13 +23,16 @@ use crate::frameworks::audio_toolbox::audio_queue::{
     is_supported_audio_format, log_if_broken_audio_format,
 };
 use crate::frameworks::carbon_core::{paramErr, OSStatus};
-use crate::frameworks::core_audio_types::{AudioStreamBasicDescription, AudioTimeStamp, SMPTETime};
+use crate::frameworks::core_audio_types::{
+    kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved,
+    kAudioFormatLinearPCM, AudioStreamBasicDescription, AudioTimeStamp, SMPTETime,
+};
 use crate::frameworks::core_foundation::cf_run_loop::CFRunLoopGetMain;
 use crate::frameworks::foundation::ns_run_loop;
 use crate::mem::{guest_size_of, ConstVoidPtr, MutPtr, MutVoidPtr, SafeRead};
 
 use super::audio_components::{AURenderCallbackStruct, AudioComponentInstance};
-use super::audio_queue::decode_buffer;
+use super::audio_queue::{decode_buffer, float_pcm_to_i16};
 use super::audio_session;
 
 pub type AudioUnit = AudioComponentInstance;
@@ -637,7 +642,20 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         stream_format.sample_rate
     };
 
-    if !is_supported_audio_format(&stream_format) {
+    let planar_stereo_float = stream_format.format_id == kAudioFormatLinearPCM
+        && stream_format.channels_per_frame == 2
+        && stream_format.bits_per_channel == 32
+        && stream_format.bytes_per_frame == 4
+        && stream_format.format_flags
+            & (kAudioFormatFlagIsFloat | kAudioFormatFlagIsNonInterleaved)
+            == (kAudioFormatFlagIsFloat | kAudioFormatFlagIsNonInterleaved)
+        && stream_format.format_flags & kAudioFormatFlagIsBigEndian == 0;
+    let sample_rate = if planar_stereo_float {
+        stream_format.sample_rate
+    } else {
+        sample_rate
+    };
+    if !planar_stereo_float && !is_supported_audio_format(&stream_format) {
         log_once!("AudioUnit stream format is not supported");
         audio_unit_host_object.is_running_handler = false;
         return;
@@ -675,7 +693,12 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     let bytes_per_channel = stream_format.bits_per_channel / 8;
     let actual_bytes_per_frame = stream_format.channels_per_frame * bytes_per_channel;
 
-    let buffer_size = number_frames * actual_bytes_per_frame;
+    let buffer_size = number_frames
+        * if planar_stereo_float {
+            bytes_per_channel
+        } else {
+            actual_bytes_per_frame
+        };
 
     // Alloc callback arguments
     let action_flags = env.mem.alloc_and_write(0);
@@ -684,7 +707,7 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         MutVoidPtr,
         MutVoidPtr,
         Option<MutVoidPtr>,
-    ) = if input_stream_format.is_some() {
+    ) = if input_stream_format.is_some() && !planar_stereo_float {
         let bufferData = env.mem.alloc(buffer_size);
         let audio_buffer_list: AudioBufferList<1> = AudioBufferList {
             number_buffers: 1,
@@ -708,12 +731,20 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
             number_buffers: 2,
             buffers: [
                 AudioBuffer {
-                    number_channels: stream_format.channels_per_frame,
+                    number_channels: if planar_stereo_float {
+                        1
+                    } else {
+                        stream_format.channels_per_frame
+                    },
                     data_byte_size: buffer_size,
                     data: buffer1Data,
                 },
                 AudioBuffer {
-                    number_channels: stream_format.channels_per_frame,
+                    number_channels: if planar_stereo_float {
+                        1
+                    } else {
+                        stream_format.channels_per_frame
+                    },
                     data_byte_size: buffer_size,
                     data: buffer2Data,
                 },
@@ -802,8 +833,17 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         .al_context
         .make_al_context_current(env.openal_manager.as_mut());
 
-    let (al_format, _sample_rate, processed_data) =
-        decode_buffer(&env.mem, &stream_format, buffer1Data.cast(), buffer_size);
+    let (al_format, processed_data) = if planar_stereo_float {
+        let output = interleave_float_stereo(
+            env.mem.bytes_at(buffer1Data.cast(), buffer_size),
+            env.mem.bytes_at(buffer2Data.unwrap().cast(), buffer_size),
+        );
+        (AL_FORMAT_STEREO16, output)
+    } else {
+        let (format, _, data) =
+            decode_buffer(&env.mem, &stream_format, buffer1Data.cast(), buffer_size);
+        (format, data)
+    };
 
     unsafe {
         // Get an unqueued buffer or create a new one
@@ -857,6 +897,38 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     audio_unit_host_object.last_render_time = Some(now);
     audio_unit_host_object.sample_time = sample_time + f64::from(number_frames);
     audio_unit_host_object.is_running_handler = false;
+}
+
+fn interleave_float_stereo(left: &[u8], right: &[u8]) -> Vec<u8> {
+    let left = float_pcm_to_i16(left);
+    let right = float_pcm_to_i16(right);
+    let mut output = Vec::with_capacity(left.len() + right.len());
+    for (l, r) in left.as_chunks::<2>().0.iter().zip(right.as_chunks::<2>().0) {
+        output.extend_from_slice(l);
+        output.extend_from_slice(r);
+    }
+    output
+}
+
+#[cfg(test)]
+#[test]
+fn planar_float_audio_interleaves_channels() {
+    let left: Vec<u8> = [0.5_f32, -1.0]
+        .into_iter()
+        .flat_map(f32::to_le_bytes)
+        .collect();
+    let right: Vec<u8> = [-0.5_f32, 1.0]
+        .into_iter()
+        .flat_map(f32::to_le_bytes)
+        .collect();
+    let audio = interleave_float_stereo(&left, &right);
+    let samples: Vec<i16> = audio
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|bytes| i16::from_le_bytes(*bytes))
+        .collect();
+    assert_eq!(samples, [16384, -16384, -32767, 32767]);
 }
 
 pub const FUNCTIONS: FunctionExports = &[
