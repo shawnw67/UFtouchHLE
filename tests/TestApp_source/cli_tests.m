@@ -10976,6 +10976,83 @@ int test_audio_component_enumeration(void) {
   return AudioComponentFindNext(NULL, &description) == NULL ? 0 : -2;
 }
 
+extern int AudioOutputUnitStart(void *);
+extern int AudioOutputUnitStop(void *);
+struct TestStreamFormat {
+  double rate;
+  uint32_t format, flags, bytes_packet, frames_packet, bytes_frame, channels,
+      bits, reserved;
+};
+struct TestAudioBuffer {
+  uint32_t channels, size;
+  void *data;
+};
+struct TestAudioBufferList {
+  uint32_t count;
+  struct TestAudioBuffer buffers[2];
+};
+struct TestRenderState {
+  int pre, render, post, bad;
+};
+struct TestRenderCallback {
+  TestRenderNotify callback;
+  void *context;
+};
+static int test_audio_render_callback(void *ctx, uint32_t *flags,
+                                      const void *timestamp, uint32_t bus,
+                                      uint32_t frames, void *data) {
+  struct TestRenderState *state = ctx;
+  struct TestAudioBufferList *list = data;
+  if (!timestamp || bus != 0 || list->count != 2 ||
+      list->buffers[0].channels != 1 || list->buffers[1].channels != 1 ||
+      list->buffers[0].size != frames * 4 ||
+      list->buffers[1].size != frames * 4)
+    state->bad = 1;
+  else {
+    memset(list->buffers[0].data, 0, list->buffers[0].size);
+    memset(list->buffers[1].data, 0, list->buffers[1].size);
+  }
+  ++state->render;
+  return 0;
+}
+static int test_audio_render_phase(void *ctx, uint32_t *flags,
+                                   const void *timestamp, uint32_t bus,
+                                   uint32_t frames, void *data) {
+  struct TestRenderState *state = ctx;
+  if (!timestamp || bus != 0)
+    state->bad = 1;
+  if (*flags == 4)
+    ++state->pre;
+  else if (*flags == 8)
+    ++state->post;
+  else
+    state->bad = 1;
+  return 0;
+}
+int test_audio_planar_render_callbacks(void) {
+  const struct TestAudioComponentDescription description = {0};
+  const struct TestStreamFormat format = {44100.0, 0x6c70636d, 41, 4, 1,
+                                          4,       2,          32, 0};
+  struct TestRenderState state = {0};
+  struct TestRenderCallback callback = {test_audio_render_callback, &state};
+  struct timespec pause = {0, 10000000};
+  void *component = AudioComponentFindNext(NULL, &description), *unit = NULL;
+  if (!component || AudioComponentInstanceNew(component, &unit) ||
+      AudioUnitSetProperty(unit, 8, 1, 0, &format, sizeof(format)) ||
+      AudioUnitSetProperty(unit, 23, 0, 0, &callback, sizeof(callback)) ||
+      AudioUnitAddRenderNotify(unit, test_audio_render_phase, &state) ||
+      AudioUnitInitialize(unit) || AudioOutputUnitStart(unit) ||
+      nanosleep(&pause, NULL))
+    return -1;
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  if (AudioOutputUnitStop(unit) || AudioComponentInstanceDispose(unit))
+    return -2;
+  return state.bad == 0 && state.pre == 1 && state.render == 1 &&
+                 state.post == 1
+             ? 0
+             : -3;
+}
+
 int test_augraph_single_output_lifecycle(void) {
   const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
                                                        0x6170706c, 0, 0};
@@ -11313,6 +11390,7 @@ struct {
     FUNC_DEF(test_mach_vm_read_overwrite),
     FUNC_DEF(test_mach_semaphore_timedwait),
     FUNC_DEF(test_mach_semaphore_wait_signal),
+    FUNC_DEF(test_audio_planar_render_callbacks),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
 #endif
