@@ -23,10 +23,16 @@ use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, MutVoidPtr, SafeRead};
 const kAudioUnitType_Output: u32 = fourcc(b"auou");
 const kAudioUnitSubType_RemoteIO: u32 = fourcc(b"rioc");
 const kAudioUnitManufacturer_Apple: u32 = fourcc(b"appl");
+const AVAILABLE_COMPONENTS: &[(u32, u32)] = &[
+    (kAudioUnitType_Output, kAudioUnitSubType_RemoteIO),
+    (fourcc(b"aumx"), fourcc(b"mcmx")),
+    (fourcc(b"aumx"), fourcc(b"3dem")),
+    (fourcc(b"aufc"), fourcc(b"conv")),
+];
 
 #[derive(Default)]
 pub struct State {
-    pub audio_component: AudioComponent,
+    components: HashMap<AudioComponent, (u32, u32)>,
     pub audio_component_instances:
         HashMap<AudioComponentInstance, AudioComponentInstanceHostObject>,
 }
@@ -162,28 +168,55 @@ fn AudioComponentFindNext(
     in_component: AudioComponent,
     in_desc: ConstPtr<AudioComponentDescription>,
 ) -> AudioComponent {
-    if !in_component.is_null() || in_desc.is_null() {
+    if in_desc.is_null() {
         return MutPtr::null();
     }
 
-    let audio_comp_descr = env.mem.read(in_desc);
-    if (audio_comp_descr.component_type != 0
-        && audio_comp_descr.component_type != kAudioUnitType_Output)
-        || (audio_comp_descr.component_sub_type != 0
-            && audio_comp_descr.component_sub_type != kAudioUnitSubType_RemoteIO)
-        || (audio_comp_descr.component_manufacturer != 0
-            && audio_comp_descr.component_manufacturer != kAudioUnitManufacturer_Apple)
-        || audio_comp_descr.component_flags & audio_comp_descr.component_flags_mask != 0
+    let desc = env.mem.read(in_desc);
+    if (desc.component_manufacturer != 0
+        && desc.component_manufacturer != kAudioUnitManufacturer_Apple)
+        || desc.component_flags & desc.component_flags_mask != 0
     {
         return MutPtr::null();
     }
-
-    let state = State::get(&mut env.framework_state);
-    if state.audio_component.is_null() {
-        state.audio_component = env.mem.alloc_and_write(OpaqueAudioComponent { _pad: 0 });
+    let start = if in_component.is_null() {
+        0
+    } else {
+        let Some(previous) = State::get(&mut env.framework_state)
+            .components
+            .get(&in_component)
+            .copied()
+        else {
+            return MutPtr::null();
+        };
+        let Some(index) = AVAILABLE_COMPONENTS
+            .iter()
+            .position(|&candidate| candidate == previous)
+        else {
+            return MutPtr::null();
+        };
+        index + 1
+    };
+    let Some(&selected) = AVAILABLE_COMPONENTS[start..]
+        .iter()
+        .find(|&&(kind, subtype)| {
+            (desc.component_type == 0 || desc.component_type == kind)
+                && (desc.component_sub_type == 0 || desc.component_sub_type == subtype)
+        })
+    else {
+        return MutPtr::null();
+    };
+    if let Some((&component, _)) = State::get(&mut env.framework_state)
+        .components
+        .iter()
+        .find(|(_, value)| **value == selected)
+    {
+        return component;
     }
-
-    let out_component: AudioComponent = state.audio_component;
+    let out_component = env.mem.alloc_and_write(OpaqueAudioComponent { _pad: 0 });
+    State::get(&mut env.framework_state)
+        .components
+        .insert(out_component, selected);
 
     log_dbg!(
         "AudioComponentFindNext({:?}, {:?}) -> {:?}",
@@ -199,13 +232,27 @@ fn AudioComponentInstanceNew(
     in_component: AudioComponent,
     out_instance: MutPtr<AudioComponentInstance>,
 ) -> OSStatus {
-    if in_component.is_null()
-        || in_component != State::get(&mut env.framework_state).audio_component
-        || out_instance.is_null()
-    {
+    if out_instance.is_null() {
         return paramErr;
     }
+    let Some((kind, subtype)) = State::get(&mut env.framework_state)
+        .components
+        .get(&in_component)
+        .copied()
+    else {
+        return paramErr;
+    };
     let guest_instance = create_audio_unit_instance(env);
+    let object = State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&guest_instance)
+        .unwrap();
+    if kind == fourcc(b"aumx") {
+        object.mixer_buses = Some(HashMap::new());
+        object.mixer_subtype = Some(subtype);
+    } else if kind == fourcc(b"aufc") {
+        object.passthrough_converter = true;
+    }
 
     env.mem.write(out_instance, guest_instance);
 

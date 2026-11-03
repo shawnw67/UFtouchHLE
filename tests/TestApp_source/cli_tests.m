@@ -10951,6 +10951,16 @@ static void test_audio_property_listener(void *context, void *unit,
 
 int test_audio_component_enumeration(void) {
   struct TestAudioComponentDescription description = {0};
+  void *cursor = NULL;
+  int component_count = 0;
+  while ((cursor = AudioComponentFindNext(cursor, &description))) {
+    if (++component_count > 4)
+      return -3;
+  }
+  if (component_count != 4)
+    return -4;
+  description.type = 0x61756f75;
+  description.subtype = 0x72696f63;
   void *component = AudioComponentFindNext(NULL, &description);
   void *unit = NULL;
   uint32_t size = 0;
@@ -10979,8 +10989,20 @@ int test_audio_component_enumeration(void) {
       AudioComponentInstanceDispose(unit) ||
       !AudioComponentInstanceNew(NULL, &unit))
     return -1;
-  description.type = 0x61756d78; // Mixer, not supported yet.
-  return AudioComponentFindNext(NULL, &description) == NULL ? 0 : -2;
+  description.type = 0x61756d78;
+  description.subtype = 0x6d636d78;
+  component = AudioComponentFindNext(NULL, &description);
+  float gain = 0;
+  if (!component || AudioComponentFindNext(component, &description) ||
+      AudioComponentInstanceNew(component, &unit) ||
+      AudioUnitSetParameter(unit, 0, 1, 0, 0.5f, 0) ||
+      AudioUnitGetParameter(unit, 0, 1, 0, &gain) || gain != 0.5f ||
+      AudioComponentInstanceDispose(unit))
+    return -2;
+  description.type = 0x61756663;
+  description.subtype = 0x636f6e76;
+  component = AudioComponentFindNext(NULL, &description);
+  return component && !AudioComponentFindNext(component, &description) ? 0 : -5;
 }
 
 extern int AudioOutputUnitStart(void *);
