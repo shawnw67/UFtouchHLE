@@ -137,6 +137,34 @@ int test_CFAttributedString_basic(void) {
   return passed ? 0 : -1;
 }
 
+int test_CFAttributedString_attributes(void) {
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "hello", kCFStringEncodingUTF8);
+  CFStringRef key =
+      CFStringCreateWithCString(NULL, "Example", kCFStringEncodingUTF8);
+  CFStringRef value =
+      CFStringCreateWithCString(NULL, "Value", kCFStringEncodingUTF8);
+  const void *keys[] = {key};
+  const void *values[] = {value};
+  CFDictionaryRef attrs =
+      CFDictionaryCreate(NULL, keys, values, 1, &kCFTypeDictionaryKeyCallBacks,
+                         &kCFTypeDictionaryValueCallBacks);
+  CFAttributedStringRef attributed =
+      CFAttributedStringCreate(NULL, text, attrs);
+  CFAttributedStringRef copy = CFAttributedStringCreateCopy(NULL, attributed);
+  CFRelease(attrs);
+  CFRelease(attributed);
+  CFRange range = CFRangeMake(-1, -1);
+  CFTypeRef found = CFAttributedStringGetAttribute(copy, 2, key, &range);
+  int passed = found && CFEqual(found, value) && range.location == 0 &&
+               range.length == 5;
+  CFRelease(copy);
+  CFRelease(value);
+  CFRelease(key);
+  CFRelease(text);
+  return passed ? 0 : -1;
+}
+
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
 
@@ -9458,6 +9486,7 @@ struct {
     FUNC_DEF(test_CFString_encoding_queries),
     FUNC_DEF(test_CTFont_graphics_font_round_trip),
     FUNC_DEF(test_CFAttributedString_basic),
+    FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),

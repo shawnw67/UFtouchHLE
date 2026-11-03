@@ -5,9 +5,7 @@
  */
 //! `NSAttributedString` and `NSMutableAttributedString`.
 //!
-//! Only the string and the font (`NSFontAttributeName`, used for measuring)
-//! are kept: other attributes are accepted but ignored, since nothing in
-//! touchHLE draws attributed strings yet.
+//! Attributes are currently stored for the whole string rather than in runs.
 
 use super::{ns_dictionary, ns_string, NSRange, NSUInteger};
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
@@ -22,6 +20,32 @@ struct NSAttributedStringHostObject {
     string: id,
     /// `UIFont*` of the whole string, if one was set.
     font: id,
+    /// Immutable dictionary for the whole string, or nil when empty.
+    attributes: id,
+}
+
+fn set_attributes(env: &mut crate::Environment, this: id, attributes: id) {
+    let copy: id = msg![env; attributes copy];
+    let old = std::mem::replace(
+        &mut env
+            .objc
+            .borrow_mut::<NSAttributedStringHostObject>(this)
+            .attributes,
+        copy,
+    );
+    release(env, old);
+}
+
+fn mutable_attributes(env: &mut crate::Environment, this: id) -> id {
+    let attributes = env
+        .objc
+        .borrow::<NSAttributedStringHostObject>(this)
+        .attributes;
+    if attributes == nil {
+        msg_class![env; NSMutableDictionary new]
+    } else {
+        msg![env; attributes mutableCopy]
+    }
 }
 
 fn set_font(env: &mut crate::Environment, this: id, font: id) {
@@ -50,7 +74,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @implementation NSAttributedString: NSObject
 
 + (id)allocWithZone:(NSZonePtr)_zone {
-    let host_object = Box::new(NSAttributedStringHostObject { string: nil, font: nil });
+    let host_object = Box::new(NSAttributedStringHostObject { string: nil, font: nil, attributes: nil });
     env.objc.alloc_object(this, host_object, &mut env.mem)
 }
 
@@ -67,6 +91,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)initWithString:(id)string // NSString*
           attributes:(id)attributes { // NSDictionary*
     let this: id = msg![env; this initWithString:string];
+    set_attributes(env, this, attributes);
     if attributes != nil {
         let key = ns_string::get_static_str(env, "NSFont");
         let font: id = msg![env; attributes objectForKey:key];
@@ -78,14 +103,17 @@ pub const CLASSES: ClassExports = objc_classes! {
     let string: id = msg![env; other string];
     let this: id = msg![env; this initWithString:string];
     let font = env.objc.borrow::<NSAttributedStringHostObject>(other).font;
+    let attributes = env.objc.borrow::<NSAttributedStringHostObject>(other).attributes;
+    set_attributes(env, this, attributes);
     set_font(env, this, font);
     this
 }
 
 - (())dealloc {
-    let &NSAttributedStringHostObject { string, font } = env.objc.borrow(this);
+    let &NSAttributedStringHostObject { string, font, attributes } = env.objc.borrow(this);
     release(env, string);
     release(env, font);
+    release(env, attributes);
     env.objc.dealloc_object(this, &mut env.mem)
 }
 
@@ -132,8 +160,11 @@ pub const CLASSES: ClassExports = objc_classes! {
         let length: NSUInteger = msg![env; this length];
         env.mem.write(range, NSRange { location: 0, length });
     }
-    let dict = ns_dictionary::dict_from_keys_and_objects(env, &[]);
-    autorelease(env, dict)
+    let attributes = env.objc.borrow::<NSAttributedStringHostObject>(this).attributes;
+    if attributes != nil { attributes } else {
+        let dict = ns_dictionary::dict_from_keys_and_objects(env, &[]);
+        autorelease(env, dict)
+    }
 }
 
 @end
@@ -178,14 +209,21 @@ pub const CLASSES: ClassExports = objc_classes! {
     let string = env.objc.borrow::<NSAttributedStringHostObject>(this).string;
     env.objc.borrow_mut::<NSAttributedStringHostObject>(this).string = new_string;
     release(env, string);
+    let attributes = env.objc.borrow::<NSAttributedStringHostObject>(other).attributes;
+    set_attributes(env, this, attributes);
+    let font = env.objc.borrow::<NSAttributedStringHostObject>(other).font;
+    set_font(env, this, font);
 }
 
-// Attributes other than the font are ignored, and the font applies to the
-// whole string.
+// These operations currently apply to the whole string.
 - (())addAttribute:(id)name // NSString*
              value:(id)value
              range:(NSRange)_range {
     set_attribute(env, this, name, value);
+    let attributes = mutable_attributes(env, this);
+    () = msg![env; attributes setObject:value forKey:name];
+    set_attributes(env, this, attributes);
+    release(env, attributes);
 }
 - (())addAttributes:(id)attributes // NSDictionary*
               range:(NSRange)_range {
@@ -193,6 +231,12 @@ pub const CLASSES: ClassExports = objc_classes! {
     let font: id = msg![env; attributes objectForKey:key];
     if font != nil {
         set_font(env, this, font);
+    }
+    if attributes != nil {
+        let merged = mutable_attributes(env, this);
+        () = msg![env; merged addEntriesFromDictionary:attributes];
+        set_attributes(env, this, merged);
+        release(env, merged);
     }
 }
 - (())setAttributes:(id)attributes // NSDictionary*
@@ -204,9 +248,15 @@ pub const CLASSES: ClassExports = objc_classes! {
         msg![env; attributes objectForKey:key]
     };
     set_font(env, this, font);
+    set_attributes(env, this, attributes);
 }
-- (())removeAttribute:(id)_name // NSString*
+- (())removeAttribute:(id)name // NSString*
                 range:(NSRange)_range {
+    let attributes = mutable_attributes(env, this);
+    () = msg![env; attributes removeObjectForKey:name];
+    set_attributes(env, this, attributes);
+    release(env, attributes);
+    if name != nil && ns_string::to_rust_string(env, name) == "NSFont" { set_font(env, this, nil); }
 }
 - (())beginEditing {
 }
