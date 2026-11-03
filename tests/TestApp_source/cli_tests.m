@@ -60,6 +60,14 @@ extern bool OSSpinLockTry(volatile int *lock);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
+extern void CGContextMoveToPoint(CGContextRef context, CGFloat x, CGFloat y);
+extern void CGContextAddQuadCurveToPoint(CGContextRef context, CGFloat cx,
+                                         CGFloat cy, CGFloat x, CGFloat y);
+extern void CGContextAddCurveToPoint(CGContextRef context, CGFloat c1x,
+                                     CGFloat c1y, CGFloat c2x, CGFloat c2y,
+                                     CGFloat x, CGFloat y);
+extern void CGContextClosePath(CGContextRef context);
+extern void CGContextFillPath(CGContextRef context);
 
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
@@ -311,6 +319,25 @@ int test_CGContext_add_rects_even_odd(void) {
   CGContextRelease(context);
   CGColorSpaceRelease(space);
   return passed ? 0 : -1;
+}
+
+int test_CGContext_curves(void) {
+  unsigned char pixels[16 * 16 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 16, 16, 8, 16 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  CGContextMoveToPoint(context, 2, 2);
+  CGContextAddQuadCurveToPoint(context, 8, 14, 14, 2);
+  CGContextAddCurveToPoint(context, 12, 1, 4, 1, 2, 2);
+  CGContextClosePath(context);
+  CGContextFillPath(context);
+  int filled = 0;
+  for (int i = 0; i < 16 * 16; i++)
+    filled += pixels[i * 4 + 3] != 0;
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return filled > 10 && filled < 150 ? 0 : -1;
 }
 
 // Declare test functions from other files.
@@ -9259,6 +9286,7 @@ struct {
     FUNC_DEF(test_CFBundle_resource_urls),
     FUNC_DEF(test_CFString_split_join_and_replace),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
+    FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),

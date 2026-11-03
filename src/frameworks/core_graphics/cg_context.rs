@@ -607,6 +607,65 @@ fn CGContextAddLineToPoint(env: &mut Environment, context: CGContextRef, x: CGFl
         .line_to(point);
 }
 
+fn CGContextAddQuadCurveToPoint(
+    env: &mut Environment,
+    context: CGContextRef,
+    cx: CGFloat,
+    cy: CGFloat,
+    x: CGFloat,
+    y: CGFloat,
+) {
+    let Some(start) = current_point(env, context) else {
+        CGContextMoveToPoint(env, context, x, y);
+        return;
+    };
+    let control = device_point(env, context, CGPoint { x: cx, y: cy });
+    let end = device_point(env, context, CGPoint { x, y });
+    let path = &mut env.objc.borrow_mut::<CGContextHostObject>(context).path;
+    for i in 1..=32 {
+        let t = i as CGFloat / 32.0;
+        let s = 1.0 - t;
+        path.line_to(CGPoint {
+            x: s * s * start.x + 2.0 * s * t * control.x + t * t * end.x,
+            y: s * s * start.y + 2.0 * s * t * control.y + t * t * end.y,
+        });
+    }
+}
+
+fn CGContextAddCurveToPoint(
+    env: &mut Environment,
+    context: CGContextRef,
+    c1x: CGFloat,
+    c1y: CGFloat,
+    c2x: CGFloat,
+    c2y: CGFloat,
+    x: CGFloat,
+    y: CGFloat,
+) {
+    let Some(start) = current_point(env, context) else {
+        CGContextMoveToPoint(env, context, x, y);
+        return;
+    };
+    let c1 = device_point(env, context, CGPoint { x: c1x, y: c1y });
+    let c2 = device_point(env, context, CGPoint { x: c2x, y: c2y });
+    let end = device_point(env, context, CGPoint { x, y });
+    let path = &mut env.objc.borrow_mut::<CGContextHostObject>(context).path;
+    for i in 1..=32 {
+        let t = i as CGFloat / 32.0;
+        let s = 1.0 - t;
+        path.line_to(CGPoint {
+            x: s * s * s * start.x
+                + 3.0 * s * s * t * c1.x
+                + 3.0 * s * t * t * c2.x
+                + t * t * t * end.x,
+            y: s * s * s * start.y
+                + 3.0 * s * s * t * c1.y
+                + 3.0 * s * t * t * c2.y
+                + t * t * t * end.y,
+        });
+    }
+}
+
 fn CGContextClosePath(env: &mut Environment, context: CGContextRef) {
     env.objc
         .borrow_mut::<CGContextHostObject>(context)
@@ -870,6 +929,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextBeginPath(_)),
     export_c_func!(CGContextMoveToPoint(_, _, _)),
     export_c_func!(CGContextAddLineToPoint(_, _, _)),
+    export_c_func!(CGContextAddQuadCurveToPoint(_, _, _, _, _)),
+    export_c_func!(CGContextAddCurveToPoint(_, _, _, _, _, _, _)),
     export_c_func!(CGContextClosePath(_)),
     export_c_func!(CGContextAddRect(_, _)),
     export_c_func!(CGContextAddRects(_, _, _)),
