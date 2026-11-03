@@ -774,6 +774,7 @@ fn test_iter_transformed_pixels() {
             blend_mode: kCGBlendModeNormal,
             alpha: 1.0,
             transform,
+            clip: Vec::new(),
             pixels: &mut [],
         }
     }
@@ -900,6 +901,7 @@ fn test_axis_aligned_coverage_matches_iter_transformed_pixels() {
             blend_mode: kCGBlendModeNormal,
             alpha: 1.0,
             transform,
+            clip: Vec::new(),
             pixels: &mut [],
         };
         let expected: Vec<(i32, i32)> = drawer
