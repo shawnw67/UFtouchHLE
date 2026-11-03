@@ -125,6 +125,15 @@ extern void *ABAddressBookGetPersonWithRecordID(void *book, int record_id);
 extern CFArrayRef ABAddressBookCopyArrayOfAllPeople(void *book);
 extern bool ABAddressBookHasUnsavedChanges(void *book);
 extern bool ABAddressBookSave(void *book, CFTypeRef *error);
+extern CFStringRef kABHomeLabel;
+extern void *ABMultiValueCreateMutable(int property_type);
+extern bool ABMultiValueAddValueAndLabel(void *multi, CFTypeRef value,
+                                         CFStringRef label, int *identifier);
+extern int ABMultiValueGetCount(void *multi);
+extern CFTypeRef ABMultiValueCopyValueAtIndex(void *multi, int index);
+extern CFStringRef ABMultiValueCopyLabelAtIndex(void *multi, int index);
+extern int ABMultiValueGetIndexForIdentifier(void *multi, int identifier);
+extern bool ABMultiValueRemoveValueAndLabelAtIndex(void *multi, int index);
 struct TestSplitComplex {
   float *realp;
   float *imagp;
@@ -6708,6 +6717,31 @@ int test_address_book_virtual_records(void) {
   return passed ? 0 : -1;
 }
 
+int test_address_book_multivalue(void) {
+  void *multi = ABMultiValueCreateMutable(0x101);
+  CFStringRef phone =
+      CFStringCreateWithCString(NULL, "123", kCFStringEncodingUTF8);
+  int identifier = -1;
+  int passed =
+      multi &&
+      ABMultiValueAddValueAndLabel(multi, phone, kABHomeLabel, &identifier) &&
+      ABMultiValueGetCount(multi) == 1 &&
+      ABMultiValueGetIndexForIdentifier(multi, identifier) == 0;
+  CFTypeRef copied = ABMultiValueCopyValueAtIndex(multi, 0);
+  CFStringRef label = ABMultiValueCopyLabelAtIndex(multi, 0);
+  passed = passed && copied && label && CFEqual(copied, phone) &&
+           CFEqual(label, kABHomeLabel) &&
+           ABMultiValueRemoveValueAndLabelAtIndex(multi, 0) &&
+           ABMultiValueGetCount(multi) == 0;
+  if (label)
+    CFRelease(label);
+  if (copied)
+    CFRelease(copied);
+  CFRelease(phone);
+  CFRelease(multi);
+  return passed ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10988,6 +11022,7 @@ struct {
     FUNC_DEF(test_dispatch_data_sources),
     FUNC_DEF(test_dispatch_once_concurrent),
     FUNC_DEF(test_address_book_virtual_records),
+    FUNC_DEF(test_address_book_multivalue),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),

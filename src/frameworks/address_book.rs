@@ -9,7 +9,7 @@ use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant,
 use crate::frameworks::foundation::ns_array;
 use crate::frameworks::foundation::ns_string::{from_rust_string, to_rust_string};
 use crate::mem::MutPtr;
-use crate::objc::{id, nil, objc_classes, release, retain, ClassExports, HostObject};
+use crate::objc::{id, msg, nil, objc_classes, release, retain, ClassExports, HostObject};
 use crate::Environment;
 use std::collections::HashMap;
 
@@ -29,6 +29,12 @@ struct Record {
     values: HashMap<i32, id>,
 }
 impl HostObject for Record {}
+#[derive(Default)]
+struct MultiValue {
+    entries: Vec<(id, id, i32)>,
+    next_id: i32,
+}
+impl HostObject for MultiValue {}
 
 pub const CLASSES: ClassExports = objc_classes! {
     (env, this, _cmd);
@@ -43,6 +49,13 @@ pub const CLASSES: ClassExports = objc_classes! {
     - (())dealloc {
         let values = std::mem::take(&mut env.objc.borrow_mut::<Record>(this).values);
         for value in values.into_values() { release(env, value); }
+        env.objc.dealloc_object(this, &mut env.mem)
+    }
+    @end
+    @implementation _Podroid_ABMultiValue: NSObject
+    - (())dealloc {
+        let entries = std::mem::take(&mut env.objc.borrow_mut::<MultiValue>(this).entries);
+        for (value, label, _) in entries { release(env, value); if !label.is_null() { release(env, label); } }
         env.objc.dealloc_object(this, &mut env.mem)
     }
     @end
@@ -316,7 +329,133 @@ pub const CONSTANTS: ConstantExports = &[
     ("_kABWorkLabel", HostConstant::NSString("_$!<Work>!$_")),
     ("_kABOtherLabel", HostConstant::NSString("_$!<Other>!$_")),
 ];
+fn ABMultiValueCreateMutable(env: &mut Environment, _property_type: i32) -> id {
+    let class = env
+        .objc
+        .get_known_class("_Podroid_ABMultiValue", &mut env.mem);
+    env.objc
+        .alloc_object(class, Box::<MultiValue>::default(), &mut env.mem)
+}
+fn ABMultiValueGetCount(env: &mut Environment, value: id) -> i32 {
+    if value.is_null() {
+        0
+    } else {
+        env.objc.borrow::<MultiValue>(value).entries.len() as i32
+    }
+}
+fn ABMultiValueCopyValueAtIndex(env: &mut Environment, multi: id, index: i32) -> id {
+    if multi.is_null() || index < 0 {
+        return nil;
+    }
+    let value = env
+        .objc
+        .borrow::<MultiValue>(multi)
+        .entries
+        .get(index as usize)
+        .map_or(nil, |entry| entry.0);
+    if !value.is_null() {
+        retain(env, value);
+    }
+    value
+}
+fn ABMultiValueCopyLabelAtIndex(env: &mut Environment, multi: id, index: i32) -> id {
+    if multi.is_null() || index < 0 {
+        return nil;
+    }
+    let value = env
+        .objc
+        .borrow::<MultiValue>(multi)
+        .entries
+        .get(index as usize)
+        .map_or(nil, |entry| entry.1);
+    if !value.is_null() {
+        retain(env, value);
+    }
+    value
+}
+fn ABMultiValueGetIdentifierAtIndex(env: &mut Environment, multi: id, index: i32) -> i32 {
+    if multi.is_null() || index < 0 {
+        return -1;
+    }
+    env.objc
+        .borrow::<MultiValue>(multi)
+        .entries
+        .get(index as usize)
+        .map_or(-1, |entry| entry.2)
+}
+fn ABMultiValueGetIndexForIdentifier(env: &mut Environment, multi: id, identifier: i32) -> i32 {
+    if multi.is_null() {
+        return -1;
+    }
+    env.objc
+        .borrow::<MultiValue>(multi)
+        .entries
+        .iter()
+        .position(|entry| entry.2 == identifier)
+        .map_or(-1, |i| i as i32)
+}
+fn ABMultiValueGetFirstIndexOfValue(env: &mut Environment, multi: id, value: id) -> i32 {
+    if multi.is_null() || value.is_null() {
+        return -1;
+    }
+    let entries = env.objc.borrow::<MultiValue>(multi).entries.clone();
+    entries
+        .iter()
+        .position(|entry| entry.0 == value || msg![env; (entry.0) isEqual:value])
+        .map_or(-1, |i| i as i32)
+}
+fn ABMultiValueAddValueAndLabel(
+    env: &mut Environment,
+    multi: id,
+    value: id,
+    label: id,
+    identifier: MutPtr<i32>,
+) -> bool {
+    if multi.is_null() || value.is_null() {
+        return false;
+    }
+    retain(env, value);
+    if !label.is_null() {
+        retain(env, label);
+    }
+    let object = env.objc.borrow_mut::<MultiValue>(multi);
+    let entry_id = object.next_id;
+    object.next_id = object
+        .next_id
+        .checked_add(1)
+        .expect("address book multivalue ID overflow");
+    object.entries.push((value, label, entry_id));
+    if !identifier.is_null() {
+        env.mem.write(identifier, entry_id);
+    }
+    true
+}
+fn ABMultiValueRemoveValueAndLabelAtIndex(env: &mut Environment, multi: id, index: i32) -> bool {
+    if multi.is_null() || index < 0 {
+        return false;
+    }
+    let object = env.objc.borrow_mut::<MultiValue>(multi);
+    if index as usize >= object.entries.len() {
+        return false;
+    }
+    let (value, label, _) = object.entries.remove(index as usize);
+    release(env, value);
+    if !label.is_null() {
+        release(env, label);
+    }
+    true
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(ABMultiValueCreateMutable(_)),
+    export_c_func!(ABMultiValueGetCount(_)),
+    export_c_func!(ABMultiValueCopyValueAtIndex(_, _)),
+    export_c_func!(ABMultiValueCopyLabelAtIndex(_, _)),
+    export_c_func!(ABMultiValueGetIdentifierAtIndex(_, _)),
+    export_c_func!(ABMultiValueGetIndexForIdentifier(_, _)),
+    export_c_func!(ABMultiValueGetFirstIndexOfValue(_, _)),
+    export_c_func!(ABMultiValueAddValueAndLabel(_, _, _, _)),
+    export_c_func!(ABMultiValueRemoveValueAndLabelAtIndex(_, _)),
     export_c_func!(ABAddressBookCreate()),
     export_c_func!(ABAddressBookCreateWithOptions(_, _)),
     export_c_func!(ABAddressBookGetAuthorizationStatus()),
