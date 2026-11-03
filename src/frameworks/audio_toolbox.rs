@@ -23,6 +23,7 @@ macro_rules! return_if_null {
     };
 }
 
+pub mod au_graph;
 pub mod audio_components;
 pub mod audio_file;
 pub mod audio_queue;
@@ -37,6 +38,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     class_exports: &[],
     constant_exports: &[],
     function_exports: &[
+        au_graph::FUNCTIONS,
         audio_components::FUNCTIONS,
         audio_file::FUNCTIONS,
         audio_queue::FUNCTIONS,
@@ -49,6 +51,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
 
 #[derive(Default)]
 pub struct State {
+    au_graph: au_graph::State,
     audio_file: audio_file::State,
     audio_queue: audio_queue::State,
     audio_services: audio_services::State,
