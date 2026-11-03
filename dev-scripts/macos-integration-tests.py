@@ -39,6 +39,7 @@ OUT = os.path.join(ROOT, "target", "macos-integration-tests")
 STUBS = os.path.join(OUT, "stubs")
 SOURCE = os.path.join(ROOT, "tests", "TestApp_source")
 APP = os.path.join(OUT, "TestApp.app")
+HOST_CXX_APP = os.path.join(OUT, "HostCxxProbe.app")
 
 CFLAGS = [
     "--target=armv7-apple-ios5.0",
@@ -190,11 +191,24 @@ def build_app(link_args):
     run(["clang"] + CFLAGS + ["-nostartfiles", "-e", "start"] + objects + link_args + ["-o", os.path.join(APP, "TestApp")])
 
 
+def build_host_cxx_probe():
+    """Build a guest without libstdc++ to exercise the host C++ ABI."""
+    shutil.rmtree(HOST_CXX_APP, ignore_errors=True)
+    shutil.copytree(os.path.join(ROOT, "tests", "TestApp.app"), HOST_CXX_APP)
+    source = os.path.join(ROOT, "tests", "fixtures", "cxx_runtime_probe.c")
+    obj = os.path.join(OUT, "cxx_runtime_probe.o")
+    run(["clang"] + CFLAGS + ["-c", source, "-o", obj])
+    run(["clang"] + CFLAGS + ["-nostartfiles", "-e", "start", os.path.join(OUT, "start.o"), obj,
+                               "-L" + os.path.join(STUBS, "lib"), "-lSystem",
+                               "-o", os.path.join(HOST_CXX_APP, "TestApp")])
+
+
 def main():
     if not os.path.exists(TOUCHHLE):
         sys.exit("Build touchHLE first: cargo build --release")
     os.makedirs(OUT, exist_ok=True)
     build_app(make_stubs())
+    build_host_cxx_probe()
     if "--gui" in sys.argv[1:]:
         os.execv(TOUCHHLE, [TOUCHHLE, APP])
     result = subprocess.run([TOUCHHLE, APP, "--headless", "--args", "--cli-tests"], capture_output=True, text=True)
@@ -237,6 +251,15 @@ def main():
     if exit_test.returncode != 0 or any(pos < 0 for pos in positions) or positions != sorted(positions):
         sys.exit("Guest exit handler order check failed:\n" + exit_output[-3000:])
     print("PASS ARM guest C and C++ exit handler order")
+    host_cxx = subprocess.run(
+        [TOUCHHLE, HOST_CXX_APP, "--headless"], capture_output=True, text=True, timeout=30,
+    )
+    host_output = host_cxx.stdout + host_cxx.stderr
+    host_markers = ["HOST_CXX_PROBE_OK", "HOST_EXIT_LAST", "HOST_EXIT_MIDDLE", "HOST_EXIT_FIRST"]
+    positions = [host_output.find(marker) for marker in host_markers]
+    if host_cxx.returncode != 0 or any(pos < 0 for pos in positions) or positions != sorted(positions):
+        sys.exit("Host C++ ABI fallback check failed:\n" + host_output[-3000:])
+    print("PASS ARM guest host C++ ABI fallback")
 
 
 if __name__ == "__main__":
