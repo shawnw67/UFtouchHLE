@@ -18,6 +18,7 @@
 
 pub mod cf_allocator;
 pub mod cf_array;
+pub mod cf_attributed_string;
 pub mod cf_bundle;
 pub mod cf_data;
 pub mod cf_dictionary;
@@ -61,6 +62,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     function_exports: &[
         FUNCTIONS,
         cf_array::FUNCTIONS,
+        cf_attributed_string::FUNCTIONS,
         cf_dictionary::FUNCTIONS,
         cf_bundle::FUNCTIONS,
         cf_socket::FUNCTIONS,

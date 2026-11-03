@@ -8,6 +8,7 @@
 // runs these automatically.
 
 #include <CoreFoundation/CFArray.h>
+#include <CoreFoundation/CFAttributedString.h>
 #include <CoreFoundation/CFBase.h>
 #include <CoreFoundation/CFBundle.h>
 #include <CoreFoundation/CFDictionary.h>
@@ -119,6 +120,20 @@ int test_CTFont_graphics_font_round_trip(void) {
   CFRelease(graphics);
   CFRelease(original);
   CFRelease(name);
+  return passed ? 0 : -1;
+}
+
+int test_CFAttributedString_basic(void) {
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "hello", kCFStringEncodingUTF8);
+  CFAttributedStringRef attributed = CFAttributedStringCreate(NULL, text, NULL);
+  CFAttributedStringRef copy = CFAttributedStringCreateCopy(NULL, attributed);
+  int passed = copy && CFAttributedStringGetLength(copy) == 5 &&
+               CFEqual(text, CFAttributedStringGetString(copy));
+  CFRelease(attributed);
+  passed = passed && CFAttributedStringGetLength(copy) == 5;
+  CFRelease(copy);
+  CFRelease(text);
   return passed ? 0 : -1;
 }
 
@@ -9442,6 +9457,7 @@ struct {
     FUNC_DEF(test_CFString_split_join_and_replace),
     FUNC_DEF(test_CFString_encoding_queries),
     FUNC_DEF(test_CTFont_graphics_font_round_trip),
+    FUNC_DEF(test_CFAttributedString_basic),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
