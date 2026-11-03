@@ -110,6 +110,21 @@ extern unsigned long dispatch_source_get_mask(void *source);
 extern unsigned long dispatch_source_get_data(void *source);
 extern void dispatch_source_merge_data(void *source, unsigned long value);
 extern void dispatch_resume(void *object);
+extern const int kABPersonFirstNameProperty;
+extern void *ABAddressBookCreate(void);
+extern void *ABPersonCreate(void);
+extern bool ABRecordSetValue(void *record, int property, CFTypeRef value,
+                             CFTypeRef *error);
+extern CFTypeRef ABRecordCopyValue(void *record, int property);
+extern int ABRecordGetRecordID(void *record);
+extern bool ABAddressBookAddRecord(void *book, void *record, CFTypeRef *error);
+extern bool ABAddressBookRemoveRecord(void *book, void *record,
+                                      CFTypeRef *error);
+extern int ABAddressBookGetPersonCount(void *book);
+extern void *ABAddressBookGetPersonWithRecordID(void *book, int record_id);
+extern CFArrayRef ABAddressBookCopyArrayOfAllPeople(void *book);
+extern bool ABAddressBookHasUnsavedChanges(void *book);
+extern bool ABAddressBookSave(void *book, CFTypeRef *error);
 struct TestSplitComplex {
   float *realp;
   float *imagp;
@@ -6663,6 +6678,36 @@ int test_dispatch_once_concurrent(void) {
   return probe.entered == 1 && (uintptr_t)a == 1 && (uintptr_t)b == 1 ? 0 : -1;
 }
 
+int test_address_book_virtual_records(void) {
+  void *book = ABAddressBookCreate();
+  void *person = ABPersonCreate();
+  CFStringRef name =
+      CFStringCreateWithCString(NULL, "Test", kCFStringEncodingUTF8);
+  int passed =
+      book && person && ABRecordGetRecordID(person) == -1 &&
+      ABRecordSetValue(person, kABPersonFirstNameProperty, name, NULL) &&
+      ABAddressBookAddRecord(book, person, NULL);
+  int record_id = ABRecordGetRecordID(person);
+  CFTypeRef copied_name = ABRecordCopyValue(person, kABPersonFirstNameProperty);
+  CFArrayRef people = ABAddressBookCopyArrayOfAllPeople(book);
+  passed = passed && record_id > 0 && ABAddressBookGetPersonCount(book) == 1 &&
+           ABAddressBookGetPersonWithRecordID(book, record_id) == person &&
+           copied_name && CFEqual(copied_name, name) && people &&
+           CFArrayGetCount(people) == 1 &&
+           ABAddressBookHasUnsavedChanges(book) &&
+           !ABAddressBookSave(book, NULL);
+  passed = passed && ABAddressBookRemoveRecord(book, person, NULL) &&
+           ABAddressBookGetPersonCount(book) == 0;
+  if (people)
+    CFRelease(people);
+  if (copied_name)
+    CFRelease(copied_name);
+  CFRelease(name);
+  CFRelease(person);
+  CFRelease(book);
+  return passed ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10942,6 +10987,7 @@ struct {
     FUNC_DEF(test_dispatch_timer_functions),
     FUNC_DEF(test_dispatch_data_sources),
     FUNC_DEF(test_dispatch_once_concurrent),
+    FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),

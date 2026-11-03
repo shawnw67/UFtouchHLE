@@ -22,6 +22,7 @@
 #![allow(clippy::too_many_arguments)] // It's not our fault!
 
 pub mod accelerate;
+pub mod address_book;
 pub mod audio_toolbox;
 pub mod avfoundation;
 pub mod carbon_core;
@@ -54,6 +55,7 @@ pub struct State {
     pub(crate) network_trace: crate::network_trace::State,
     pub(crate) performance: crate::performance::State,
     avfoundation: avfoundation::State,
+    address_book: address_book::State,
     audio_toolbox: audio_toolbox::State,
     core_animation: core_animation::State,
     core_foundation: core_foundation::State,
