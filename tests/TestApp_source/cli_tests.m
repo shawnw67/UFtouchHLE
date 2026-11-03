@@ -83,6 +83,13 @@ extern float cblas_sdot(int n, const float *x, int ix, const float *y, int iy);
 extern void cblas_sgemv(int order, int trans, int m, int n, float alpha,
                         const float *a, int lda, const float *x, int ix,
                         float beta, float *y, int iy);
+struct TestImageBuffer {
+  void *data;
+  unsigned int height, width, row_bytes;
+};
+extern int vImageCopyBuffer(const struct TestImageBuffer *source,
+                            const struct TestImageBuffer *destination,
+                            unsigned int pixel_size, unsigned int flags);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -635,6 +642,22 @@ int test_cblas_operations(void) {
   cblas_sgemv(101, 112, 2, 3, 1, row, 3, x2, 1, 0, transposed, 1);
   passed = passed && transposed[0] == 9 && transposed[1] == 12 &&
            transposed[2] == 15;
+  return passed ? 0 : -1;
+}
+
+int test_vImageCopyBuffer(void) {
+  unsigned char src[] = {1, 2, 3, 4, 5, 6, 7, 8};
+  unsigned char dst[] = {0, 0, 9, 0, 0, 9};
+  struct TestImageBuffer source = {src, 2, 3, 4};
+  struct TestImageBuffer target = {dst, 2, 2, 3};
+  int passed = vImageCopyBuffer(&source, &target, 1, 0) == 0 && dst[0] == 1 &&
+               dst[1] == 2 && dst[2] == 9 && dst[3] == 5 && dst[4] == 6 &&
+               dst[5] == 9;
+  target.width = 4;
+  passed = passed && vImageCopyBuffer(&source, &target, 1, 0) == -21766;
+  target.width = 2;
+  target.row_bytes = 1;
+  passed = passed && vImageCopyBuffer(&source, &target, 1, 0) == -21777;
   return passed ? 0 : -1;
 }
 
@@ -9951,6 +9974,7 @@ struct {
     FUNC_DEF(test_vDSP_fft_and_packing),
     FUNC_DEF(test_vDSP_vector_operations),
     FUNC_DEF(test_cblas_operations),
+    FUNC_DEF(test_vImageCopyBuffer),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),

@@ -654,7 +654,92 @@ fn cblas_sgemv(
     }
 }
 
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
+struct VImageBuffer {
+    data: MutPtr<u8>,
+    height: u32,
+    width: u32,
+    row_bytes: u32,
+}
+unsafe impl SafeRead for VImageBuffer {}
+
+fn vImageCopyBuffer(
+    env: &mut Environment,
+    source: ConstPtr<VImageBuffer>,
+    destination: ConstPtr<VImageBuffer>,
+    pixel_size: u32,
+    flags: u32,
+) -> i32 {
+    const NULL_POINTER: i32 = -21772;
+    const ROI_LARGER: i32 = -21766;
+    const INVALID_PARAMETER: i32 = -21773;
+    const UNKNOWN_FLAGS: i32 = -21775;
+    const INVALID_ROW_BYTES: i32 = -21777;
+    if source.is_null() || destination.is_null() {
+        return NULL_POINTER;
+    }
+    if flags & !(16 | 128) != 0 {
+        return UNKNOWN_FLAGS;
+    }
+    if flags & 128 != 0 {
+        return 0;
+    }
+    let src = env.mem.read(source);
+    let dst = env.mem.read(destination);
+    if src.data.is_null() || dst.data.is_null() {
+        return NULL_POINTER;
+    }
+    if src.width < dst.width || src.height < dst.height {
+        return ROI_LARGER;
+    }
+    let Some(line_bytes) = dst.width.checked_mul(pixel_size) else {
+        return INVALID_PARAMETER;
+    };
+    if pixel_size == 0 {
+        return INVALID_PARAMETER;
+    }
+    if src.row_bytes < line_bytes || dst.row_bytes < line_bytes {
+        return INVALID_ROW_BYTES;
+    }
+    for y in 0..dst.height {
+        let src_offset = y
+            .checked_mul(src.row_bytes)
+            .expect("vImage source overflow");
+        let dst_offset = y
+            .checked_mul(dst.row_bytes)
+            .expect("vImage destination overflow");
+        let bytes = env
+            .mem
+            .bytes_at((src.data + src_offset).cast(), line_bytes)
+            .to_vec();
+        env.mem
+            .bytes_at_mut(dst.data + dst_offset, line_bytes)
+            .copy_from_slice(&bytes);
+    }
+    0
+}
+
+// Converter creation is not implemented yet; report unsupported conversions
+// so callers can choose their fallback instead of treating them as successful.
+fn vImageConvert_AnyToAny(
+    _env: &mut Environment,
+    converter: MutVoidPtr,
+    sources: ConstPtr<u32>,
+    destinations: ConstPtr<u32>,
+    _temp_buffer: MutVoidPtr,
+    _flags: u32,
+) -> i32 {
+    if converter.is_null() || sources.is_null() || destinations.is_null() {
+        -21772
+    } else {
+        -21773
+    }
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(vImageConvert_AnyToAny(_, _, _, _, _)),
+    export_c_func!(vImageCopyBuffer(_, _, _, _)),
     export_c_func!(vDSP_normalize(_, _, _, _, _, _, _)),
     export_c_func!(vDSP_vintb(_, _, _, _, _, _, _, _)),
     export_c_func!(cblas_saxpy(_, _, _, _, _, _)),
