@@ -38,6 +38,7 @@ pub mod core_text;
 pub mod foundation;
 pub mod game_controller;
 pub mod game_kit;
+pub mod image_io;
 pub mod media_player;
 pub mod message_ui;
 pub mod openal;

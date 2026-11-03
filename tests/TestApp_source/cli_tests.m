@@ -142,6 +142,12 @@ extern CGImageRef CGImageCreateFlippedVertically(CGImageRef image);
 extern CGImageRef CGImageCreateScaled(CGImageRef image, unsigned int width,
                                       unsigned int height);
 extern void CGImageReadPixels(CGImageRef image, unsigned char *output);
+extern CFTypeRef CGImageSourceCreateWithData(CFDataRef data, CFTypeRef options);
+extern unsigned int CGImageSourceGetCount(CFTypeRef source);
+extern int CGImageSourceGetStatusAtIndex(CFTypeRef source, unsigned int index);
+extern CGImageRef CGImageSourceCreateImageAtIndex(CFTypeRef source,
+                                                  unsigned int index,
+                                                  CFTypeRef options);
 
 @interface UIBezierPath : NSObject
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
@@ -6348,6 +6354,29 @@ int test_CGImage_transform_helpers(void) {
   return passed ? 0 : -1;
 }
 
+int test_CGImageSource_data(void) {
+  FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
+  if (!file)
+    return -1;
+  unsigned char bytes[4096];
+  size_t length = fread(bytes, 1, sizeof(bytes), file);
+  fclose(file);
+  CFDataRef data = CFDataCreate(NULL, bytes, length);
+  CFTypeRef source = CGImageSourceCreateWithData(data, NULL);
+  CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, NULL);
+  int passed = source && image && CGImageSourceGetCount(source) == 1 &&
+               CGImageSourceGetStatusAtIndex(source, 0) == 0 &&
+               CGImageSourceGetStatusAtIndex(source, 1) == -4 &&
+               CGImageGetWidth(image) == 1 && CGImageGetHeight(image) == 1 &&
+               !CGImageSourceCreateImageAtIndex(source, 1, NULL);
+  if (image)
+    CGImageRelease(image);
+  if (source)
+    CFRelease(source);
+  CFRelease(data);
+  return passed ? 0 : -1;
+}
+
 int test_CGImage_JPEG() {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "r");
   if (file == NULL) {
@@ -10576,6 +10605,7 @@ struct {
     FUNC_DEF(test_CGImage_invalid_rgb32),
     FUNC_DEF(test_CGImage_copy_metadata),
     FUNC_DEF(test_CGImage_transform_helpers),
+    FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
     FUNC_DEF(test_NSString_stringByReplacingOccurrencesOfString),

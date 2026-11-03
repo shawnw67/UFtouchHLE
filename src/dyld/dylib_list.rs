@@ -30,6 +30,7 @@ pub const DYLIB_LIST: &[&super::HostDylib] = &[
     &frameworks::foundation::DYLIB,
     &frameworks::game_controller::DYLIB,
     &frameworks::game_kit::DYLIB,
+    &frameworks::image_io::DYLIB,
     &frameworks::media_player::DYLIB,
     &frameworks::message_ui::DYLIB,
     &frameworks::openal::DYLIB,
