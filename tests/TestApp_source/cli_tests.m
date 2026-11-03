@@ -129,6 +129,8 @@ extern void CGPathAddArcToPoint(void *path, const void *transform, float x1,
 extern CGPoint CGPathGetCurrentPoint(const void *path);
 extern void UIGraphicsPushContext(CGContextRef context);
 extern void UIGraphicsPopContext(void);
+extern void CGContextResetClip(CGContextRef context);
+extern CGRect CGContextGetClipBoundingBox(CGContextRef context);
 
 @interface UIBezierPath : NSObject
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
@@ -1233,6 +1235,16 @@ int test_UIBezierPath_even_odd(void) {
   UIGraphicsPopContext();
   passed = passed && pixels[(1 * 8 + 1) * 4 + 3] == 255 &&
            pixels[(4 * 8 + 4) * 4 + 3] == 0;
+  CGContextResetClip(context);
+  UIGraphicsPushContext(context);
+  [inner addClip];
+  UIGraphicsPopContext();
+  CGRect bounds = CGContextGetClipBoundingBox(context);
+  passed = passed && bounds.origin.x == 2 && bounds.origin.y == 2 &&
+           bounds.size.width == 4 && bounds.size.height == 4;
+  CGContextResetClip(context);
+  bounds = CGContextGetClipBoundingBox(context);
+  passed = passed && bounds.size.width == 8 && bounds.size.height == 8;
   memset(pixels, 0, sizeof(pixels));
   UIGraphicsPushContext(context);
   [outer addClip];

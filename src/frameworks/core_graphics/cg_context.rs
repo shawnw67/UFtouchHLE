@@ -964,6 +964,41 @@ pub(crate) fn CGContextEOClip(env: &mut Environment, context: CGContextRef) {
     host_obj.clip.push((path, true));
 }
 
+fn CGContextResetClip(env: &mut Environment, context: CGContextRef) {
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .clip
+        .clear();
+}
+
+fn CGContextGetClipBoundingBox(env: &mut Environment, context: CGContextRef) -> CGRect {
+    let (mut x0, mut y0) = (0.0f32, 0.0f32);
+    let (mut x1, mut y1) = (
+        CGBitmapContextGetWidth(env, context) as f32,
+        CGBitmapContextGetHeight(env, context) as f32,
+    );
+    let host = env.objc.borrow::<CGContextHostObject>(context);
+    for (path, _) in &host.clip {
+        let Some(bounds) = path.bounds() else {
+            return CGRect::default();
+        };
+        x0 = x0.max(bounds.origin.x);
+        y0 = y0.max(bounds.origin.y);
+        x1 = x1.min(bounds.origin.x + bounds.size.width);
+        y1 = y1.min(bounds.origin.y + bounds.size.height);
+    }
+    if x1 <= x0 || y1 <= y0 {
+        return CGRect::default();
+    }
+    host.transform.invert().apply_to_rect(CGRect {
+        origin: CGPoint { x: x0, y: y0 },
+        size: CGSize {
+            width: x1 - x0,
+            height: y1 - y0,
+        },
+    })
+}
+
 fn CGContextDrawPath(env: &mut Environment, context: CGContextRef, mode: CGPathDrawingMode) {
     let path = std::mem::take(&mut env.objc.borrow_mut::<CGContextHostObject>(context).path);
     let (fill, even_odd, stroke) = match mode {
@@ -1151,6 +1186,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextAddPath(_, _)),
     export_c_func!(CGContextClip(_)),
     export_c_func!(CGContextEOClip(_)),
+    export_c_func!(CGContextResetClip(_)),
+    export_c_func!(CGContextGetClipBoundingBox(_)),
     export_c_func!(CGContextDrawPath(_, _)),
     export_c_func!(CGContextSetLineWidth(_, _)),
     export_c_func!(CGContextSetShouldAntialias(_, _)),
