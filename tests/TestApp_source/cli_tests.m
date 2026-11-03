@@ -10885,6 +10885,56 @@ int test_address_book_access_callback(void) {
   return passed ? 0 : -1;
 }
 
+// Keep the graph test independent of SDK AudioToolbox header availability.
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+struct TestAudioComponentDescription {
+  uint32_t type, subtype, manufacturer, flags, flags_mask;
+};
+extern int NewAUGraph(void **);
+extern int DisposeAUGraph(void *);
+extern int AUGraphAddNode(void *, const struct TestAudioComponentDescription *,
+                          int *);
+extern int AUGraphRemoveNode(void *, int);
+extern int AUGraphCountNodes(void *, uint32_t *);
+extern int AUGraphNodeInfo(void *, int, struct TestAudioComponentDescription *,
+                           void **);
+extern int AUGraphOpen(void *);
+extern int AUGraphClose(void *);
+extern int AUGraphInitialize(void *);
+extern int AUGraphUninitialize(void *);
+extern int AUGraphIsOpen(void *, unsigned char *);
+extern int AUGraphIsInitialized(void *, unsigned char *);
+extern int AUGraphConnectNodeInput(void *, int, uint32_t, int, uint32_t);
+extern int AUGraphDisconnectNodeInput(void *, int, uint32_t);
+
+int test_augraph_single_output_lifecycle(void) {
+  const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
+                                                       0x6170706c, 0, 0};
+  const struct TestAudioComponentDescription mixer = {0x61756d78, 0x33646d78,
+                                                      0x6170706c, 0, 0};
+  struct TestAudioComponentDescription returned = {0};
+  void *graph = NULL, *unit = NULL;
+  int output_node = 0, mixer_node = 0;
+  uint32_t count = 0;
+  unsigned char state = 0;
+  if (NewAUGraph(&graph) || AUGraphAddNode(graph, &output, &output_node) ||
+      AUGraphAddNode(graph, &mixer, &mixer_node) ||
+      AUGraphCountNodes(graph, &count) || count != 2 ||
+      AUGraphConnectNodeInput(graph, mixer_node, 0, output_node, 0) ||
+      !AUGraphOpen(graph) ||
+      AUGraphDisconnectNodeInput(graph, output_node, 0) ||
+      AUGraphRemoveNode(graph, mixer_node) || AUGraphOpen(graph) ||
+      AUGraphIsOpen(graph, &state) || state != 1 ||
+      AUGraphNodeInfo(graph, output_node, &returned, &unit) || !unit ||
+      returned.subtype != output.subtype || AUGraphInitialize(graph) ||
+      AUGraphIsInitialized(graph, &state) || state != 1 ||
+      AUGraphUninitialize(graph) || AUGraphClose(graph) ||
+      AUGraphIsOpen(graph, &state) || state != 0 || DisposeAUGraph(graph))
+    return -1;
+  return 0;
+}
+#endif
+
 // clang-format off
 #define FUNC_DEF(func)                                                         \
   { &func, #func }
@@ -11087,6 +11137,9 @@ struct {
     FUNC_DEF(test_dispatch_timer_functions),
     FUNC_DEF(test_dispatch_data_sources),
     FUNC_DEF(test_dispatch_once_concurrent),
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+    FUNC_DEF(test_augraph_single_output_lifecycle),
+#endif
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),
     FUNC_DEF(test_address_book_access_callback),
