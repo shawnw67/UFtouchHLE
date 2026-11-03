@@ -81,15 +81,22 @@ enum DispatchObject {
 }
 
 struct TimerSource {
-    /// Copied blocks, or null.
-    event_handler: MutVoidPtr,
-    cancel_handler: MutVoidPtr,
+    event_handler: Option<SourceHandler>,
+    cancel_handler: Option<SourceHandler>,
     next_fire: Option<Instant>,
     interval: Option<Duration>,
     /// Sources are created suspended.
     suspend_count: i32,
     cancelled: bool,
     queue: ConstVoidPtr,
+    handle: u32,
+    mask: u32,
+}
+
+#[derive(Clone, Copy)]
+enum SourceHandler {
+    Block(MutVoidPtr),
+    Function(GuestFunction),
 }
 
 /// Turn a `dispatch_time_t` into an [Instant] ([None] if it's "forever").
@@ -834,8 +841,8 @@ fn timer_source(env: &mut Environment, source: MutVoidPtr) -> &mut TimerSource {
 fn dispatch_source_create(
     env: &mut Environment,
     type_: ConstVoidPtr,
-    _handle: u32,
-    _mask: u32,
+    handle: u32,
+    mask: u32,
     queue: ConstVoidPtr,
 ) -> MutVoidPtr {
     assert_eq!(
@@ -846,13 +853,15 @@ fn dispatch_source_create(
     new_object(
         env,
         DispatchObject::TimerSource(TimerSource {
-            event_handler: MutVoidPtr::null(),
-            cancel_handler: MutVoidPtr::null(),
+            event_handler: None,
+            cancel_handler: None,
             next_fire: None,
             interval: None,
             suspend_count: 1,
             cancelled: false,
             queue,
+            handle,
+            mask,
         }),
     )
 }
@@ -875,8 +884,13 @@ fn dispatch_source_set_event_handler(
     block: ConstVoidPtr,
 ) {
     let block = _Block_copy(env, block);
-    let old = std::mem::replace(&mut timer_source(env, source).event_handler, block);
-    _Block_release(env, old);
+    let old = std::mem::replace(
+        &mut timer_source(env, source).event_handler,
+        (!block.is_null()).then_some(SourceHandler::Block(block)),
+    );
+    if let Some(SourceHandler::Block(old)) = old {
+        _Block_release(env, old);
+    }
 }
 fn dispatch_source_set_cancel_handler(
     env: &mut Environment,
@@ -884,8 +898,44 @@ fn dispatch_source_set_cancel_handler(
     block: ConstVoidPtr,
 ) {
     let block = _Block_copy(env, block);
-    let old = std::mem::replace(&mut timer_source(env, source).cancel_handler, block);
-    _Block_release(env, old);
+    let old = std::mem::replace(
+        &mut timer_source(env, source).cancel_handler,
+        (!block.is_null()).then_some(SourceHandler::Block(block)),
+    );
+    if let Some(SourceHandler::Block(old)) = old {
+        _Block_release(env, old);
+    }
+}
+fn dispatch_source_set_event_handler_f(
+    env: &mut Environment,
+    source: MutVoidPtr,
+    function: GuestFunction,
+) {
+    let handler = (!function.to_ptr().is_null()).then_some(SourceHandler::Function(function));
+    let old = std::mem::replace(&mut timer_source(env, source).event_handler, handler);
+    if let Some(SourceHandler::Block(old)) = old {
+        _Block_release(env, old);
+    }
+}
+fn dispatch_source_set_cancel_handler_f(
+    env: &mut Environment,
+    source: MutVoidPtr,
+    function: GuestFunction,
+) {
+    let handler = (!function.to_ptr().is_null()).then_some(SourceHandler::Function(function));
+    let old = std::mem::replace(&mut timer_source(env, source).cancel_handler, handler);
+    if let Some(SourceHandler::Block(old)) = old {
+        _Block_release(env, old);
+    }
+}
+fn dispatch_source_testcancel(env: &mut Environment, source: MutVoidPtr) -> i32 {
+    i32::from(timer_source(env, source).cancelled)
+}
+fn dispatch_source_get_handle(env: &mut Environment, source: MutVoidPtr) -> u32 {
+    timer_source(env, source).handle
+}
+fn dispatch_source_get_mask(env: &mut Environment, source: MutVoidPtr) -> u32 {
+    timer_source(env, source).mask
 }
 fn dispatch_source_cancel(env: &mut Environment, source: MutVoidPtr) {
     let timer = timer_source(env, source);
@@ -893,16 +943,19 @@ fn dispatch_source_cancel(env: &mut Environment, source: MutVoidPtr) {
         return;
     }
     timer.cancelled = true;
-    let cancel_handler = std::mem::take(&mut timer.cancel_handler);
+    let cancel_handler = timer.cancel_handler.take();
     let queue = timer.queue;
-    if !cancel_handler.is_null() {
-        env.libc_state
-            .dispatch
-            .pending
-            .push_back(DispatchWork::Block {
-                block: cancel_handler,
+    if let Some(handler) = cancel_handler {
+        let context = dispatch_get_context(env, source);
+        let work = match handler {
+            SourceHandler::Block(block) => DispatchWork::Block { block, queue },
+            SourceHandler::Function(function) => DispatchWork::Function {
+                context,
+                function,
                 queue,
-            });
+            },
+        };
+        env.libc_state.dispatch.pending.push_back(work);
     }
 }
 
@@ -939,11 +992,11 @@ fn queue_due_work(env: &mut Environment) {
         }
     }
     let mut handlers = Vec::new();
-    for object in state.objects.values_mut() {
+    for (&source, object) in state.objects.iter_mut() {
         let DispatchObject::TimerSource(timer) = object else {
             continue;
         };
-        if timer.cancelled || timer.suspend_count > 0 || timer.event_handler.is_null() {
+        if timer.cancelled || timer.suspend_count > 0 || timer.event_handler.is_none() {
             continue;
         }
         let Some(next_fire) = timer.next_fire else {
@@ -960,17 +1013,22 @@ fn queue_due_work(env: &mut Environment) {
             }
             next
         });
-        handlers.push((timer.event_handler, timer.queue));
+        handlers.push((source, timer.event_handler.unwrap(), timer.queue));
     }
-    for (handler, queue) in handlers {
-        let handler = _Block_copy(env, handler.cast_const());
-        env.libc_state
-            .dispatch
-            .pending
-            .push_back(DispatchWork::Block {
-                block: handler,
+    for (source, handler, queue) in handlers {
+        let context = dispatch_get_context(env, source);
+        let work = match handler {
+            SourceHandler::Block(block) => DispatchWork::Block {
+                block: _Block_copy(env, block.cast_const()),
                 queue,
-            });
+            },
+            SourceHandler::Function(function) => DispatchWork::Function {
+                context,
+                function,
+                queue,
+            },
+        };
+        env.libc_state.dispatch.pending.push_back(work);
     }
 }
 
@@ -1075,8 +1133,13 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(dispatch_source_create(_, _, _, _)),
     export_c_func!(dispatch_source_set_timer(_, _, _, _)),
     export_c_func!(dispatch_source_set_event_handler(_, _)),
+    export_c_func!(dispatch_source_set_event_handler_f(_, _)),
     export_c_func!(dispatch_source_set_cancel_handler(_, _)),
+    export_c_func!(dispatch_source_set_cancel_handler_f(_, _)),
     export_c_func!(dispatch_source_cancel(_)),
+    export_c_func!(dispatch_source_testcancel(_)),
+    export_c_func!(dispatch_source_get_handle(_)),
+    export_c_func!(dispatch_source_get_mask(_)),
     export_c_func!(dispatch_suspend(_)),
     export_c_func!(dispatch_resume(_)),
     export_c_func!(_Block_copy(_)),

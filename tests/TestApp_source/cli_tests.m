@@ -89,6 +89,21 @@ extern void dispatch_group_async_f(void *group, const void *queue,
                                    void *context, void (*function)(void *));
 extern void dispatch_group_notify_f(void *group, const void *queue,
                                     void *context, void (*function)(void *));
+extern const char _dispatch_source_type_timer;
+extern void *dispatch_source_create(const void *type, unsigned long handle,
+                                    unsigned long mask, const void *queue);
+extern void dispatch_source_set_timer(void *source, unsigned long long start,
+                                      unsigned long long interval,
+                                      unsigned long long leeway);
+extern void dispatch_source_set_event_handler_f(void *source,
+                                                void (*fn)(void *));
+extern void dispatch_source_set_cancel_handler_f(void *source,
+                                                 void (*fn)(void *));
+extern void dispatch_source_cancel(void *source);
+extern int dispatch_source_testcancel(void *source);
+extern unsigned long dispatch_source_get_handle(void *source);
+extern unsigned long dispatch_source_get_mask(void *source);
+extern void dispatch_resume(void *object);
 struct TestSplitComplex {
   float *realp;
   float *imagp;
@@ -6543,6 +6558,27 @@ int test_dispatch_group_counting(void) {
   return passed ? 0 : -1;
 }
 
+int test_dispatch_timer_functions(void) {
+  const void *queue = dispatch_get_main_queue();
+  void *source =
+      dispatch_source_create(&_dispatch_source_type_timer, 7, 3, queue);
+  int value = 0;
+  dispatch_set_context(source, &value);
+  dispatch_source_set_event_handler_f(source, test_dispatch_add_one);
+  dispatch_source_set_cancel_handler_f(source, test_dispatch_add_one);
+  dispatch_source_set_timer(source, 0, ~0ULL, 0);
+  dispatch_resume(source);
+  void *semaphore = dispatch_semaphore_create(0);
+  dispatch_semaphore_wait(semaphore, 0);
+  int passed = value == 1 && dispatch_source_get_handle(source) == 7 &&
+               dispatch_source_get_mask(source) == 3 &&
+               !dispatch_source_testcancel(source);
+  dispatch_source_cancel(source);
+  dispatch_semaphore_wait(semaphore, 0);
+  passed = passed && value == 2 && dispatch_source_testcancel(source);
+  return passed ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10819,6 +10855,7 @@ struct {
     FUNC_DEF(test_dispatch_function_calls),
     FUNC_DEF(test_dispatch_queue_metadata),
     FUNC_DEF(test_dispatch_group_counting),
+    FUNC_DEF(test_dispatch_timer_functions),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
