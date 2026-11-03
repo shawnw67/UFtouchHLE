@@ -69,8 +69,9 @@ extern void dispatch_after_f(unsigned long long time, const void *queue,
 extern void dispatch_once_f(int *predicate, void *context, void (*fn)(void *));
 extern void dispatch_apply_f(unsigned int count, const void *queue,
                              void *context, void (*fn)(void *, unsigned int));
-extern void *dispatch_semaphore_create(int value);
-extern int dispatch_semaphore_wait(void *semaphore, unsigned long long timeout);
+extern void *dispatch_semaphore_create(long value);
+extern long dispatch_semaphore_wait(void *semaphore,
+                                    unsigned long long timeout);
 struct TestSplitComplex {
   float *realp;
   float *imagp;
