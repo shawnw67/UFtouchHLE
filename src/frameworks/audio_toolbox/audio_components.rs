@@ -18,7 +18,7 @@ use crate::frameworks::core_audio_types::{
     fourcc, kAudioFormatFlagIsAlignedHigh, kAudioFormatFlagIsFloat, kAudioFormatFlagIsPacked,
     kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM, AudioStreamBasicDescription,
 };
-use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, SafeRead};
+use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, MutVoidPtr, SafeRead};
 
 const kAudioUnitType_Output: u32 = fourcc(b"auou");
 const kAudioUnitSubType_RemoteIO: u32 = fourcc(b"rioc");
@@ -47,6 +47,7 @@ pub struct AudioComponentInstanceHostObject {
     pub last_render_time: Option<Instant>,
     pub al_source: Option<ALuint>,
     pub is_running_handler: bool,
+    pub property_listeners: Vec<(u32, GuestFunction, MutVoidPtr)>,
 }
 impl Default for AudioComponentInstanceHostObject {
     fn default() -> Self {
@@ -76,6 +77,7 @@ impl Default for AudioComponentInstanceHostObject {
             last_render_time: None,
             al_source: None,
             is_running_handler: false,
+            property_listeners: Vec::new(),
         }
     }
 }

@@ -10916,6 +10916,19 @@ extern int AudioUnitSetProperty(void *, uint32_t, uint32_t, uint32_t,
                                 const void *, uint32_t);
 extern int AudioUnitGetProperty(void *, uint32_t, uint32_t, uint32_t, void *,
                                 uint32_t *);
+typedef void (*TestAudioPropertyListener)(void *, void *, uint32_t, uint32_t,
+                                          uint32_t);
+extern int AudioUnitAddPropertyListener(void *, uint32_t,
+                                        TestAudioPropertyListener, void *);
+extern int
+AudioUnitRemovePropertyListenerWithUserData(void *, uint32_t,
+                                            TestAudioPropertyListener, void *);
+static void test_audio_property_listener(void *context, void *unit,
+                                         uint32_t property, uint32_t scope,
+                                         uint32_t element) {
+  if (unit && property == 2 && scope == 0 && element == 0)
+    ++*(int *)context;
+}
 
 int test_audio_component_enumeration(void) {
   struct TestAudioComponentDescription description = {0};
@@ -10924,10 +10937,17 @@ int test_audio_component_enumeration(void) {
   uint32_t size = 0;
   unsigned char writable = 0;
   double rate = 22050.0, actual = 0;
+  int notifications = 0;
   if (!component || AudioComponentFindNext(component, &description) ||
       AudioComponentInstanceNew(component, &unit) || !unit ||
       AudioUnitGetPropertyInfo(unit, 2, 0, 0, &size, &writable) || size != 8 ||
-      writable != 1 || AudioUnitSetProperty(unit, 2, 0, 0, &rate, 8) ||
+      writable != 1 ||
+      AudioUnitAddPropertyListener(unit, 2, test_audio_property_listener,
+                                   &notifications) ||
+      AudioUnitSetProperty(unit, 2, 0, 0, &rate, 8) || notifications != 1 ||
+      AudioUnitRemovePropertyListenerWithUserData(
+          unit, 2, test_audio_property_listener, &notifications) ||
+      AudioUnitSetProperty(unit, 2, 0, 0, &rate, 8) || notifications != 1 ||
       AudioUnitGetProperty(unit, 2, 0, 0, &actual, &size) || actual != rate ||
       AudioComponentInstanceDispose(unit) ||
       !AudioComponentInstanceNew(NULL, &unit))

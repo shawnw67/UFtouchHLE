@@ -12,7 +12,7 @@ use std::time::Instant;
 use crate::audio::openal::al_types::{ALuint, ALvoid};
 use crate::audio::openal::{AL_BUFFERS_PROCESSED, AL_PLAYING, AL_SOURCE_STATE};
 
-use crate::abi::CallFromHost;
+use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::FunctionExports;
 use crate::environment::Environment;
 use crate::export_c_func;
@@ -74,6 +74,94 @@ pub(super) fn AudioUnitUninitialize(env: &mut Environment, in_unit: AudioUnit) -
     match ns_run_loop::remove_audio_unit(env, run_loop, in_unit) {
         Ok(_) => 0,
         Err(_) => paramErr, // TODO: handle different errors
+    }
+}
+
+fn AudioUnitAddPropertyListener(
+    env: &mut Environment,
+    unit: AudioUnit,
+    property: AudioUnitPropertyID,
+    callback: GuestFunction,
+    context: MutVoidPtr,
+) -> OSStatus {
+    if callback.to_ptr().is_null() {
+        return paramErr;
+    }
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&unit)
+    else {
+        return paramErr;
+    };
+    object
+        .property_listeners
+        .push((property, callback, context));
+    0
+}
+
+fn AudioUnitRemovePropertyListener(
+    env: &mut Environment,
+    unit: AudioUnit,
+    property: AudioUnitPropertyID,
+    callback: GuestFunction,
+) -> OSStatus {
+    remove_property_listener(env, unit, property, callback, None)
+}
+
+fn AudioUnitRemovePropertyListenerWithUserData(
+    env: &mut Environment,
+    unit: AudioUnit,
+    property: AudioUnitPropertyID,
+    callback: GuestFunction,
+    context: MutVoidPtr,
+) -> OSStatus {
+    remove_property_listener(env, unit, property, callback, Some(context))
+}
+
+fn remove_property_listener(
+    env: &mut Environment,
+    unit: AudioUnit,
+    property: AudioUnitPropertyID,
+    callback: GuestFunction,
+    context: Option<MutVoidPtr>,
+) -> OSStatus {
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&unit)
+    else {
+        return paramErr;
+    };
+    if let Some(index) = object.property_listeners.iter().position(|&(p, c, ctx)| {
+        p == property
+            && c.to_ptr() == callback.to_ptr()
+            && context.is_none_or(|wanted| wanted == ctx)
+    }) {
+        object.property_listeners.remove(index);
+    }
+    0
+}
+
+fn notify_property_listeners(
+    env: &mut Environment,
+    unit: AudioUnit,
+    property: AudioUnitPropertyID,
+    scope: AudioUnitScope,
+    element: AudioUnitElement,
+) {
+    let listeners = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&unit)
+        .map(|object| {
+            object
+                .property_listeners
+                .iter()
+                .copied()
+                .filter(|entry| entry.0 == property)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    for (_, callback, context) in listeners {
+        let (): () = callback.call_from_host(env, (context, unit, property, scope, element));
     }
 }
 
@@ -170,6 +258,9 @@ fn AudioUnitSetProperty(
         _ => unimplemented!(),
     };
 
+    if result == 0 {
+        notify_property_listeners(env, in_unit, in_id, in_scope, in_element);
+    }
     result
 }
 
@@ -573,6 +664,9 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitInitialize(_)),
     export_c_func!(AudioUnitUninitialize(_)),
+    export_c_func!(AudioUnitAddPropertyListener(_, _, _, _)),
+    export_c_func!(AudioUnitRemovePropertyListener(_, _, _)),
+    export_c_func!(AudioUnitRemovePropertyListenerWithUserData(_, _, _, _)),
     export_c_func!(AudioUnitSetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetPropertyInfo(_, _, _, _, _, _)),
