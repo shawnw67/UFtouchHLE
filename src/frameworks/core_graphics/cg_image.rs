@@ -404,7 +404,7 @@ fn CGImageCreateFlippedVertically(env: &mut Environment, image: CGImageRef) -> C
     )
 }
 
-fn CGImageCreateScaled(
+pub(crate) fn CGImageCreateScaled(
     env: &mut Environment,
     image: CGImageRef,
     width: u32,

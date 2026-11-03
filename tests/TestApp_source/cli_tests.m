@@ -148,6 +148,14 @@ extern int CGImageSourceGetStatusAtIndex(CFTypeRef source, unsigned int index);
 extern CGImageRef CGImageSourceCreateImageAtIndex(CFTypeRef source,
                                                   unsigned int index,
                                                   CFTypeRef options);
+extern CFDictionaryRef CGImageSourceCopyPropertiesAtIndex(CFTypeRef source,
+                                                          unsigned int index,
+                                                          CFTypeRef options);
+extern CGImageRef CGImageSourceCreateThumbnailAtIndex(CFTypeRef source,
+                                                      unsigned int index,
+                                                      CFDictionaryRef options);
+extern CFStringRef kCGImagePropertyPixelWidth;
+extern CFStringRef kCGImageSourceCreateThumbnailFromImageAlways;
 
 @interface UIBezierPath : NSObject
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
@@ -6364,11 +6372,31 @@ int test_CGImageSource_data(void) {
   CFDataRef data = CFDataCreate(NULL, bytes, length);
   CFTypeRef source = CGImageSourceCreateWithData(data, NULL);
   CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, NULL);
+  CFDictionaryRef properties =
+      CGImageSourceCopyPropertiesAtIndex(source, 0, NULL);
+  CFNumberRef number =
+      properties ? CFDictionaryGetValue(properties, kCGImagePropertyPixelWidth)
+                 : NULL;
+  int width = 0;
+  CFMutableDictionaryRef options =
+      CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks,
+                                &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(options, kCGImageSourceCreateThumbnailFromImageAlways,
+                       kCFBooleanTrue);
+  CGImageRef thumbnail =
+      CGImageSourceCreateThumbnailAtIndex(source, 0, options);
   int passed = source && image && CGImageSourceGetCount(source) == 1 &&
                CGImageSourceGetStatusAtIndex(source, 0) == 0 &&
                CGImageSourceGetStatusAtIndex(source, 1) == -4 &&
                CGImageGetWidth(image) == 1 && CGImageGetHeight(image) == 1 &&
-               !CGImageSourceCreateImageAtIndex(source, 1, NULL);
+               !CGImageSourceCreateImageAtIndex(source, 1, NULL) && number &&
+               CFNumberGetValue(number, kCFNumberIntType, &width) &&
+               width == 1 && thumbnail && CGImageGetWidth(thumbnail) == 1;
+  if (thumbnail)
+    CGImageRelease(thumbnail);
+  CFRelease(options);
+  if (properties)
+    CFRelease(properties);
   if (image)
     CGImageRelease(image);
   if (source)
