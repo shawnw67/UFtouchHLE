@@ -64,15 +64,44 @@ const kAudioOutputUnitProperty_EnableIO: AudioUnitPropertyID = 2003;
 const kAudioOutputUnitProperty_IsRunning: AudioUnitPropertyID = 2001;
 
 pub(super) fn AudioUnitInitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&in_unit)
+    else {
+        return paramErr;
+    };
+    if object.disposing {
+        return paramErr;
+    }
+    if object.initialized {
+        return 0;
+    }
+    object.initialized = true;
     let run_loop = CFRunLoopGetMain(env);
     ns_run_loop::add_audio_unit(env, run_loop, in_unit);
     0 // success
 }
 
 pub(super) fn AudioUnitUninitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&in_unit)
+    else {
+        return paramErr;
+    };
+    if !object.initialized || object.started {
+        return paramErr;
+    }
     let run_loop = CFRunLoopGetMain(env);
     match ns_run_loop::remove_audio_unit(env, run_loop, in_unit) {
-        Ok(_) => 0,
+        Ok(_) => {
+            audio_components::State::get(&mut env.framework_state)
+                .audio_component_instances
+                .get_mut(&in_unit)
+                .unwrap()
+                .initialized = false;
+            0
+        }
         Err(_) => paramErr, // TODO: handle different errors
     }
 }
@@ -414,6 +443,7 @@ pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSSt
         .audio_component_instances
         .get(&ci)
     {
+        Some(unit) if unit.disposing => return paramErr,
         Some(unit) if unit.started => return 0,
         None => return paramErr,
         _ => {}

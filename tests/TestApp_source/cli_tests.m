@@ -10910,6 +10910,7 @@ extern void *
 AudioComponentFindNext(void *, const struct TestAudioComponentDescription *);
 extern int AudioComponentInstanceNew(void *, void **);
 extern int AudioComponentInstanceDispose(void *);
+extern int AudioUnitInitialize(void *);
 extern int AudioUnitGetPropertyInfo(void *, uint32_t, uint32_t, uint32_t,
                                     uint32_t *, unsigned char *);
 extern int AudioUnitSetProperty(void *, uint32_t, uint32_t, uint32_t,
@@ -10953,6 +10954,7 @@ int test_audio_component_enumeration(void) {
       AudioUnitGetProperty(unit, 2001, 0, 0, &running, &running_size) ||
       running != 0 || !AudioUnitSetProperty(unit, 99999, 0, 0, &rate, 8) ||
       !AudioUnitGetProperty(unit, 99999, 0, 0, &actual, &size) ||
+      AudioUnitInitialize(unit) || AudioUnitInitialize(unit) ||
       AudioComponentInstanceDispose(unit) ||
       !AudioComponentInstanceNew(NULL, &unit))
     return -1;

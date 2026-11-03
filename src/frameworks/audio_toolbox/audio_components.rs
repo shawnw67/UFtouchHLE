@@ -39,6 +39,8 @@ impl State {
 #[derive(Clone)]
 pub struct AudioComponentInstanceHostObject {
     pub started: bool,
+    pub initialized: bool,
+    pub disposing: bool,
     pub maximum_frames_per_slice: u32,
     pub global_stream_format: AudioStreamBasicDescription,
     pub input_stream_format: Option<AudioStreamBasicDescription>,
@@ -56,6 +58,8 @@ impl Default for AudioComponentInstanceHostObject {
         // through a test app built targetting iOS 2.0
         AudioComponentInstanceHostObject {
             started: false,
+            initialized: false,
+            disposing: false,
             // returning 1024 based on https://developer.apple.com/documentation/audiotoolbox/kaudiounitproperty_maximumframesperslice
             maximum_frames_per_slice: 1024,
             global_stream_format: AudioStreamBasicDescription {
@@ -197,15 +201,28 @@ pub(super) fn AudioComponentInstanceDispose(
     env: &mut Environment,
     in_instance: AudioComponentInstance,
 ) -> OSStatus {
-    let result = if in_instance.is_null() {
-        paramErr
-    } else {
-        State::get(&mut env.framework_state)
-            .audio_component_instances
-            .remove(&in_instance);
-        env.mem.free(in_instance.cast());
-        0
+    let Some(object) = State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&in_instance)
+    else {
+        return paramErr;
     };
+    if object.disposing {
+        return paramErr;
+    }
+    object.disposing = true;
+    let (started, initialized) = (object.started, object.initialized);
+    if started {
+        super::audio_unit::AudioOutputUnitStop(env, in_instance);
+    }
+    if initialized {
+        super::audio_unit::AudioUnitUninitialize(env, in_instance);
+    }
+    State::get(&mut env.framework_state)
+        .audio_component_instances
+        .remove(&in_instance);
+    env.mem.free(in_instance.cast());
+    let result = 0;
     log_dbg!(
         "AudioComponentInstanceDispose({:?}) -> {:?}",
         in_instance,
