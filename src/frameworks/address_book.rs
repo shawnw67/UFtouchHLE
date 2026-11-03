@@ -8,7 +8,7 @@
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant, HostDylib};
 use crate::frameworks::foundation::ns_array;
 use crate::frameworks::foundation::ns_string::{from_rust_string, to_rust_string};
-use crate::mem::MutPtr;
+use crate::mem::{ConstVoidPtr, MutPtr};
 use crate::objc::{id, msg, nil, objc_classes, release, retain, ClassExports, HostObject};
 use crate::Environment;
 use std::collections::HashMap;
@@ -97,6 +97,13 @@ fn ABAddressBookCreateWithOptions(env: &mut Environment, _options: id, error: Mu
 }
 fn ABAddressBookGetAuthorizationStatus(_env: &mut Environment) -> i32 {
     3
+}
+fn ABAddressBookRequestAccessWithCompletion(
+    env: &mut Environment,
+    book: id,
+    completion: ConstVoidPtr,
+) {
+    crate::libc::dispatch::enqueue_bool_object_block(env, completion, !book.is_null(), nil);
 }
 fn ABPersonCreate(env: &mut Environment) -> id {
     new_record(env, 0)
@@ -247,6 +254,35 @@ fn ABPersonGetSortOrdering(_env: &mut Environment) -> i32 {
 fn ABPersonGetCompositeNameFormat(_env: &mut Environment) -> i32 {
     0
 }
+fn ABPersonGetTypeOfProperty(_env: &mut Environment, property: i32) -> i32 {
+    match property {
+        0..=11 | 14 => 1,
+        12 | 20 | 22 | 23 => 0x101,
+        13 | 15 | 16 => 4,
+        17 | 21 | 24 | 25 => 0x105,
+        18 => 0x104,
+        19 => 2,
+        _ => 0,
+    }
+}
+fn ABPersonCopyLocalizedPropertyName(env: &mut Environment, property: i32) -> id {
+    let name = match property {
+        0 => "First name",
+        1 => "Last name",
+        2 => "Middle name",
+        9 => "Organization",
+        10 => "Job title",
+        11 => "Department",
+        12 => "Email",
+        13 => "Birthday",
+        14 => "Note",
+        17 => "Address",
+        20 => "Phone",
+        22 => "URL",
+        _ => return nil,
+    };
+    from_rust_string(env, name.to_owned())
+}
 fn ABPersonHasImageData(env: &mut Environment, person: id) -> bool {
     !person.is_null() && !env.objc.borrow::<Record>(person).image_data.is_null()
 }
@@ -341,6 +377,17 @@ fn ABAddressBookSave(env: &mut Environment, _book: id, error: MutPtr<id>) -> boo
     // No persistent store is available yet: do not claim that data was saved.
     false
 }
+fn ABAddressBookRevert(env: &mut Environment, book: id) {
+    if book.is_null() {
+        return;
+    }
+    let book = env.objc.borrow_mut::<AddressBook>(book);
+    book.changed = false;
+    let records = std::mem::take(&mut book.records);
+    for record in records {
+        release(env, record);
+    }
+}
 fn ABAddressBookGetPersonCount(env: &mut Environment, book: id) -> i32 {
     if book.is_null() {
         return 0;
@@ -408,6 +455,245 @@ fn property_constant(env: &mut Environment, value: i32) -> crate::mem::ConstVoid
     env.mem.alloc_and_write(value).cast().cast_const()
 }
 pub const CONSTANTS: ConstantExports = &[
+    (
+        "_kABPersonMiddleNameProperty",
+        HostConstant::Custom(|env| property_constant(env, 2)),
+    ),
+    (
+        "_kABPersonPrefixProperty",
+        HostConstant::Custom(|env| property_constant(env, 3)),
+    ),
+    (
+        "_kABPersonSuffixProperty",
+        HostConstant::Custom(|env| property_constant(env, 4)),
+    ),
+    (
+        "_kABPersonNicknameProperty",
+        HostConstant::Custom(|env| property_constant(env, 5)),
+    ),
+    (
+        "_kABPersonFirstNamePhoneticProperty",
+        HostConstant::Custom(|env| property_constant(env, 6)),
+    ),
+    (
+        "_kABPersonLastNamePhoneticProperty",
+        HostConstant::Custom(|env| property_constant(env, 7)),
+    ),
+    (
+        "_kABPersonMiddleNamePhoneticProperty",
+        HostConstant::Custom(|env| property_constant(env, 8)),
+    ),
+    (
+        "_kABPersonJobTitleProperty",
+        HostConstant::Custom(|env| property_constant(env, 10)),
+    ),
+    (
+        "_kABPersonDepartmentProperty",
+        HostConstant::Custom(|env| property_constant(env, 11)),
+    ),
+    (
+        "_kABPersonBirthdayProperty",
+        HostConstant::Custom(|env| property_constant(env, 13)),
+    ),
+    (
+        "_kABPersonNoteProperty",
+        HostConstant::Custom(|env| property_constant(env, 14)),
+    ),
+    (
+        "_kABPersonCreationDateProperty",
+        HostConstant::Custom(|env| property_constant(env, 15)),
+    ),
+    (
+        "_kABPersonModificationDateProperty",
+        HostConstant::Custom(|env| property_constant(env, 16)),
+    ),
+    (
+        "_kABPersonAddressProperty",
+        HostConstant::Custom(|env| property_constant(env, 17)),
+    ),
+    (
+        "_kABPersonDateProperty",
+        HostConstant::Custom(|env| property_constant(env, 18)),
+    ),
+    (
+        "_kABPersonKindProperty",
+        HostConstant::Custom(|env| property_constant(env, 19)),
+    ),
+    (
+        "_kABPersonInstantMessageProperty",
+        HostConstant::Custom(|env| property_constant(env, 21)),
+    ),
+    (
+        "_kABPersonURLProperty",
+        HostConstant::Custom(|env| property_constant(env, 22)),
+    ),
+    (
+        "_kABPersonRelatedNamesProperty",
+        HostConstant::Custom(|env| property_constant(env, 23)),
+    ),
+    (
+        "_kABPersonSocialProfileProperty",
+        HostConstant::Custom(|env| property_constant(env, 24)),
+    ),
+    (
+        "_kABPersonAlternateBirthdayProperty",
+        HostConstant::Custom(|env| property_constant(env, 25)),
+    ),
+    (
+        "_kABPersonPhoneMobileLabel",
+        HostConstant::NSString("_$!<Mobile>!$_"),
+    ),
+    (
+        "_kABPersonPhoneIPhoneLabel",
+        HostConstant::NSString("iPhone"),
+    ),
+    (
+        "_kABPersonPhoneMainLabel",
+        HostConstant::NSString("_$!<Main>!$_"),
+    ),
+    (
+        "_kABPersonPhoneHomeFAXLabel",
+        HostConstant::NSString("_$!<HomeFAX>!$_"),
+    ),
+    (
+        "_kABPersonPhoneWorkFAXLabel",
+        HostConstant::NSString("_$!<WorkFAX>!$_"),
+    ),
+    (
+        "_kABPersonPhoneOtherFAXLabel",
+        HostConstant::NSString("_$!<OtherFAX>!$_"),
+    ),
+    (
+        "_kABPersonPhonePagerLabel",
+        HostConstant::NSString("_$!<Pager>!$_"),
+    ),
+    (
+        "_kABPersonHomePageLabel",
+        HostConstant::NSString("_$!<HomePage>!$_"),
+    ),
+    (
+        "_kABPersonAddressStreetKey",
+        HostConstant::NSString("Street"),
+    ),
+    ("_kABPersonAddressCityKey", HostConstant::NSString("City")),
+    ("_kABPersonAddressStateKey", HostConstant::NSString("State")),
+    ("_kABPersonAddressZIPKey", HostConstant::NSString("ZIP")),
+    (
+        "_kABPersonAddressCountryKey",
+        HostConstant::NSString("Country"),
+    ),
+    (
+        "_kABPersonAddressCountryCodeKey",
+        HostConstant::NSString("CountryCode"),
+    ),
+    (
+        "_kABPersonInstantMessageServiceKey",
+        HostConstant::NSString("service"),
+    ),
+    (
+        "_kABPersonInstantMessageUsernameKey",
+        HostConstant::NSString("username"),
+    ),
+    (
+        "_kABPersonInstantMessageServiceAIM",
+        HostConstant::NSString("AIM"),
+    ),
+    (
+        "_kABPersonInstantMessageServiceICQ",
+        HostConstant::NSString("ICQ"),
+    ),
+    (
+        "_kABPersonInstantMessageServiceJabber",
+        HostConstant::NSString("Jabber"),
+    ),
+    (
+        "_kABPersonInstantMessageServiceMSN",
+        HostConstant::NSString("MSN"),
+    ),
+    (
+        "_kABPersonInstantMessageServiceYahoo",
+        HostConstant::NSString("Yahoo"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceKey",
+        HostConstant::NSString("service"),
+    ),
+    (
+        "_kABPersonSocialProfileURLKey",
+        HostConstant::NSString("url"),
+    ),
+    (
+        "_kABPersonSocialProfileUsernameKey",
+        HostConstant::NSString("username"),
+    ),
+    (
+        "_kABPersonSocialProfileUserIdentifierKey",
+        HostConstant::NSString("identifier"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceTwitter",
+        HostConstant::NSString("twitter"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceFacebook",
+        HostConstant::NSString("facebook"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceFlickr",
+        HostConstant::NSString("flickr"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceLinkedIn",
+        HostConstant::NSString("linkedin"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceMyspace",
+        HostConstant::NSString("myspace"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceSinaWeibo",
+        HostConstant::NSString("sinaweibo"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceTencentWeibo",
+        HostConstant::NSString("tencentweibo"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceYelp",
+        HostConstant::NSString("yelp"),
+    ),
+    (
+        "_kABPersonSocialProfileServiceGameCenter",
+        HostConstant::NSString("gamecenter"),
+    ),
+    (
+        "_ABAddressBookErrorDomain",
+        HostConstant::NSString("ABAddressBookErrorDomain"),
+    ),
+    (
+        "_kABPersonAlternateBirthdayCalendarIdentifierKey",
+        HostConstant::NSString("calendaridentifier"),
+    ),
+    (
+        "_kABPersonAlternateBirthdayEraKey",
+        HostConstant::NSString("era"),
+    ),
+    (
+        "_kABPersonAlternateBirthdayYearKey",
+        HostConstant::NSString("year"),
+    ),
+    (
+        "_kABPersonAlternateBirthdayMonthKey",
+        HostConstant::NSString("month"),
+    ),
+    (
+        "_kABPersonAlternateBirthdayIsLeapMonthKey",
+        HostConstant::NSString("leapmonth"),
+    ),
+    (
+        "_kABPersonAlternateBirthdayDayKey",
+        HostConstant::NSString("day"),
+    ),
     (
         "_kABPersonFirstNameProperty",
         HostConstant::Custom(|env| property_constant(env, 0)),
@@ -550,6 +836,10 @@ fn ABMultiValueRemoveValueAndLabelAtIndex(env: &mut Environment, multi: id, inde
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(ABAddressBookRequestAccessWithCompletion(_, _)),
+    export_c_func!(ABAddressBookRevert(_)),
+    export_c_func!(ABPersonGetTypeOfProperty(_)),
+    export_c_func!(ABPersonCopyLocalizedPropertyName(_)),
     export_c_func!(ABAddressBookCopyPeopleWithName(_, _)),
     export_c_func!(ABPersonComparePeopleByName(_, _, _)),
     export_c_func!(ABPersonGetSortOrdering()),

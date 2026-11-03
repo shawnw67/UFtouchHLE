@@ -78,6 +78,12 @@ enum DispatchWork {
         data: u32,
         work: Box<DispatchWork>,
     },
+    BlockBoolObject {
+        block: MutVoidPtr,
+        queue: ConstVoidPtr,
+        value: bool,
+        object: id,
+    },
 }
 
 enum DispatchObject {
@@ -185,6 +191,31 @@ fn new_object(env: &mut Environment, object: DispatchObject) -> MutVoidPtr {
 /// followed by the block's own arguments.
 pub fn block_invoke_function(env: &Environment, block: ConstVoidPtr) -> GuestFunction {
     GuestFunction::from_addr_with_thumb_bit(block_word(env, block, 3))
+}
+
+pub(crate) fn enqueue_bool_object_block(
+    env: &mut Environment,
+    block: ConstVoidPtr,
+    value: bool,
+    object: id,
+) {
+    if block.is_null() {
+        return;
+    }
+    let block = _Block_copy(env, block);
+    if !object.is_null() {
+        crate::objc::retain(env, object);
+    }
+    let queue = main_queue(env);
+    env.libc_state
+        .dispatch
+        .pending
+        .push_back(DispatchWork::BlockBoolObject {
+            block,
+            queue,
+            value,
+            object,
+        });
 }
 
 /// Call a block that takes no arguments.
@@ -1228,6 +1259,22 @@ fn run_work(env: &mut Environment, work: DispatchWork) {
             timer.delivering_data = None;
             timer.event_queued = false;
             queue_source_cancel(env, source);
+        }
+        DispatchWork::BlockBoolObject {
+            block,
+            queue,
+            value,
+            object,
+        } => {
+            push_queue(env, queue);
+            let invoke =
+                GuestFunction::from_addr_with_thumb_bit(block_word(env, block.cast_const(), 3));
+            let _: () = invoke.call_from_host(env, (block, value, object));
+            _Block_release(env, block);
+            if !object.is_null() {
+                crate::objc::release(env, object);
+            }
+            pop_queue(env);
         }
     }
 }

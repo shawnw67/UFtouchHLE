@@ -112,6 +112,10 @@ extern void dispatch_source_merge_data(void *source, unsigned long value);
 extern void dispatch_resume(void *object);
 extern const int kABPersonFirstNameProperty;
 extern void *ABAddressBookCreate(void);
+extern void ABAddressBookRequestAccessWithCompletion(void *book,
+                                                     const void *block);
+extern void ABAddressBookRevert(void *book);
+extern int ABPersonGetTypeOfProperty(int property);
 extern void *ABPersonCreate(void);
 extern bool ABRecordSetValue(void *record, int property, CFTypeRef value,
                              CFTypeRef *error);
@@ -10851,6 +10855,36 @@ int test_Block_copy_lifetime() {
   return block_dispose_calls == 1 ? 0 : -5;
 }
 
+struct AccessBlock {
+  void *isa;
+  int flags;
+  int reserved;
+  void (*invoke)(struct AccessBlock *, bool, void *);
+  const struct TestBlockDescriptor *descriptor;
+  int *result;
+};
+static void test_access_block_invoke(struct AccessBlock *block, bool granted,
+                                     void *error) {
+  *block->result = granted && !error ? 1 : -1;
+}
+int test_address_book_access_callback(void) {
+  static const struct TestBlockDescriptor descriptor = {
+      0, sizeof(struct AccessBlock), NULL, NULL};
+  int result = 0;
+  struct AccessBlock block = {_NSConcreteStackBlock,    0,           0,
+                              test_access_block_invoke, &descriptor, &result};
+  void *book = ABAddressBookCreate();
+  ABAddressBookRequestAccessWithCompletion(book, &block);
+  int passed =
+      result == 0 && ABPersonGetTypeOfProperty(kABPersonFirstNameProperty) == 1;
+  void *semaphore = dispatch_semaphore_create(0);
+  dispatch_semaphore_wait(semaphore, 0);
+  passed = passed && result == 1;
+  ABAddressBookRevert(book);
+  CFRelease(book);
+  return passed ? 0 : -1;
+}
+
 // clang-format off
 #define FUNC_DEF(func)                                                         \
   { &func, #func }
@@ -11055,6 +11089,7 @@ struct {
     FUNC_DEF(test_dispatch_once_concurrent),
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),
+    FUNC_DEF(test_address_book_access_callback),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
