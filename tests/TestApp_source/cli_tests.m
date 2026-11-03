@@ -96,12 +96,17 @@ typedef const void *TestCTFontRef;
 typedef const void *TestCFReadStreamRef;
 typedef const void *TestCFWriteStreamRef;
 extern const CFStringRef kCFStreamPropertyDataWritten;
+extern const CFStringRef kCFStreamPropertyAppendToFile;
 extern TestCFWriteStreamRef
 CFWriteStreamCreateWithBuffer(CFAllocatorRef allocator, UInt8 *buffer,
                               CFIndex capacity);
 extern TestCFWriteStreamRef
 CFWriteStreamCreateWithAllocatedBuffers(CFAllocatorRef allocator,
                                         CFAllocatorRef bufferAllocator);
+extern TestCFWriteStreamRef
+CFWriteStreamCreateWithFile(CFAllocatorRef allocator, CFURLRef url);
+extern bool CFWriteStreamSetProperty(TestCFWriteStreamRef stream,
+                                     CFStringRef name, CFTypeRef value);
 extern bool CFWriteStreamOpen(TestCFWriteStreamRef stream);
 extern void CFWriteStreamClose(TestCFWriteStreamRef stream);
 extern bool CFWriteStreamCanAcceptBytes(TestCFWriteStreamRef stream);
@@ -225,6 +230,44 @@ int test_CFWriteStream_memory(void) {
   CFWriteStreamClose(stream);
   CFRelease(stream);
   return passed ? 0 : -1;
+}
+
+int test_CFWriteStream_file(void) {
+  char path[1024];
+  const char *home = getenv("HOME");
+  if (!home || snprintf(path, sizeof(path), "%s/tmp/podroid-cfstream-test",
+                        home) >= sizeof(path))
+    return -1;
+  unlink(path);
+  CFStringRef path_string =
+      CFStringCreateWithCString(NULL, path, kCFStringEncodingUTF8);
+  CFURLRef url = CFURLCreateWithFileSystemPath(NULL, path_string,
+                                               kCFURLPOSIXPathStyle, false);
+  TestCFWriteStreamRef stream = CFWriteStreamCreateWithFile(NULL, url);
+  const UInt8 first[] = {1, 2};
+  const UInt8 second[] = {3};
+  int passed = stream && CFWriteStreamOpen(stream) &&
+               CFWriteStreamWrite(stream, first, 2) == 2;
+  CFWriteStreamClose(stream);
+  CFRelease(stream);
+  stream = CFWriteStreamCreateWithFile(NULL, url);
+  passed = passed &&
+           CFWriteStreamSetProperty(stream, kCFStreamPropertyAppendToFile,
+                                    kCFBooleanTrue) &&
+           CFWriteStreamOpen(stream) &&
+           CFWriteStreamWrite(stream, second, 1) == 1;
+  CFWriteStreamClose(stream);
+  CFRelease(stream);
+  FILE *file = fopen(path, "rb");
+  UInt8 result[4] = {0};
+  passed = passed && file && fread(result, 1, sizeof(result), file) == 3 &&
+           result[0] == 1 && result[1] == 2 && result[2] == 3;
+  if (file)
+    fclose(file);
+  unlink(path);
+  CFRelease(url);
+  CFRelease(path_string);
+  return passed ? 0 : -2;
 }
 
 int test_CFReadStream_memory(void) {
@@ -9678,6 +9721,7 @@ struct {
     FUNC_DEF(test_CFReadStream_memory),
     FUNC_DEF(test_CFReadStream_file),
     FUNC_DEF(test_CFWriteStream_memory),
+    FUNC_DEF(test_CFWriteStream_file),
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),

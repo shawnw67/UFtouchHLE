@@ -9,10 +9,11 @@ use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::{CFIndex, CFTypeRef};
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::foundation::ns_string;
-use crate::fs::GuestPath;
+use crate::fs::{GuestFile, GuestOpenOptions, GuestPath};
 use crate::mem::{ConstPtr, MutPtr};
 use crate::objc::{id, msg, nil, objc_classes, ClassExports, HostObject};
 use crate::Environment;
+use std::io::Write;
 
 type CFReadStreamRef = CFTypeRef;
 type CFWriteStreamRef = CFTypeRef;
@@ -39,6 +40,11 @@ enum WriteBuffer {
         offset: u32,
     },
     Allocated(Vec<u8>),
+    File {
+        path: String,
+        file: Option<GuestFile>,
+        append: bool,
+    },
 }
 struct MemoryWriteStream {
     buffer: WriteBuffer,
@@ -47,10 +53,17 @@ struct MemoryWriteStream {
 impl HostObject for MemoryWriteStream {}
 
 const DATA_WRITTEN: &str = "kCFStreamPropertyDataWritten";
-pub const CONSTANTS: ConstantExports = &[(
-    "_kCFStreamPropertyDataWritten",
-    HostConstant::NSString(DATA_WRITTEN),
-)];
+const APPEND_TO_FILE: &str = "kCFStreamPropertyAppendToFile";
+pub const CONSTANTS: ConstantExports = &[
+    (
+        "_kCFStreamPropertyDataWritten",
+        HostConstant::NSString(DATA_WRITTEN),
+    ),
+    (
+        "_kCFStreamPropertyAppendToFile",
+        HostConstant::NSString(APPEND_TO_FILE),
+    ),
+];
 
 pub const CLASSES: ClassExports = objc_classes! {
 (env, this, _cmd);
@@ -116,17 +129,98 @@ fn CFWriteStreamCreateWithAllocatedBuffers(
     allocate_write_stream(env, WriteBuffer::Allocated(Vec::new()))
 }
 
-fn CFWriteStreamOpen(env: &mut Environment, stream: CFWriteStreamRef) -> bool {
+fn CFWriteStreamCreateWithFile(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    url: id,
+) -> CFWriteStreamRef {
+    if url.is_null()
+        || !(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default())
+    {
+        return nil;
+    }
+    let is_file: bool = msg![env; url isFileURL];
+    if !is_file {
+        return nil;
+    }
+    let path: id = msg![env; url path];
+    if path.is_null() {
+        return nil;
+    }
+    let path = ns_string::to_rust_string(env, path).into_owned();
+    allocate_write_stream(
+        env,
+        WriteBuffer::File {
+            path,
+            file: None,
+            append: false,
+        },
+    )
+}
+
+fn CFWriteStreamSetProperty(
+    env: &mut Environment,
+    stream: CFWriteStreamRef,
+    name: id,
+    value: id,
+) -> bool {
+    if name.is_null() || value.is_null() || ns_string::to_rust_string(env, name) != APPEND_TO_FILE {
+        return false;
+    }
+    let append: bool = msg![env; value boolValue];
     let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
     if host.status != NOT_OPEN {
         return false;
     }
+    if let WriteBuffer::File {
+        append: setting, ..
+    } = &mut host.buffer
+    {
+        *setting = append;
+        true
+    } else {
+        false
+    }
+}
+
+fn CFWriteStreamOpen(env: &mut Environment, stream: CFWriteStreamRef) -> bool {
+    let host = env.objc.borrow::<MemoryWriteStream>(stream);
+    if host.status != NOT_OPEN {
+        return false;
+    }
+    let file_request = if let WriteBuffer::File { path, append, .. } = &host.buffer {
+        Some((path.clone(), *append))
+    } else {
+        None
+    };
+    if let Some((path, append)) = file_request {
+        let mut options = GuestOpenOptions::new();
+        options.write().create();
+        if append {
+            options.append();
+        } else {
+            options.truncate();
+        }
+        let Ok(opened) = env.fs.open_with_options(GuestPath::new(&path), options) else {
+            env.objc.borrow_mut::<MemoryWriteStream>(stream).status = ERROR;
+            return false;
+        };
+        let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
+        if let WriteBuffer::File { file, .. } = &mut host.buffer {
+            *file = Some(opened);
+        }
+    }
+    let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
     host.status = OPEN;
     true
 }
 
 fn CFWriteStreamClose(env: &mut Environment, stream: CFWriteStreamRef) {
-    env.objc.borrow_mut::<MemoryWriteStream>(stream).status = CLOSED;
+    let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
+    if let WriteBuffer::File { file, .. } = &mut host.buffer {
+        *file = None;
+    }
+    host.status = CLOSED;
 }
 
 fn CFWriteStreamGetStatus(env: &mut Environment, stream: CFWriteStreamRef) -> i32 {
@@ -141,6 +235,7 @@ fn CFWriteStreamCanAcceptBytes(env: &mut Environment, stream: CFWriteStreamRef) 
                 capacity, offset, ..
             } => offset < capacity,
             WriteBuffer::Allocated(_) => true,
+            WriteBuffer::File { file, .. } => file.is_some(),
         }
 }
 
@@ -191,6 +286,13 @@ fn CFWriteStreamWrite(
             buffer.extend_from_slice(&data);
             length
         }
+        WriteBuffer::File { file, .. } => match file.as_mut().unwrap().write(&data) {
+            Ok(count) => count as CFIndex,
+            Err(_) => {
+                host.status = ERROR;
+                -1
+            }
+        },
     }
 }
 
@@ -420,12 +522,14 @@ fn CFReadStreamRead(
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFWriteStreamCreateWithBuffer(_, _, _)),
     export_c_func!(CFWriteStreamCreateWithAllocatedBuffers(_, _)),
+    export_c_func!(CFWriteStreamCreateWithFile(_, _)),
     export_c_func!(CFWriteStreamOpen(_)),
     export_c_func!(CFWriteStreamClose(_)),
     export_c_func!(CFWriteStreamGetStatus(_)),
     export_c_func!(CFWriteStreamCanAcceptBytes(_)),
     export_c_func!(CFWriteStreamWrite(_, _, _)),
     export_c_func!(CFWriteStreamCopyProperty(_, _)),
+    export_c_func!(CFWriteStreamSetProperty(_, _, _)),
     export_c_func!(CFReadStreamCreateWithBytesNoCopy(_, _, _, _)),
     export_c_func!(CFReadStreamCreateWithFile(_, _)),
     export_c_func!(CFReadStreamOpen(_)),
