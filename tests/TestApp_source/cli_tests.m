@@ -133,6 +133,11 @@ extern void CGContextResetClip(CGContextRef context);
 extern CGRect CGContextGetClipBoundingBox(CGContextRef context);
 extern void CGContextDrawTiledImage(CGContextRef context, CGRect rect,
                                     CGImageRef image);
+extern CGImageRef CGImageCreateCopy(CGImageRef image);
+extern unsigned int CGImageGetBitmapInfo(CGImageRef image);
+extern bool CGImageGetShouldInterpolate(CGImageRef image);
+extern int CGImageGetRenderingIntent(CGImageRef image);
+extern bool CGImageIsMask(CGImageRef image);
 
 @interface UIBezierPath : NSObject
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
@@ -6297,6 +6302,25 @@ int test_CGImage_invalid_rgb32() {
   return result;
 }
 
+int test_CGImage_copy_metadata(void) {
+  const unsigned char pixels[] = {32, 16, 8, 64};
+  CFDataRef data = CFDataCreate(NULL, pixels, sizeof(pixels));
+  CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGImageRef image =
+      CGImageCreate(1, 1, 8, 32, 4, space, 1, provider, NULL, true, 3);
+  CGImageRef copy = CGImageCreateCopy(image);
+  int passed = image && copy && CGImageGetShouldInterpolate(copy) &&
+               CGImageGetRenderingIntent(copy) == 3 && !CGImageIsMask(copy) &&
+               (CGImageGetBitmapInfo(copy) & 31) == 1;
+  CGImageRelease(copy);
+  CGImageRelease(image);
+  CGColorSpaceRelease(space);
+  CFRelease(provider);
+  CFRelease(data);
+  return passed ? 0 : -1;
+}
+
 int test_CGImage_JPEG() {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "r");
   if (file == NULL) {
@@ -10523,6 +10547,7 @@ struct {
     FUNC_DEF(test_CGGeometry),
     FUNC_DEF(test_CFURLHasDirectoryPath),
     FUNC_DEF(test_CGImage_invalid_rgb32),
+    FUNC_DEF(test_CGImage_copy_metadata),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
     FUNC_DEF(test_NSString_stringByReplacingOccurrencesOfString),

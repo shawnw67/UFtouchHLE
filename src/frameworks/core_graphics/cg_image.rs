@@ -59,6 +59,8 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 struct CGImageHostObject {
     image: Image,
+    should_interpolate: bool,
+    rendering_intent: i32,
 }
 impl HostObject for CGImageHostObject {}
 
@@ -79,7 +81,20 @@ pub fn CGImageRetain(env: &mut Environment, c: CGImageRef) -> CGImageRef {
 /// Shortcut for use by `UIImage`: directly construct a `CGImage` instance from
 /// an [Image] instance.
 pub fn from_image(env: &mut Environment, image: Image) -> CGImageRef {
-    let host_obj = Box::new(CGImageHostObject { image });
+    from_image_with_options(env, image, false, 0)
+}
+
+fn from_image_with_options(
+    env: &mut Environment,
+    image: Image,
+    should_interpolate: bool,
+    rendering_intent: i32,
+) -> CGImageRef {
+    let host_obj = Box::new(CGImageHostObject {
+        image,
+        should_interpolate,
+        rendering_intent,
+    });
     let class = env.objc.get_known_class("_Podroid_CGImage", &mut env.mem);
     env.objc.alloc_object(class, host_obj, &mut env.mem)
 }
@@ -109,8 +124,8 @@ fn CGImageCreate(
     bitmap_info: CGBitmapInfo,
     provider: CGDataProviderRef,
     decode: ConstPtr<CGFloat>,
-    _should_interpolate: bool, // TODO
-    _intent: i32,              // TODO (should be CGColorRenderingIntent)
+    should_interpolate: bool,
+    intent: i32,
 ) -> CGImageRef {
     log_dbg!(
         "CGImageCreate w {}, h {}, bpc {}, bpp {}, bpr {}, bi {}",
@@ -158,7 +173,7 @@ fn CGImageCreate(
     }
 
     let image = Image::from_pixel_vec(pixels, (width, height));
-    from_image(env, image)
+    from_image_with_options(env, image, should_interpolate, intent)
 }
 
 fn CGImageCreateCopyWithColorSpace(
@@ -172,16 +187,15 @@ fn CGImageCreateCopyWithColorSpace(
         CGColorSpaceGetModel(env, color_space)
     );
     // If color space matches, we could just create a copy.
-    let new_image = env.objc.borrow::<CGImageHostObject>(image).image.clone();
-    from_image(env, new_image)
+    CGImageCreateCopy(env, image)
 }
 
 fn CGImageCreateWithPNGDataProvider(
     env: &mut Environment,
     source: CGDataProviderRef,
     decode: ConstPtr<CGFloat>,
-    _should_interpolate: bool, // TODO
-    _intent: i32,              // TODO (should be CGColorRenderingIntent)
+    should_interpolate: bool,
+    intent: i32,
 ) -> CGImageRef {
     assert!(decode.is_null()); // TODO
 
@@ -191,15 +205,15 @@ fn CGImageCreateWithPNGDataProvider(
         return nil;
     };
 
-    from_image(env, image)
+    from_image_with_options(env, image, should_interpolate, intent)
 }
 
 fn CGImageCreateWithJPEGDataProvider(
     env: &mut Environment,
     source: CGDataProviderRef,
     decode: ConstPtr<CGFloat>,
-    _should_interpolate: bool, // TODO
-    _intent: i32,              // TODO (should be CGColorRenderingIntent)
+    should_interpolate: bool,
+    intent: i32,
 ) -> CGImageRef {
     assert!(decode.is_null());
 
@@ -209,7 +223,7 @@ fn CGImageCreateWithJPEGDataProvider(
         return nil;
     };
 
-    from_image(env, image)
+    from_image_with_options(env, image, should_interpolate, intent)
 }
 
 fn CGImageGetAlphaInfo(_env: &mut Environment, _image: CGImageRef) -> CGImageAlphaInfo {
@@ -312,10 +326,61 @@ fn CGImageCreateWithImageInRect(
     // Note: instead of keeping reference to the orig image,
     // we're creating a copy here
     let new_img = Image::from_pixel_vec(new_pixels, (w, h));
-    from_image(env, new_img)
+    let source = env.objc.borrow::<CGImageHostObject>(image);
+    let (interpolate, intent) = (source.should_interpolate, source.rendering_intent);
+    from_image_with_options(env, new_img, interpolate, intent)
 }
 
+fn CGImageCreateCopy(env: &mut Environment, image: CGImageRef) -> CGImageRef {
+    if image.is_null() {
+        return nil;
+    }
+    let source = env.objc.borrow::<CGImageHostObject>(image);
+    let (copy, interpolate, intent) = (
+        source.image.clone(),
+        source.should_interpolate,
+        source.rendering_intent,
+    );
+    from_image_with_options(env, copy, interpolate, intent)
+}
+fn CGImageGetBitmapInfo(_env: &mut Environment, image: CGImageRef) -> CGBitmapInfo {
+    if image.is_null() {
+        0
+    } else {
+        kCGImageAlphaPremultipliedLast | kCGImageByteOrder32Big
+    }
+}
+fn CGImageGetDecode(_env: &mut Environment, _image: CGImageRef) -> ConstPtr<CGFloat> {
+    ConstPtr::null()
+}
+fn CGImageGetShouldInterpolate(env: &mut Environment, image: CGImageRef) -> bool {
+    !image.is_null()
+        && env
+            .objc
+            .borrow::<CGImageHostObject>(image)
+            .should_interpolate
+}
+fn CGImageGetRenderingIntent(env: &mut Environment, image: CGImageRef) -> i32 {
+    if image.is_null() {
+        0
+    } else {
+        env.objc.borrow::<CGImageHostObject>(image).rendering_intent
+    }
+}
+fn CGImageIsMask(_env: &mut Environment, _image: CGImageRef) -> bool {
+    false
+}
+fn CGImageGetPixelFormatInfo(_env: &mut Environment, _image: CGImageRef) -> u32 {
+    0
+}
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CGImageCreateCopy(_)),
+    export_c_func!(CGImageGetBitmapInfo(_)),
+    export_c_func!(CGImageGetDecode(_)),
+    export_c_func!(CGImageGetShouldInterpolate(_)),
+    export_c_func!(CGImageGetRenderingIntent(_)),
+    export_c_func!(CGImageIsMask(_)),
+    export_c_func!(CGImageGetPixelFormatInfo(_)),
     export_c_func!(CGImageRelease(_)),
     export_c_func!(CGImageRetain(_)),
     export_c_func!(CGImageCreate(_, _, _, _, _, _, _, _, _, _, _)),
