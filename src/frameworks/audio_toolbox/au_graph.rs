@@ -49,7 +49,6 @@ struct Graph {
     next_node: AUNode,
     unit: Option<AudioUnit>,
     initialized: bool,
-    running: bool,
 }
 
 #[derive(Default)]
@@ -363,20 +362,7 @@ fn AUGraphStart(env: &mut Environment, graph: AUGraph) -> OSStatus {
     if !state.initialized {
         return paramErr;
     }
-    if state.running {
-        return 0;
-    }
-    let result = audio_unit::AudioOutputUnitStart(env, unit);
-    if result == 0 {
-        env.framework_state
-            .audio_toolbox
-            .au_graph
-            .graphs
-            .get_mut(&graph)
-            .unwrap()
-            .running = true;
-    }
-    result
+    audio_unit::AudioOutputUnitStart(env, unit)
 }
 
 fn AUGraphStop(env: &mut Environment, graph: AUGraph) -> OSStatus {
@@ -389,21 +375,13 @@ fn AUGraphStop(env: &mut Environment, graph: AUGraph) -> OSStatus {
     else {
         return paramErr;
     };
-    if !state.running {
+    let Some(unit) = state.unit else {
+        return 0;
+    };
+    if !unit_is_running(env, unit) {
         return 0;
     }
-    let unit = state.unit.unwrap();
-    let result = audio_unit::AudioOutputUnitStop(env, unit);
-    if result == 0 {
-        env.framework_state
-            .audio_toolbox
-            .au_graph
-            .graphs
-            .get_mut(&graph)
-            .unwrap()
-            .running = false;
-    }
-    result
+    audio_unit::AudioOutputUnitStop(env, unit)
 }
 
 fn AUGraphUninitialize(env: &mut Environment, graph: AUGraph) -> OSStatus {
@@ -416,7 +394,7 @@ fn AUGraphUninitialize(env: &mut Environment, graph: AUGraph) -> OSStatus {
     else {
         return paramErr;
     };
-    if state.running {
+    if state.unit.is_some_and(|unit| unit_is_running(env, unit)) {
         return paramErr;
     }
     if !state.initialized {
@@ -510,8 +488,19 @@ fn AUGraphIsRunning(env: &mut Environment, graph: AUGraph, out_value: MutPtr<u8>
     else {
         return paramErr;
     };
-    env.mem.write(out_value, u8::from(state.running));
+    let unit = state.unit;
+    let running = unit.is_some_and(|unit| unit_is_running(env, unit));
+    env.mem.write(out_value, u8::from(running));
     0
+}
+
+fn unit_is_running(env: &Environment, unit: AudioUnit) -> bool {
+    env.framework_state
+        .audio_toolbox
+        .audio_components
+        .audio_component_instances
+        .get(&unit)
+        .is_some_and(|state| state.started)
 }
 
 fn AUGraphSetNodeInputCallback(

@@ -198,6 +198,14 @@ fn AudioUnitGetProperty(
 }
 
 pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSStatus {
+    match audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&ci)
+    {
+        Some(unit) if unit.started => return 0,
+        None => return paramErr,
+        _ => {}
+    }
     let context = env
         .framework_state
         .audio_toolbox
