@@ -81,6 +81,14 @@ extern void dispatch_set_context(void *object, void *context);
 extern void *dispatch_get_context(void *object);
 extern const void *dispatch_get_current_queue(void);
 extern void *dispatch_get_specific(const void *key);
+extern void *dispatch_group_create(void);
+extern void dispatch_group_enter(void *group);
+extern void dispatch_group_leave(void *group);
+extern long dispatch_group_wait(void *group, unsigned long long timeout);
+extern void dispatch_group_async_f(void *group, const void *queue,
+                                   void *context, void (*function)(void *));
+extern void dispatch_group_notify_f(void *group, const void *queue,
+                                    void *context, void (*function)(void *));
 struct TestSplitComplex {
   float *realp;
   float *imagp;
@@ -6517,6 +6525,24 @@ int test_dispatch_queue_metadata(void) {
   return passed && !dispatch_queue_get_specific(queue, &key) ? 0 : -1;
 }
 
+int test_dispatch_group_counting(void) {
+  void *group = dispatch_group_create();
+  const void *queue = dispatch_get_main_queue();
+  int work = 0, notified = 0;
+  dispatch_group_enter(group);
+  int passed = dispatch_group_wait(group, 0) != 0;
+  dispatch_group_notify_f(group, queue, &notified, test_dispatch_add_one);
+  dispatch_group_leave(group);
+  passed = passed && dispatch_group_wait(group, 0) == 0 && notified == 0;
+  void *semaphore = dispatch_semaphore_create(0);
+  dispatch_semaphore_wait(semaphore, 0);
+  passed = passed && notified == 1;
+  dispatch_group_async_f(group, queue, &work, test_dispatch_add_one);
+  passed =
+      passed && work == 0 && dispatch_group_wait(group, 0) == 0 && work == 1;
+  return passed ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10792,6 +10818,7 @@ struct {
     FUNC_DEF(test_CGImage_bitmap_data),
     FUNC_DEF(test_dispatch_function_calls),
     FUNC_DEF(test_dispatch_queue_metadata),
+    FUNC_DEF(test_dispatch_group_counting),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),

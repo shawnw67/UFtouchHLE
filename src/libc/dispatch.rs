@@ -9,7 +9,7 @@
 //!
 //! This is a simplified implementation: all work runs on the main thread,
 //! either when the main run loop next runs (`dispatch_async`, `dispatch_after`,
-//! timer sources) or immediately (`dispatch_sync`, `dispatch_group_async`).
+//! timer sources and groups) or immediately (`dispatch_sync`).
 //! Global queues are treated like the main queue. Semaphores do block other
 //! threads.
 
@@ -65,10 +65,17 @@ enum DispatchWork {
         function: GuestFunction,
         queue: ConstVoidPtr,
     },
+    Group {
+        group: MutVoidPtr,
+        work: Box<DispatchWork>,
+    },
 }
 
 enum DispatchObject {
-    Group,
+    Group {
+        count: u32,
+        notifications: Vec<DispatchWork>,
+    },
     Semaphore(MutPtr<sem_t>),
     TimerSource(TimerSource),
 }
@@ -567,12 +574,23 @@ fn dispatch_apply(
 }
 fn dispatch_group_async_f(
     env: &mut Environment,
-    _group: MutVoidPtr,
+    group: MutVoidPtr,
     queue: ConstVoidPtr,
     context: MutVoidPtr,
     function: GuestFunction,
 ) {
-    dispatch_sync_f(env, queue, context, function);
+    dispatch_group_enter(env, group);
+    env.libc_state
+        .dispatch
+        .pending
+        .push_back(DispatchWork::Group {
+            group,
+            work: Box::new(DispatchWork::Function {
+                context,
+                function,
+                queue,
+            }),
+        });
 }
 fn dispatch_barrier_async(env: &mut Environment, queue: ConstVoidPtr, block: ConstVoidPtr) {
     dispatch_async(env, queue, block);
@@ -643,23 +661,123 @@ fn dispatch_retain(_env: &mut Environment, _object: MutVoidPtr) {}
 fn dispatch_release(_env: &mut Environment, _object: MutVoidPtr) {}
 
 fn dispatch_group_create(env: &mut Environment) -> MutVoidPtr {
-    new_object(env, DispatchObject::Group)
+    new_object(
+        env,
+        DispatchObject::Group {
+            count: 0,
+            notifications: Vec::new(),
+        },
+    )
 }
 fn dispatch_group_async(
     env: &mut Environment,
-    _group: MutVoidPtr,
+    group: MutVoidPtr,
     queue: ConstVoidPtr,
     block: ConstVoidPtr,
 ) {
-    // Run immediately, so the group is never waiting for anything.
-    dispatch_sync(env, queue, block);
+    let block = _Block_copy(env, block);
+    dispatch_group_enter(env, group);
+    env.libc_state
+        .dispatch
+        .pending
+        .push_back(DispatchWork::Group {
+            group,
+            work: Box::new(DispatchWork::Block { block, queue }),
+        });
 }
-fn dispatch_group_wait(
-    _env: &mut Environment,
-    _group: MutVoidPtr,
-    _timeout: dispatch_time_t,
-) -> i32 {
-    0
+fn dispatch_group_enter(env: &mut Environment, group: MutVoidPtr) {
+    let Some(DispatchObject::Group { count, .. }) = env.libc_state.dispatch.objects.get_mut(&group)
+    else {
+        return;
+    };
+    *count = count.checked_add(1).expect("dispatch group count overflow");
+}
+fn dispatch_group_leave(env: &mut Environment, group: MutVoidPtr) {
+    let Some(DispatchObject::Group {
+        count,
+        notifications,
+    }) = env.libc_state.dispatch.objects.get_mut(&group)
+    else {
+        return;
+    };
+    if *count == 0 {
+        return;
+    }
+    *count -= 1;
+    if *count == 0 {
+        let ready = std::mem::take(notifications);
+        env.libc_state.dispatch.pending.extend(ready);
+    }
+}
+fn group_notify(env: &mut Environment, group: MutVoidPtr, work: DispatchWork) {
+    let Some(DispatchObject::Group {
+        count,
+        notifications,
+    }) = env.libc_state.dispatch.objects.get_mut(&group)
+    else {
+        return;
+    };
+    if *count == 0 {
+        env.libc_state.dispatch.pending.push_back(work);
+    } else {
+        notifications.push(work);
+    }
+}
+fn dispatch_group_notify(
+    env: &mut Environment,
+    group: MutVoidPtr,
+    queue: ConstVoidPtr,
+    block: ConstVoidPtr,
+) {
+    let block = _Block_copy(env, block);
+    group_notify(env, group, DispatchWork::Block { block, queue });
+}
+fn dispatch_group_notify_f(
+    env: &mut Environment,
+    group: MutVoidPtr,
+    queue: ConstVoidPtr,
+    context: MutVoidPtr,
+    function: GuestFunction,
+) {
+    group_notify(
+        env,
+        group,
+        DispatchWork::Function {
+            context,
+            function,
+            queue,
+        },
+    );
+}
+fn dispatch_group_wait(env: &mut Environment, group: MutVoidPtr, timeout: dispatch_time_t) -> i32 {
+    let deadline = time_to_instant(env, timeout);
+    loop {
+        if matches!(
+            env.libc_state.dispatch.objects.get(&group),
+            Some(DispatchObject::Group { count: 0, .. })
+        ) {
+            return 0;
+        }
+        if !matches!(
+            env.libc_state.dispatch.objects.get(&group),
+            Some(DispatchObject::Group { .. })
+        ) {
+            return TIMED_OUT;
+        }
+        if env.current_thread == 0 && !env.libc_state.dispatch.draining {
+            drain_main_queue(env);
+        }
+        if matches!(
+            env.libc_state.dispatch.objects.get(&group),
+            Some(DispatchObject::Group { count: 0, .. })
+        ) {
+            return 0;
+        }
+        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            return TIMED_OUT;
+        }
+        env.sleep(Duration::from_millis(1));
+    }
 }
 
 fn dispatch_semaphore_create(env: &mut Environment, value: i32) -> MutVoidPtr {
@@ -869,29 +987,37 @@ pub fn drain_main_queue(env: &mut Environment) {
     queue_due_work(env);
     let pending = std::mem::take(&mut env.libc_state.dispatch.pending);
     for work in pending {
-        match work {
-            DispatchWork::Block { block, queue } => {
-                push_queue(env, queue);
-                let invoke =
-                    GuestFunction::from_addr_with_thumb_bit(block_word(env, block.cast_const(), 3));
-                let trace = crate::network_trace::callback_begin(env, block.to_bits());
-                let _: () = invoke.call_from_host(env, (block,));
-                crate::network_trace::end(env, trace);
-                _Block_release(env, block);
-                pop_queue(env);
-            }
-            DispatchWork::Function {
-                context,
-                function,
-                queue,
-            } => {
-                push_queue(env, queue);
-                let _: () = function.call_from_host(env, (context,));
-                pop_queue(env);
-            }
-        }
+        run_work(env, work);
     }
     env.libc_state.dispatch.draining = false;
+}
+
+fn run_work(env: &mut Environment, work: DispatchWork) {
+    match work {
+        DispatchWork::Block { block, queue } => {
+            push_queue(env, queue);
+            let invoke =
+                GuestFunction::from_addr_with_thumb_bit(block_word(env, block.cast_const(), 3));
+            let trace = crate::network_trace::callback_begin(env, block.to_bits());
+            let _: () = invoke.call_from_host(env, (block,));
+            crate::network_trace::end(env, trace);
+            _Block_release(env, block);
+            pop_queue(env);
+        }
+        DispatchWork::Function {
+            context,
+            function,
+            queue,
+        } => {
+            push_queue(env, queue);
+            let _: () = function.call_from_host(env, (context,));
+            pop_queue(env);
+        }
+        DispatchWork::Group { group, work } => {
+            run_work(env, *work);
+            dispatch_group_leave(env, group);
+        }
+    }
 }
 
 pub const CONSTANTS: ConstantExports = &[
@@ -937,6 +1063,10 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(dispatch_retain(_)),
     export_c_func!(dispatch_release(_)),
     export_c_func!(dispatch_group_create()),
+    export_c_func!(dispatch_group_enter(_)),
+    export_c_func!(dispatch_group_leave(_)),
+    export_c_func!(dispatch_group_notify(_, _, _)),
+    export_c_func!(dispatch_group_notify_f(_, _, _, _)),
     export_c_func!(dispatch_group_async(_, _, _)),
     export_c_func!(dispatch_group_wait(_, _)),
     export_c_func!(dispatch_semaphore_create(_)),
