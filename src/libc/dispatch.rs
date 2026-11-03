@@ -48,6 +48,9 @@ pub struct State {
     copies: HashMap<MutVoidPtr, u32>,
     /// Heap-promoted __block cells: one stack owner plus each copied Block.
     byrefs: HashMap<MutVoidPtr, u32>,
+    queue_labels: HashMap<ConstVoidPtr, ConstPtr<u8>>,
+    queue_specifics: HashMap<(ConstVoidPtr, ConstVoidPtr), (MutVoidPtr, GuestFunction)>,
+    contexts: HashMap<MutVoidPtr, MutVoidPtr>,
     draining: bool,
 }
 
@@ -321,6 +324,115 @@ fn dispatch_get_global_queue(env: &mut Environment, _identifier: i32, _flags: u3
 
 fn dispatch_get_main_queue(env: &mut Environment) -> ConstVoidPtr {
     main_queue(env)
+}
+
+fn dispatch_queue_create(
+    env: &mut Environment,
+    label: ConstPtr<u8>,
+    _attr: ConstVoidPtr,
+) -> ConstVoidPtr {
+    let name = if label.is_null() {
+        Vec::new()
+    } else {
+        env.mem
+            .cstr_at_utf8(label)
+            .unwrap_or_default()
+            .as_bytes()
+            .to_vec()
+    };
+    let stored = env.mem.alloc_and_write_cstr(&name).cast_const();
+    let queue = env.mem.calloc(64).cast_const();
+    env.libc_state.dispatch.queue_labels.insert(queue, stored);
+    queue
+}
+fn dispatch_queue_get_label(env: &mut Environment, queue: ConstVoidPtr) -> ConstPtr<u8> {
+    let queue = if queue.is_null() {
+        main_queue(env)
+    } else {
+        queue
+    };
+    if let Some(&label) = env.libc_state.dispatch.queue_labels.get(&queue) {
+        return label;
+    }
+    let main = main_queue(env);
+    let global = dispatch_get_global_queue(env, 0, 0);
+    let label: &[u8] = if queue == main {
+        b"com.apple.main-thread"
+    } else if queue == global {
+        b"com.apple.root.default-priority"
+    } else {
+        b""
+    };
+    let label = env.mem.alloc_and_write_cstr(label).cast_const();
+    env.libc_state.dispatch.queue_labels.insert(queue, label);
+    label
+}
+fn dispatch_queue_set_specific(
+    env: &mut Environment,
+    queue: ConstVoidPtr,
+    key: ConstVoidPtr,
+    context: MutVoidPtr,
+    destructor: GuestFunction,
+) {
+    if key.is_null() {
+        return;
+    }
+    let old = if context.is_null() {
+        env.libc_state
+            .dispatch
+            .queue_specifics
+            .remove(&(queue, key))
+    } else {
+        env.libc_state
+            .dispatch
+            .queue_specifics
+            .insert((queue, key), (context, destructor))
+    };
+    if let Some((context, function)) = old {
+        if !function.to_ptr().is_null() {
+            env.libc_state
+                .dispatch
+                .pending
+                .push_back(DispatchWork::Function { context, function });
+        }
+    }
+}
+fn dispatch_queue_get_specific(
+    env: &mut Environment,
+    queue: ConstVoidPtr,
+    key: ConstVoidPtr,
+) -> MutVoidPtr {
+    env.libc_state
+        .dispatch
+        .queue_specifics
+        .get(&(queue, key))
+        .map_or(MutVoidPtr::null(), |(context, _)| *context)
+}
+fn dispatch_set_context(env: &mut Environment, object: MutVoidPtr, context: MutVoidPtr) {
+    env.libc_state.dispatch.contexts.insert(object, context);
+}
+fn dispatch_get_context(env: &mut Environment, object: MutVoidPtr) -> MutVoidPtr {
+    env.libc_state
+        .dispatch
+        .contexts
+        .get(&object)
+        .copied()
+        .unwrap_or(MutVoidPtr::null())
+}
+fn dispatch_queue_retain(env: &mut Environment, queue: MutVoidPtr) -> MutVoidPtr {
+    dispatch_retain(env, queue);
+    queue
+}
+fn dispatch_queue_release(env: &mut Environment, queue: MutVoidPtr) {
+    dispatch_release(env, queue);
+}
+fn dispatch_queue_attr_make_with_qos_class(
+    _env: &mut Environment,
+    attr: ConstVoidPtr,
+    _qos: u32,
+    _priority: i32,
+) -> ConstVoidPtr {
+    attr
 }
 
 fn dispatch_async_f(
@@ -712,6 +824,15 @@ pub const CONSTANTS: ConstantExports = &[
     ),
 ];
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(dispatch_queue_create(_, _)),
+    export_c_func!(dispatch_queue_get_label(_)),
+    export_c_func!(dispatch_queue_set_specific(_, _, _, _)),
+    export_c_func!(dispatch_queue_get_specific(_, _)),
+    export_c_func!(dispatch_queue_retain(_)),
+    export_c_func!(dispatch_queue_release(_)),
+    export_c_func!(dispatch_queue_attr_make_with_qos_class(_, _, _)),
+    export_c_func!(dispatch_set_context(_, _)),
+    export_c_func!(dispatch_get_context(_)),
     export_c_func!(dispatch_get_main_queue()),
     export_c_func!(dispatch_async_f(_, _, _)),
     export_c_func!(dispatch_sync_f(_, _, _)),

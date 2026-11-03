@@ -72,6 +72,13 @@ extern void dispatch_apply_f(unsigned int count, const void *queue,
 extern void *dispatch_semaphore_create(long value);
 extern long dispatch_semaphore_wait(void *semaphore,
                                     unsigned long long timeout);
+extern void *dispatch_queue_create(const char *label, const void *attributes);
+extern const char *dispatch_queue_get_label(const void *queue);
+extern void dispatch_queue_set_specific(const void *queue, const void *key,
+                                        void *context, void (*destroy)(void *));
+extern void *dispatch_queue_get_specific(const void *queue, const void *key);
+extern void dispatch_set_context(void *object, void *context);
+extern void *dispatch_get_context(void *object);
 struct TestSplitComplex {
   float *realp;
   float *imagp;
@@ -6475,6 +6482,24 @@ int test_dispatch_function_calls(void) {
   return value == 10 ? 0 : -2;
 }
 
+int test_dispatch_queue_metadata(void) {
+  int key, first = 0, second = 0;
+  void *queue = dispatch_queue_create("podroid.test.queue", NULL);
+  if (!queue || strcmp(dispatch_queue_get_label(queue), "podroid.test.queue"))
+    return -1;
+  dispatch_set_context(queue, &second);
+  dispatch_queue_set_specific(queue, &key, &first, test_dispatch_add_one);
+  int passed = dispatch_get_context(queue) == &second &&
+               dispatch_queue_get_specific(queue, &key) == &first;
+  dispatch_queue_set_specific(queue, &key, &second, NULL);
+  void *semaphore = dispatch_semaphore_create(0);
+  dispatch_semaphore_wait(semaphore, 0);
+  passed = passed && first == 1 &&
+           dispatch_queue_get_specific(queue, &key) == &second;
+  dispatch_queue_set_specific(queue, &key, NULL, NULL);
+  return passed && !dispatch_queue_get_specific(queue, &key) ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10749,6 +10774,7 @@ struct {
     FUNC_DEF(test_CGImage_packed_mask),
     FUNC_DEF(test_CGImage_bitmap_data),
     FUNC_DEF(test_dispatch_function_calls),
+    FUNC_DEF(test_dispatch_queue_metadata),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
