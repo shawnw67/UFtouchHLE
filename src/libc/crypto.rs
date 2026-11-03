@@ -24,6 +24,7 @@ struct CC_MD5_CTX {}
 pub struct State {
     md5_contexts: HashMap<MutPtr<CC_MD5_CTX>, Md5>,
     sha_contexts: HashMap<MutVoidPtr, ShaState>,
+    cryptors: HashMap<MutVoidPtr, Cryptor>,
 }
 impl State {
     fn get_mut(env: &mut Environment) -> &mut Self {
@@ -197,6 +198,7 @@ const kCCOptionECBMode: u32 = 2;
 
 const AES_BLOCK: usize = 16;
 
+#[derive(Clone)]
 enum AesCipher {
     Aes128(aes::Aes128),
     Aes192(aes::Aes192),
@@ -270,7 +272,13 @@ fn aes_crypt(
     }
     if !encrypt && padding {
         let pad = *data.last().ok_or(kCCDecodeError)? as usize;
-        if pad == 0 || pad > AES_BLOCK || pad > data.len() {
+        if pad == 0
+            || pad > AES_BLOCK
+            || pad > data.len()
+            || data[data.len() - pad..]
+                .iter()
+                .any(|&byte| byte != pad as u8)
+        {
             return Err(kCCDecodeError);
         }
         data.truncate(data.len() - pad);
@@ -391,6 +399,215 @@ fn CCCrypt(
     kCCSuccess
 }
 
+#[derive(Clone)]
+struct Cryptor {
+    cipher: AesCipher,
+    encrypt: bool,
+    ecb: bool,
+    padding: bool,
+    chain: [u8; AES_BLOCK],
+    buffered: Vec<u8>,
+}
+
+#[allow(clippy::too_many_arguments)] // Matches the guest's CommonCrypto ABI.
+fn CCCryptorCreate(
+    env: &mut Environment,
+    op: u32,
+    alg: u32,
+    options: u32,
+    key: ConstVoidPtr,
+    key_len: u32,
+    iv: ConstVoidPtr,
+    result: MutPtr<MutVoidPtr>,
+) -> i32 {
+    if result.is_null() || key.is_null() || op > 1 || options & !3 != 0 {
+        return kCCParamError;
+    }
+    if alg != kCCAlgorithmAES {
+        return kCCUnimplemented;
+    }
+    if ![16, 24, 32].contains(&key_len) {
+        return kCCParamError;
+    }
+    let cipher = AesCipher::new(env.mem.bytes_at(key.cast(), key_len)).unwrap();
+    let mut chain = [0; AES_BLOCK];
+    if !iv.is_null() {
+        chain.copy_from_slice(env.mem.bytes_at(iv.cast(), AES_BLOCK as u32));
+    }
+    let state = Cryptor {
+        cipher,
+        encrypt: op == kCCEncrypt,
+        ecb: options & 2 != 0,
+        padding: options & 1 != 0,
+        chain,
+        buffered: Vec::new(),
+    };
+    let handle = env.mem.alloc(4);
+    env.libc_state.crypto.cryptors.insert(handle, state);
+    env.mem.write(result, handle);
+    kCCSuccess
+}
+
+fn cryptor_blocks(state: &mut Cryptor, data: &[u8]) -> Vec<u8> {
+    let output = aes_crypt(
+        state.encrypt,
+        &state.cipher,
+        state.ecb,
+        false,
+        state.chain,
+        data,
+    )
+    .unwrap();
+    if !data.is_empty() && !state.ecb {
+        let chain_data = if state.encrypt { &output } else { data };
+        state
+            .chain
+            .copy_from_slice(&chain_data[chain_data.len() - AES_BLOCK..]);
+    }
+    output
+}
+
+fn CCCryptorUpdate(
+    env: &mut Environment,
+    handle: MutVoidPtr,
+    input: ConstVoidPtr,
+    input_len: u32,
+    output: MutVoidPtr,
+    output_len: u32,
+    moved: MutPtr<u32>,
+) -> i32 {
+    if !moved.is_null() {
+        env.mem.write(moved, 0);
+    }
+    if input_len != 0 && input.is_null() {
+        return kCCParamError;
+    }
+    let Some(mut state) = env.libc_state.crypto.cryptors.get(&handle).cloned() else {
+        return kCCParamError;
+    };
+    if input_len != 0 {
+        state
+            .buffered
+            .extend_from_slice(env.mem.bytes_at(input.cast(), input_len));
+    }
+    let hold = if !state.encrypt && state.padding {
+        AES_BLOCK
+    } else {
+        0
+    };
+    let count = state.buffered.len().saturating_sub(hold) / AES_BLOCK * AES_BLOCK;
+    if count > output_len as usize {
+        return kCCBufferTooSmall;
+    }
+    if count != 0 && output.is_null() {
+        return kCCParamError;
+    }
+    let data: Vec<u8> = state.buffered.drain(..count).collect();
+    let result = cryptor_blocks(&mut state, &data);
+    if count != 0 {
+        env.mem
+            .bytes_at_mut(output.cast(), count as u32)
+            .copy_from_slice(&result);
+    }
+    if !moved.is_null() {
+        env.mem.write(moved, count as u32);
+    }
+    env.libc_state.crypto.cryptors.insert(handle, state);
+    kCCSuccess
+}
+
+fn CCCryptorFinal(
+    env: &mut Environment,
+    handle: MutVoidPtr,
+    output: MutVoidPtr,
+    output_len: u32,
+    moved: MutPtr<u32>,
+) -> i32 {
+    if !moved.is_null() {
+        env.mem.write(moved, 0);
+    }
+    let Some(mut state) = env.libc_state.crypto.cryptors.get(&handle).cloned() else {
+        return kCCParamError;
+    };
+    let result = match aes_crypt(
+        state.encrypt,
+        &state.cipher,
+        state.ecb,
+        state.padding,
+        state.chain,
+        &state.buffered,
+    ) {
+        Ok(data) => data,
+        Err(status) => return status,
+    };
+    if result.len() > output_len as usize {
+        return kCCBufferTooSmall;
+    }
+    if !result.is_empty() && output.is_null() {
+        return kCCParamError;
+    }
+    if !result.is_empty() {
+        env.mem
+            .bytes_at_mut(output.cast(), result.len() as u32)
+            .copy_from_slice(&result);
+    }
+    if !moved.is_null() {
+        env.mem.write(moved, result.len() as u32);
+    }
+    state.buffered.clear();
+    env.libc_state.crypto.cryptors.insert(handle, state);
+    kCCSuccess
+}
+
+fn CCCryptorGetOutputLength(
+    env: &mut Environment,
+    handle: MutVoidPtr,
+    input_len: u32,
+    final_: bool,
+) -> u32 {
+    let Some(state) = env.libc_state.crypto.cryptors.get(&handle) else {
+        return 0;
+    };
+    let total = (state.buffered.len() as u64) + u64::from(input_len);
+    let size = if final_ {
+        if state.encrypt && state.padding {
+            (total / 16 + 1) * 16
+        } else {
+            total.div_ceil(16) * 16
+        }
+    } else {
+        let hold = if !state.encrypt && state.padding {
+            16
+        } else {
+            0
+        };
+        total.saturating_sub(hold) / 16 * 16
+    };
+    size.min(u64::from(u32::MAX)) as u32
+}
+fn CCCryptorReset(env: &mut Environment, handle: MutVoidPtr, iv: ConstVoidPtr) -> i32 {
+    let mut chain = [0; AES_BLOCK];
+    if !iv.is_null() {
+        chain.copy_from_slice(env.mem.bytes_at(iv.cast(), AES_BLOCK as u32));
+    }
+    let Some(state) = env.libc_state.crypto.cryptors.get_mut(&handle) else {
+        return kCCParamError;
+    };
+    state.chain = chain;
+    state.buffered.clear();
+    kCCSuccess
+}
+fn CCCryptorRelease(env: &mut Environment, handle: MutVoidPtr) -> i32 {
+    if handle.is_null() {
+        return kCCSuccess;
+    }
+    if env.libc_state.crypto.cryptors.remove(&handle).is_none() {
+        return kCCParamError;
+    }
+    env.mem.free(handle);
+    kCCSuccess
+}
+
 fn hmac<D>(key: &[u8], data: &[u8]) -> Vec<u8>
 where
     D: digest::core_api::CoreProxy,
@@ -504,6 +721,12 @@ fn CCHmac(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CCCryptorCreate(_, _, _, _, _, _, _)),
+    export_c_func!(CCCryptorUpdate(_, _, _, _, _, _)),
+    export_c_func!(CCCryptorFinal(_, _, _, _)),
+    export_c_func!(CCCryptorGetOutputLength(_, _, _)),
+    export_c_func!(CCCryptorReset(_, _)),
+    export_c_func!(CCCryptorRelease(_)),
     export_c_func!(CCKeyDerivationPBKDF(_, _, _, _, _, _, _, _, _)),
     export_c_func!(CCCrypt(_, _, _, _, _, _, _, _, _, _, _)),
     export_c_func!(CCHmac(_, _, _, _, _, _)),

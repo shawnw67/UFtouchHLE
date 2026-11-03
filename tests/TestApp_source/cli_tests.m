@@ -100,6 +100,16 @@ extern int CCKeyDerivationPBKDF(unsigned int algorithm, const void *password,
                                 unsigned int salt_len, unsigned int prf,
                                 unsigned int rounds, void *output,
                                 unsigned int output_len);
+extern int CCCryptorCreate(unsigned int op, unsigned int algorithm,
+                           unsigned int options, const void *key,
+                           unsigned int key_length, const void *iv,
+                           void **cryptor);
+extern int CCCryptorUpdate(void *cryptor, const void *input,
+                           unsigned int input_length, void *output,
+                           unsigned int output_length, unsigned int *moved);
+extern int CCCryptorFinal(void *cryptor, void *output,
+                          unsigned int output_length, unsigned int *moved);
+extern int CCCryptorRelease(void *cryptor);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -697,6 +707,61 @@ int test_CCKeyDerivationPBKDF(void) {
                                     sizeof(output));
   return result == 0 && memcmp(output, expected, sizeof(expected)) == 0 ? 0
                                                                         : -1;
+}
+
+int test_CCCryptor_stream(void) {
+  const unsigned char key[] = {0, 1, 2,  3,  4,  5,  6,  7,
+                               8, 9, 10, 11, 12, 13, 14, 15};
+  const unsigned char plain[] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+                                 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb,
+                                 0xcc, 0xdd, 0xee, 0xff};
+  const unsigned char expected[] = {0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b,
+                                    0x04, 0x30, 0xd8, 0xcd, 0xb7, 0x80,
+                                    0x70, 0xb4, 0xc5, 0x5a};
+  unsigned char out[16];
+  unsigned int moved = 99;
+  void *cryptor = NULL;
+  int passed = CCCryptorCreate(0, 0, 2, key, sizeof(key), NULL, &cryptor) == 0;
+  passed = passed && CCCryptorUpdate(cryptor, plain, 3, out, 16, &moved) == 0 &&
+           moved == 0;
+  passed = passed &&
+           CCCryptorUpdate(cryptor, plain + 3, 13, out, 0, &moved) == -4301 &&
+           moved == 0;
+  passed = passed &&
+           CCCryptorUpdate(cryptor, plain + 3, 13, out, 16, &moved) == 0 &&
+           moved == 16 && memcmp(out, expected, sizeof(out)) == 0;
+  passed =
+      passed && CCCryptorFinal(cryptor, out, 16, &moved) == 0 && moved == 0;
+  CCCryptorRelease(cryptor);
+  return passed ? 0 : -1;
+}
+
+int test_CCCryptor_padded_cbc(void) {
+  const unsigned char key[16] = {0};
+  const unsigned char plain[] = "twenty one bytes here";
+  unsigned char encrypted[48], decoded[48];
+  unsigned int a = 0, b = 0, c = 0, d = 0;
+  void *encryptor = NULL, *decryptor = NULL;
+  int passed = CCCryptorCreate(0, 0, 1, key, 16, NULL, &encryptor) == 0;
+  passed = passed && CCCryptorUpdate(encryptor, plain, sizeof(plain) - 1,
+                                     encrypted, sizeof(encrypted), &a) == 0;
+  passed = passed &&
+           CCCryptorFinal(encryptor, encrypted + a, sizeof(encrypted) - a,
+                          &b) == 0 &&
+           a + b == 32;
+  passed = passed && CCCryptorCreate(1, 0, 1, key, 16, NULL, &decryptor) == 0;
+  passed = passed &&
+           CCCryptorUpdate(decryptor, encrypted, a + b, decoded,
+                           sizeof(decoded), &c) == 0 &&
+           c == 16;
+  passed =
+      passed &&
+      CCCryptorFinal(decryptor, decoded + c, sizeof(decoded) - c, &d) == 0 &&
+      c + d == sizeof(plain) - 1 &&
+      memcmp(decoded, plain, sizeof(plain) - 1) == 0;
+  CCCryptorRelease(encryptor);
+  CCCryptorRelease(decryptor);
+  return passed ? 0 : -1;
 }
 
 static void custom_mode_timer_callback(CFRunLoopTimerRef timer, void *info) {
@@ -10015,6 +10080,8 @@ struct {
     FUNC_DEF(test_vImageCopyBuffer),
     FUNC_DEF(test_CC_SHA256),
     FUNC_DEF(test_CCKeyDerivationPBKDF),
+    FUNC_DEF(test_CCCryptor_stream),
+    FUNC_DEF(test_CCCryptor_padded_cbc),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),
