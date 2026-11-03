@@ -371,6 +371,43 @@ pub fn cf_escaped_path(env: &mut Environment, url: id) -> Option<String> {
     }
 }
 
+/// The original encoded authority, including user information and port.
+pub fn cf_authority(env: &mut Environment, url: id) -> Option<String> {
+    let object = env
+        .objc
+        .get_host_object(url)?
+        .as_any()
+        .downcast_ref::<NSURLHostObject>()?;
+    match object {
+        NSURLHostObject::OtherURL { ns_string } => {
+            let string = *ns_string;
+            let url = to_rust_string(env, string);
+            let parts = split_url(&url);
+            parts
+                .decomposable
+                .then(|| parts.authority.map(str::to_owned))
+                .flatten()
+        }
+        NSURLHostObject::FileURL { host, port, .. } => host.as_ref().map(|host| match port {
+            Some(port) => format!("{host}:{port}"),
+            None => host.clone(),
+        }),
+    }
+}
+
+pub fn cf_user_and_password(env: &mut Environment, url: id) -> (Option<String>, Option<String>) {
+    let Some(authority) = cf_authority(env, url) else {
+        return (None, None);
+    };
+    let Some((user_info, _)) = authority.rsplit_once('@') else {
+        return (None, None);
+    };
+    let (user, password) = user_info
+        .split_once(':')
+        .map_or((user_info, None), |(u, p)| (u, Some(p)));
+    (Some(percent_decode(user)), password.map(percent_decode))
+}
+
 /// The parts of a URL string, as split by RFC 3986's regular expression
 /// (appendix B). The parts aren't unescaped.
 struct UrlParts<'a> {

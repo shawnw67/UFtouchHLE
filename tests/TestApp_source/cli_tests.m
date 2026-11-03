@@ -793,6 +793,33 @@ int test_CFURL_path_extensions(void) {
   return passed ? 0 : -1;
 }
 
+int test_CFURL_authority(void) {
+  CFStringRef input = CFStringCreateWithCString(
+      NULL, "https://user:p%40ss@example.com:443/path", kCFStringEncodingUTF8);
+  CFURLRef url = CFURLCreateWithString(NULL, input, NULL);
+  CFStringRef authority = CFURLCopyNetLocation(url);
+  CFStringRef user = CFURLCopyUserName(url);
+  CFStringRef password = CFURLCopyPassword(url);
+  CFStringRef expected_authority = CFStringCreateWithCString(
+      NULL, "user:p%40ss@example.com:443", kCFStringEncodingUTF8);
+  CFStringRef expected_user =
+      CFStringCreateWithCString(NULL, "user", kCFStringEncodingUTF8);
+  CFStringRef expected_password =
+      CFStringCreateWithCString(NULL, "p@ss", kCFStringEncodingUTF8);
+  int passed = CFEqual(authority, expected_authority) &&
+               CFEqual(user, expected_user) &&
+               CFEqual(password, expected_password);
+  CFRelease(expected_password);
+  CFRelease(expected_user);
+  CFRelease(expected_authority);
+  CFRelease(password);
+  CFRelease(user);
+  CFRelease(authority);
+  CFRelease(url);
+  CFRelease(input);
+  return passed ? 0 : -1;
+}
+
 static void custom_mode_timer_callback(CFRunLoopTimerRef timer, void *info) {
   (void)timer;
   *(int *)info += 1;
@@ -10112,6 +10139,7 @@ struct {
     FUNC_DEF(test_CCCryptor_stream),
     FUNC_DEF(test_CCCryptor_padded_cbc),
     FUNC_DEF(test_CFURL_path_extensions),
+    FUNC_DEF(test_CFURL_authority),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),
