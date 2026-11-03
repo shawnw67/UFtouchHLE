@@ -325,7 +325,7 @@ fn AudioUnitSetProperty(
             result = 0;
         }
         kAudioUnitProperty_SetRenderCallback => {
-            if in_scope != kAudioUnitScope_Global
+            if !matches!(in_scope, kAudioUnitScope_Global | kAudioUnitScope_Input)
                 || in_data_size != guest_size_of::<AURenderCallbackStruct>()
             {
                 return paramErr;
@@ -490,7 +490,9 @@ fn AudioUnitGetPropertyInfo(
         kAudioUnitProperty_MaximumFramesPerSlice if scope == kAudioUnitScope_Global => {
             (guest_size_of::<u32>(), true)
         }
-        kAudioUnitProperty_SetRenderCallback if scope == kAudioUnitScope_Global => {
+        kAudioUnitProperty_SetRenderCallback
+            if matches!(scope, kAudioUnitScope_Global | kAudioUnitScope_Input) =>
+        {
             (guest_size_of::<AURenderCallbackStruct>(), true)
         }
         _ => return paramErr,

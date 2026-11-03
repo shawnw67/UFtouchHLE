@@ -11043,7 +11043,7 @@ int test_audio_planar_render_callbacks(void) {
   void *component = AudioComponentFindNext(NULL, &description), *unit = NULL;
   if (!component || AudioComponentInstanceNew(component, &unit) ||
       AudioUnitSetProperty(unit, 8, 1, 0, &format, sizeof(format)) ||
-      AudioUnitSetProperty(unit, 23, 0, 0, &callback, sizeof(callback)) ||
+      AudioUnitSetProperty(unit, 23, 1, 0, &callback, sizeof(callback)) ||
       AudioUnitAddRenderNotify(unit, test_audio_render_phase, &state) ||
       AudioUnitInitialize(unit) || AudioOutputUnitStart(unit) ||
       nanosleep(&pause, NULL))
