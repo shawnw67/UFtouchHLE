@@ -38,6 +38,9 @@ pub struct State {
     main_queue: MutVoidPtr,
     global_queue: MutVoidPtr,
     source_type_timer: MutVoidPtr,
+    source_type_data_add: MutVoidPtr,
+    source_type_data_or: MutVoidPtr,
+    source_type_data_replace: MutVoidPtr,
     pending: VecDeque<DispatchWork>,
     /// Blocks from `dispatch_after`, and when to run them.
     delayed: Vec<(Instant, DispatchWork)>,
@@ -69,6 +72,11 @@ enum DispatchWork {
         group: MutVoidPtr,
         work: Box<DispatchWork>,
     },
+    SourceEvent {
+        source: MutVoidPtr,
+        data: u32,
+        work: Box<DispatchWork>,
+    },
 }
 
 enum DispatchObject {
@@ -91,6 +99,19 @@ struct TimerSource {
     queue: ConstVoidPtr,
     handle: u32,
     mask: u32,
+    kind: SourceKind,
+    pending_data: u32,
+    pending_event: bool,
+    event_queued: bool,
+    delivering_data: Option<u32>,
+}
+
+#[derive(Clone, Copy)]
+enum SourceKind {
+    Timer,
+    DataAdd,
+    DataOr,
+    DataReplace,
 }
 
 #[derive(Clone, Copy)]
@@ -161,6 +182,27 @@ fn source_type_timer(env: &mut Environment) -> ConstVoidPtr {
         env.libc_state.dispatch.source_type_timer = env.mem.calloc(16);
     }
     env.libc_state.dispatch.source_type_timer.cast_const()
+}
+fn source_type_data_add(env: &mut Environment) -> ConstVoidPtr {
+    if env.libc_state.dispatch.source_type_data_add.is_null() {
+        env.libc_state.dispatch.source_type_data_add = env.mem.calloc(16);
+    }
+    env.libc_state.dispatch.source_type_data_add.cast_const()
+}
+fn source_type_data_or(env: &mut Environment) -> ConstVoidPtr {
+    if env.libc_state.dispatch.source_type_data_or.is_null() {
+        env.libc_state.dispatch.source_type_data_or = env.mem.calloc(16);
+    }
+    env.libc_state.dispatch.source_type_data_or.cast_const()
+}
+fn source_type_data_replace(env: &mut Environment) -> ConstVoidPtr {
+    if env.libc_state.dispatch.source_type_data_replace.is_null() {
+        env.libc_state.dispatch.source_type_data_replace = env.mem.calloc(16);
+    }
+    env.libc_state
+        .dispatch
+        .source_type_data_replace
+        .cast_const()
 }
 
 fn block_class(env: &mut Environment) -> ConstVoidPtr {
@@ -845,11 +887,17 @@ fn dispatch_source_create(
     mask: u32,
     queue: ConstVoidPtr,
 ) -> MutVoidPtr {
-    assert_eq!(
-        type_,
-        source_type_timer(env),
-        "Only timer dispatch sources are implemented"
-    );
+    let kind = if type_ == source_type_timer(env) {
+        SourceKind::Timer
+    } else if type_ == source_type_data_add(env) {
+        SourceKind::DataAdd
+    } else if type_ == source_type_data_or(env) {
+        SourceKind::DataOr
+    } else if type_ == source_type_data_replace(env) {
+        SourceKind::DataReplace
+    } else {
+        return MutVoidPtr::null();
+    };
     new_object(
         env,
         DispatchObject::TimerSource(TimerSource {
@@ -862,6 +910,11 @@ fn dispatch_source_create(
             queue,
             handle,
             mask,
+            kind,
+            pending_data: 0,
+            pending_event: false,
+            event_queued: false,
+            delivering_data: None,
         }),
     )
 }
@@ -872,6 +925,9 @@ fn dispatch_source_set_timer(
     interval: u64,
     _leeway: u64,
 ) {
+    if !matches!(timer_source(env, source).kind, SourceKind::Timer) {
+        return;
+    }
     let start = time_to_instant(env, start);
     let timer = timer_source(env, source);
     timer.next_fire = start;
@@ -937,6 +993,23 @@ fn dispatch_source_get_handle(env: &mut Environment, source: MutVoidPtr) -> u32 
 fn dispatch_source_get_mask(env: &mut Environment, source: MutVoidPtr) -> u32 {
     timer_source(env, source).mask
 }
+fn dispatch_source_get_data(env: &mut Environment, source: MutVoidPtr) -> u32 {
+    let source = timer_source(env, source);
+    source.delivering_data.unwrap_or(source.pending_data)
+}
+fn dispatch_source_merge_data(env: &mut Environment, source: MutVoidPtr, value: u32) {
+    let source = timer_source(env, source);
+    if source.cancelled {
+        return;
+    }
+    match source.kind {
+        SourceKind::DataAdd => source.pending_data = source.pending_data.saturating_add(value),
+        SourceKind::DataOr => source.pending_data |= value,
+        SourceKind::DataReplace => source.pending_data = value,
+        SourceKind::Timer => return,
+    }
+    source.pending_event = true;
+}
 fn dispatch_source_cancel(env: &mut Environment, source: MutVoidPtr) {
     let timer = timer_source(env, source);
     if timer.cancelled {
@@ -996,26 +1069,35 @@ fn queue_due_work(env: &mut Environment) {
         let DispatchObject::TimerSource(timer) = object else {
             continue;
         };
-        if timer.cancelled || timer.suspend_count > 0 || timer.event_handler.is_none() {
+        if timer.cancelled
+            || timer.suspend_count > 0
+            || timer.event_handler.is_none()
+            || timer.event_queued
+        {
             continue;
         }
-        let Some(next_fire) = timer.next_fire else {
-            continue;
-        };
-        if next_fire > now {
-            continue;
-        }
-        // Coalesce missed events, like GCD does.
-        timer.next_fire = timer.interval.map(|interval| {
-            let mut next = next_fire + interval;
-            while next <= now {
-                next += interval;
+        if let Some(next_fire) = timer.next_fire {
+            if next_fire <= now {
+                let count = timer.interval.map_or(1, |interval| {
+                    let elapsed = now.duration_since(next_fire).as_nanos();
+                    (1 + elapsed / interval.as_nanos()).min(u32::MAX as u128) as u32
+                });
+                timer.pending_data = timer.pending_data.saturating_add(count);
+                timer.pending_event = true;
+                timer.next_fire = timer
+                    .interval
+                    .and_then(|interval| now.checked_add(interval));
             }
-            next
-        });
-        handlers.push((source, timer.event_handler.unwrap(), timer.queue));
+        }
+        if !timer.pending_event {
+            continue;
+        }
+        let data = std::mem::take(&mut timer.pending_data);
+        timer.pending_event = false;
+        timer.event_queued = true;
+        handlers.push((source, timer.event_handler.unwrap(), timer.queue, data));
     }
-    for (source, handler, queue) in handlers {
+    for (source, handler, queue, data) in handlers {
         let context = dispatch_get_context(env, source);
         let work = match handler {
             SourceHandler::Block(block) => DispatchWork::Block {
@@ -1028,7 +1110,14 @@ fn queue_due_work(env: &mut Environment) {
                 queue,
             },
         };
-        env.libc_state.dispatch.pending.push_back(work);
+        env.libc_state
+            .dispatch
+            .pending
+            .push_back(DispatchWork::SourceEvent {
+                source,
+                data,
+                work: Box::new(work),
+            });
     }
 }
 
@@ -1075,6 +1164,13 @@ fn run_work(env: &mut Environment, work: DispatchWork) {
             run_work(env, *work);
             dispatch_group_leave(env, group);
         }
+        DispatchWork::SourceEvent { source, data, work } => {
+            timer_source(env, source).delivering_data = Some(data);
+            run_work(env, *work);
+            let source = timer_source(env, source);
+            source.delivering_data = None;
+            source.event_queued = false;
+        }
     }
 }
 
@@ -1086,6 +1182,18 @@ pub const CONSTANTS: ConstantExports = &[
     (
         "__dispatch_source_type_timer",
         HostConstant::Custom(source_type_timer),
+    ),
+    (
+        "__dispatch_source_type_data_add",
+        HostConstant::Custom(source_type_data_add),
+    ),
+    (
+        "__dispatch_source_type_data_or",
+        HostConstant::Custom(source_type_data_or),
+    ),
+    (
+        "__dispatch_source_type_data_replace",
+        HostConstant::Custom(source_type_data_replace),
     ),
 ];
 pub const FUNCTIONS: FunctionExports = &[
@@ -1140,6 +1248,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(dispatch_source_testcancel(_)),
     export_c_func!(dispatch_source_get_handle(_)),
     export_c_func!(dispatch_source_get_mask(_)),
+    export_c_func!(dispatch_source_get_data(_)),
+    export_c_func!(dispatch_source_merge_data(_, _)),
     export_c_func!(dispatch_suspend(_)),
     export_c_func!(dispatch_resume(_)),
     export_c_func!(_Block_copy(_)),

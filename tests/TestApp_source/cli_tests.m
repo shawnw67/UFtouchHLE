@@ -90,6 +90,8 @@ extern void dispatch_group_async_f(void *group, const void *queue,
 extern void dispatch_group_notify_f(void *group, const void *queue,
                                     void *context, void (*function)(void *));
 extern const char _dispatch_source_type_timer;
+extern const char _dispatch_source_type_data_add;
+extern const char _dispatch_source_type_data_or;
 extern void *dispatch_source_create(const void *type, unsigned long handle,
                                     unsigned long mask, const void *queue);
 extern void dispatch_source_set_timer(void *source, unsigned long long start,
@@ -103,6 +105,8 @@ extern void dispatch_source_cancel(void *source);
 extern int dispatch_source_testcancel(void *source);
 extern unsigned long dispatch_source_get_handle(void *source);
 extern unsigned long dispatch_source_get_mask(void *source);
+extern unsigned long dispatch_source_get_data(void *source);
+extern void dispatch_source_merge_data(void *source, unsigned long value);
 extern void dispatch_resume(void *object);
 struct TestSplitComplex {
   float *realp;
@@ -6579,6 +6583,44 @@ int test_dispatch_timer_functions(void) {
   return passed ? 0 : -1;
 }
 
+struct dispatch_data_probe {
+  void *source;
+  unsigned long value;
+  int calls;
+};
+static void test_dispatch_data_handler(void *context) {
+  struct dispatch_data_probe *probe = context;
+  probe->value = dispatch_source_get_data(probe->source);
+  probe->calls++;
+}
+int test_dispatch_data_sources(void) {
+  const void *queue = dispatch_get_main_queue();
+  void *add =
+      dispatch_source_create(&_dispatch_source_type_data_add, 0, 0, queue);
+  void *bit_or =
+      dispatch_source_create(&_dispatch_source_type_data_or, 0, 0, queue);
+  struct dispatch_data_probe a = {add, 0, 0}, b = {bit_or, 0, 0};
+  dispatch_set_context(add, &a);
+  dispatch_set_context(bit_or, &b);
+  dispatch_source_set_event_handler_f(add, test_dispatch_data_handler);
+  dispatch_source_set_event_handler_f(bit_or, test_dispatch_data_handler);
+  dispatch_source_merge_data(add, 7);
+  dispatch_source_merge_data(add, 5);
+  dispatch_source_merge_data(bit_or, 1);
+  dispatch_source_merge_data(bit_or, 4);
+  int passed = dispatch_source_get_data(add) == 12 &&
+               dispatch_source_get_data(bit_or) == 5;
+  dispatch_resume(add);
+  dispatch_resume(bit_or);
+  void *semaphore = dispatch_semaphore_create(0);
+  dispatch_semaphore_wait(semaphore, 0);
+  passed =
+      passed && a.calls == 1 && a.value == 12 && b.calls == 1 && b.value == 5;
+  dispatch_source_cancel(add);
+  dispatch_source_cancel(bit_or);
+  return passed ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10856,6 +10898,7 @@ struct {
     FUNC_DEF(test_dispatch_queue_metadata),
     FUNC_DEF(test_dispatch_group_counting),
     FUNC_DEF(test_dispatch_timer_functions),
+    FUNC_DEF(test_dispatch_data_sources),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
