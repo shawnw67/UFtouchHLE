@@ -124,6 +124,9 @@ extern void CGPathMoveToPoint(void *path, const void *transform, float x,
 extern void CGPathAddQuadCurveToPoint(void *path, const void *transform,
                                       float cx, float cy, float x, float y);
 extern void CGPathAddPath(void *path, const void *transform, const void *other);
+extern void CGPathAddArcToPoint(void *path, const void *transform, float x1,
+                                float y1, float x2, float y2, float radius);
+extern CGPoint CGPathGetCurrentPoint(const void *path);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -1149,6 +1152,17 @@ int test_CGPath_curves_and_copy(void) {
   passed = passed && CGPathContainsPoint(path, NULL, translated, false);
   CGPathRelease(path);
   CGPathRelease(ellipse);
+  return passed ? 0 : -1;
+}
+
+int test_CGPath_transformed_arc(void) {
+  float transform[6] = {2, 0, 0, 1, 0, 0};
+  void *path = CGPathCreateMutable();
+  CGPathMoveToPoint(path, transform, 0, 0);
+  CGPathAddArcToPoint(path, transform, 10, 0, 10, 10, 2);
+  CGPoint end = CGPathGetCurrentPoint(path);
+  int passed = fabsf(end.x - 20) < 0.01f && fabsf(end.y - 2) < 0.01f;
+  CGPathRelease(path);
   return passed ? 0 : -1;
 }
 
@@ -10247,6 +10261,7 @@ struct {
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGPath_rect_and_draw),
     FUNC_DEF(test_CGPath_curves_and_copy),
+    FUNC_DEF(test_CGPath_transformed_arc),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),

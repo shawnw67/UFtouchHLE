@@ -516,6 +516,46 @@ fn CGPathAddPath(
         .subpaths
         .extend(path.subpaths);
 }
+
+#[allow(clippy::too_many_arguments)]
+fn CGPathAddArcToPoint(
+    env: &mut Environment,
+    path: CFTypeRef,
+    transform: ConstPtr<CGAffineTransform>,
+    x1: CGFloat,
+    y1: CGFloat,
+    x2: CGFloat,
+    y2: CGFloat,
+    radius: CGFloat,
+) {
+    let end1 = CGPoint { x: x1, y: y1 };
+    let end2 = CGPoint { x: x2, y: y2 };
+    let current = {
+        let geometry = &mut env.objc.borrow_mut::<CGPathHostObject>(path).path;
+        resume_closed_subpath(geometry);
+        geometry.current_point()
+    };
+    let Some(mut current) = current else {
+        CGPathMoveToPoint(env, path, transform, x1, y1);
+        return;
+    };
+    if !transform.is_null() {
+        let t = env.mem.read(transform);
+        let det = t.a * t.d - t.b * t.c;
+        if det == 0.0 {
+            CGPathAddLineToPoint(env, path, transform, x1, y1);
+            return;
+        }
+        let (x, y) = (current.x - t.tx, current.y - t.ty);
+        current = CGPoint {
+            x: (t.d * x - t.c * y) / det,
+            y: (t.a * y - t.b * x) / det,
+        };
+    }
+    for point in arc_to_point(current, end1, end2, radius) {
+        CGPathAddLineToPoint(env, path, transform, point.x, point.y);
+    }
+}
 fn CGPathEqualToPath(env: &mut Environment, first: CFTypeRef, second: CFTypeRef) -> bool {
     if first == second {
         return true;
@@ -527,6 +567,7 @@ fn CGPathEqualToPath(env: &mut Environment, first: CFTypeRef, second: CFTypeRef)
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CGPathAddArcToPoint(_, _, _, _, _, _, _)),
     export_c_func!(CGPathAddQuadCurveToPoint(_, _, _, _, _, _)),
     export_c_func!(CGPathAddCurveToPoint(_, _, _, _, _, _, _, _)),
     export_c_func!(CGPathCreateWithEllipseInRect(_, _)),
