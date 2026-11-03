@@ -11218,6 +11218,31 @@ int test_mach_vm_partial_deallocation(void) {
 extern int __cxa_guard_acquire(uint64_t *);
 extern void __cxa_guard_release(uint64_t *);
 extern void __cxa_guard_abort(uint64_t *);
+extern int __cxa_atexit(void (*)(void *), void *, void *);
+extern void __cxa_finalize(void *);
+static int test_cxx_finalizer_order[4], test_cxx_finalizer_count;
+static char test_cxx_dso_one, test_cxx_dso_two;
+static void test_cxx_destructor(void *arg) {
+  int value = (int)(uintptr_t)arg;
+  test_cxx_finalizer_order[test_cxx_finalizer_count++] = value;
+  if (value == 3)
+    __cxa_finalize(&test_cxx_dso_one);
+}
+int test_cxx_destructor_order_and_reentry(void) {
+  test_cxx_finalizer_count = 0;
+  if (__cxa_atexit(test_cxx_destructor, (void *)1, &test_cxx_dso_one) ||
+      __cxa_atexit(test_cxx_destructor, (void *)2, &test_cxx_dso_two) ||
+      __cxa_atexit(test_cxx_destructor, (void *)3, &test_cxx_dso_one))
+    return -1;
+  __cxa_finalize(&test_cxx_dso_one);
+  __cxa_finalize(&test_cxx_dso_one);
+  if (test_cxx_finalizer_count != 2 || test_cxx_finalizer_order[0] != 3 ||
+      test_cxx_finalizer_order[1] != 1)
+    return -2;
+  __cxa_finalize(&test_cxx_dso_two);
+  return test_cxx_finalizer_count == 3 && test_cxx_finalizer_order[2] == 2 ? 0
+                                                                           : -3;
+}
 struct TestCxxGuard {
   uint64_t guard;
   int worker_acquired;
@@ -11450,6 +11475,7 @@ struct {
     FUNC_DEF(test_dispatch_once_concurrent),
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
     FUNC_DEF(test_cxx_guard_retry_and_threads),
+    FUNC_DEF(test_cxx_destructor_order_and_reentry),
     FUNC_DEF(test_mach_vm_partial_deallocation),
     FUNC_DEF(test_mach_vm_read_overwrite),
     FUNC_DEF(test_mach_semaphore_timedwait),

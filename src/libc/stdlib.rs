@@ -104,13 +104,10 @@ fn free(env: &mut Environment, ptr: MutVoidPtr) {
 }
 
 fn atexit(
-    _env: &mut Environment,
+    env: &mut Environment,
     func: GuestFunction, // void (*func)(void)
 ) -> i32 {
-    // TODO: when this is implemented, make sure it's properly compatible with
-    // __cxa_atexit.
-    log!("TODO: atexit({:?}) (unimplemented)", func);
-    0 // success
+    super::cxxabi::register_atexit(env, func)
 }
 
 #[allow(rustdoc::broken_intra_doc_links)] // https://github.com/rust-lang/rust/issues/83049
@@ -332,6 +329,8 @@ fn unsetenv(env: &mut Environment, name: ConstPtr<u8>) -> i32 {
 fn exit(env: &mut Environment, exit_code: i32) {
     // TODO: handle errno properly
     set_errno(env, 0);
+
+    super::cxxabi::__cxa_finalize(env, MutPtr::null());
 
     echo!("App called exit(), exiting.");
     std::process::exit(exit_code);

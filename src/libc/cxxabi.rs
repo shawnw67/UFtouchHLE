@@ -8,7 +8,7 @@
 //! Resources:
 //! - [Itanium C++ ABI specification](https://itanium-cxx-abi.github.io/cxx-abi/abi.html#dso-dtor-runtime-api)
 
-use crate::abi::GuestFunction;
+use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::mem::{MutPtr, MutVoidPtr};
 use crate::Environment;
@@ -18,6 +18,27 @@ use std::time::Duration;
 #[derive(Default)]
 pub struct State {
     guards: HashMap<MutPtr<u8>, usize>,
+    destructors: Vec<Destructor>,
+}
+
+enum Destructor {
+    C(GuestFunction),
+    Cxx {
+        function: GuestFunction,
+        argument: MutVoidPtr,
+        dso: MutVoidPtr,
+    },
+}
+
+pub(super) fn register_atexit(env: &mut Environment, function: GuestFunction) -> i32 {
+    if function.to_ptr().is_null() {
+        return -1;
+    }
+    env.libc_state
+        .cxxabi
+        .destructors
+        .push(Destructor::C(function));
+    0
 }
 
 fn __cxa_guard_acquire(env: &mut Environment, guard: MutPtr<u8>) -> i32 {
@@ -61,24 +82,49 @@ fn __cxa_guard_abort(env: &mut Environment, guard: MutPtr<u8>) {
 }
 
 fn __cxa_atexit(
-    _env: &mut Environment,
+    env: &mut Environment,
     func: GuestFunction, // void (*func)(void *)
     p: MutVoidPtr,
     d: MutVoidPtr,
 ) -> i32 {
-    // TODO: when this is implemented, make sure it's properly compatible with
-    // C atexit.
-    log!(
-        "TODO: __cxa_atexit({:?}, {:?}, {:?}) (unimplemented)",
-        func,
-        p,
-        d
-    );
-    0 // success
+    if func.to_ptr().is_null() {
+        return -1;
+    }
+    env.libc_state.cxxabi.destructors.push(Destructor::Cxx {
+        function: func,
+        argument: p,
+        dso: d,
+    });
+    0
 }
 
-fn __cxa_finalize(_env: &mut Environment, d: MutVoidPtr) {
-    log!("TODO: __cxa_finalize({:?}) (unimplemented)", d);
+pub(super) fn __cxa_finalize(env: &mut Environment, d: MutVoidPtr) {
+    loop {
+        let position = env
+            .libc_state
+            .cxxabi
+            .destructors
+            .iter()
+            .rposition(|entry| match entry {
+                Destructor::C(_) => d.is_null(),
+                Destructor::Cxx { dso, .. } => d.is_null() || *dso == d,
+            });
+        let Some(position) = position else {
+            break;
+        };
+        // Remove before invoking guest code: finalizers can reenter this API.
+        let entry = env.libc_state.cxxabi.destructors.remove(position);
+        match entry {
+            Destructor::C(function) => {
+                let (): () = function.call_from_host(env, ());
+            }
+            Destructor::Cxx {
+                function, argument, ..
+            } => {
+                let (): () = function.call_from_host(env, (argument,));
+            }
+        }
+    }
 }
 
 pub const FUNCTIONS: FunctionExports = &[
