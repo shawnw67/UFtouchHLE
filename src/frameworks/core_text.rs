@@ -261,6 +261,51 @@ fn CTLineGetTypographicBounds(
     total
 }
 
+fn CTLineDraw(env: &mut Environment, line: id, context: CGContextRef) {
+    if line.is_null() || context.is_null() {
+        return;
+    }
+    let host = env.objc.borrow::<CTLineHostObject>(line);
+    let (text, font) = (host.text, host.font);
+    let font_host = env.objc.borrow::<CTFontHostObject>(font);
+    let (fonts, size) = (font_host.cg_fonts, font_host.size);
+    let mut units = Vec::new();
+    ns_string::for_each_code_unit(env, text, |_, unit| units.push(unit));
+    let glyph_ptr: MutPtr<CGGlyph> = env.mem.alloc_and_write(0);
+    let position: MutPtr<CGPoint> = env.mem.alloc_and_write(CGPoint { x: 0.0, y: 0.0 });
+    let mut x = 0.0;
+    for unit in units {
+        if (0xd800..=0xdfff).contains(&unit) {
+            continue;
+        }
+        let first = &env.objc.borrow::<CGFontHostObject>(fonts[0]).font;
+        let mut glyph = first.glyph_id_for_char(unit).0;
+        let mut selected = fonts[0];
+        if glyph == 0 {
+            let fallback = &env.objc.borrow::<CGFontHostObject>(fonts[1]).font;
+            glyph = fallback.glyph_id_for_char(unit).0;
+            selected = fonts[1];
+        }
+        let face = &env.objc.borrow::<CGFontHostObject>(selected).font;
+        let advance = face.glyph_hor_advance(glyph).unwrap_or(0) as CGFloat * size
+            / face.units_per_em() as CGFloat;
+        env.mem.write(glyph_ptr, glyph);
+        env.mem.write(position, CGPoint { x, y: 0.0 });
+        show_glyphs_with_font(
+            env,
+            context,
+            selected,
+            size,
+            glyph_ptr.cast_const(),
+            position.cast_const(),
+            1,
+        );
+        x += advance;
+    }
+    env.mem.free(glyph_ptr.cast());
+    env.mem.free(position.cast());
+}
+
 fn CTFontCopyGraphicsFont(
     env: &mut Environment,
     font: CTFontRef,
@@ -475,6 +520,7 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(CTLineCreateWithAttributedString(_)),
     export_c_func!(CTLineGetGlyphCount(_)),
     export_c_func!(CTLineGetTypographicBounds(_, _, _, _)),
+    export_c_func!(CTLineDraw(_, _)),
     export_c_func!(CTFontCopyGraphicsFont(_, _)),
     export_c_func!(CTFontCreateWithGraphicsFont(_, _, _, _)),
     export_c_func!(CTFontGetGlyphsForCharacters(_, _, _, _)),

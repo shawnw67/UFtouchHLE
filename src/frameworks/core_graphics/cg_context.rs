@@ -559,6 +559,21 @@ fn CGContextGetTextMatrix(env: &mut Environment, context: CGContextRef) -> CGAff
         .unwrap_or(CGAffineTransformIdentity)
 }
 
+fn CGContextSetTextPosition(env: &mut Environment, context: CGContextRef, x: CGFloat, y: CGFloat) {
+    let host = env.objc.borrow_mut::<CGContextHostObject>(context);
+    let matrix = host.text_transform.get_or_insert(CGAffineTransformIdentity);
+    matrix.tx = x;
+    matrix.ty = y;
+}
+
+fn CGContextGetTextPosition(env: &mut Environment, context: CGContextRef) -> CGPoint {
+    let matrix = CGContextGetTextMatrix(env, context);
+    CGPoint {
+        x: matrix.tx,
+        y: matrix.ty,
+    }
+}
+
 fn CGContextShowGlyphsAtPoint(
     env: &mut Environment,
     context: CGContextRef,
@@ -644,12 +659,18 @@ fn CGContextShowGlyphsAtPositions(
         .borrow::<CGContextHostObject>(context)
         .text_transform
         .unwrap_or(CGAffineTransformIdentity);
-    assert!(text_transform.tx == 0.0 && text_transform.ty == 0.0); // TODO
-
     for i in 0..count {
         let glyph_ptr = glyphs + i;
         let point = env.mem.read(positions + i);
         let transformed_point = text_transform.apply_to_point(point);
+        // The origin already includes translation. Apply only the linear
+        // part of the matrix to each glyph's shape.
+        let mut glyph_transform = text_transform;
+        glyph_transform.tx = 0.0;
+        glyph_transform.ty = 0.0;
+        env.objc
+            .borrow_mut::<CGContextHostObject>(context)
+            .text_transform = Some(glyph_transform);
         CGContextShowGlyphsAtPoint(
             env,
             context,
@@ -658,6 +679,9 @@ fn CGContextShowGlyphsAtPositions(
             glyph_ptr,
             1,
         );
+        env.objc
+            .borrow_mut::<CGContextHostObject>(context)
+            .text_transform = Some(text_transform);
     }
 }
 
@@ -1124,6 +1148,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextFillEllipseInRect(_, _)),
     export_c_func!(CGContextSetTextMatrix(_, _)),
     export_c_func!(CGContextGetTextMatrix(_)),
+    export_c_func!(CGContextSetTextPosition(_, _, _)),
+    export_c_func!(CGContextGetTextPosition(_)),
     export_c_func!(CGContextShowGlyphsAtPoint(_, _, _, _, _)),
     export_c_func!(CGContextShowGlyphsAtPositions(_, _, _, _)),
 ];

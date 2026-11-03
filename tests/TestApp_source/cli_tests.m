@@ -76,6 +76,9 @@ extern void CGContextFlush(CGContextRef context);
 extern void CGContextSetTextMatrix(CGContextRef context,
                                    CGAffineTransform matrix);
 extern CGAffineTransform CGContextGetTextMatrix(CGContextRef context);
+extern void CGContextSetTextPosition(CGContextRef context, CGFloat x,
+                                     CGFloat y);
+extern CGPoint CGContextGetTextPosition(CGContextRef context);
 extern void CGContextSetStrokeColorWithColor(CGContextRef context,
                                              CGColorRef color);
 extern void CGContextStrokeRect(CGContextRef context, CGRect rect);
@@ -97,6 +100,7 @@ CTLineCreateWithAttributedString(CFAttributedStringRef string);
 extern CFIndex CTLineGetGlyphCount(TestCTLineRef line);
 extern double CTLineGetTypographicBounds(TestCTLineRef line, CGFloat *ascent,
                                          CGFloat *descent, CGFloat *leading);
+extern void CTLineDraw(TestCTLineRef line, CGContextRef context);
 extern TestCTFontRef CTFontCreateWithName(CFStringRef name, CGFloat size,
                                           const CGAffineTransform *matrix);
 extern CGFontRef CTFontCopyGraphicsFont(TestCTFontRef font, void *attributes);
@@ -169,6 +173,30 @@ int test_CTLine_typographic_bounds(void) {
   CFRelease(text);
   CFRelease(name);
   return passed ? 0 : -1;
+}
+
+int test_CTLine_draw(void) {
+  unsigned char pixels[64 * 32 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 64, 32, 8, 64 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "hello", kCFStringEncodingUTF8);
+  CFAttributedStringRef attributed = CFAttributedStringCreate(NULL, text, NULL);
+  TestCTLineRef line = CTLineCreateWithAttributedString(attributed);
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  CGContextSetTextPosition(context, 4, 8);
+  CTLineDraw(line, context);
+  CGPoint position = CGContextGetTextPosition(context);
+  int painted = 0;
+  for (int i = 0; i < 64 * 32; i++)
+    painted += pixels[i * 4 + 3] != 0;
+  CFRelease(line);
+  CFRelease(attributed);
+  CFRelease(text);
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return painted > 0 && position.x == 4 && position.y == 8 ? 0 : -1;
 }
 
 int test_CFAttributedString_attributes(void) {
@@ -9522,6 +9550,7 @@ struct {
     FUNC_DEF(test_CFAttributedString_basic),
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CTLine_typographic_bounds),
+    FUNC_DEF(test_CTLine_draw),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
