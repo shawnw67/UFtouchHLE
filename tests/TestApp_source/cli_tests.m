@@ -145,6 +145,7 @@ extern CGImageRef CGImageMaskCreate(size_t width, size_t height,
                                     const CGFloat *decode, bool interpolate);
 extern CGImageRef CGImageCreateWithMask(CGImageRef image, CGImageRef mask);
 extern const CGFloat *CGImageGetDecode(CGImageRef image);
+extern CGImageRef CGImageCreateWithImageInRect(CGImageRef image, CGRect rect);
 extern CGImageRef CGImageCreateFlippedVertically(CGImageRef image);
 extern CGImageRef CGImageCreateScaled(CGImageRef image, unsigned int width,
                                       unsigned int height);
@@ -6391,6 +6392,23 @@ int test_CGImage_packed_mask(void) {
                mask_decode[0] == 0 && mask_decode[1] == 1 && masked &&
                result[0] == 255 && result[3] == 255 && result[4] == 0 &&
                result[7] == 0;
+  CGImageRef cropped =
+      CGImageCreateWithImageInRect(mask, CGRectMake(1, 0, 1, 1));
+  CGImageRef scaled = CGImageCreateScaled(mask, 4, 1);
+  CFDataRef cropped_bytes =
+      CGDataProviderCopyData(CGImageGetDataProvider(cropped));
+  CFDataRef scaled_bytes =
+      CGDataProviderCopyData(CGImageGetDataProvider(scaled));
+  passed = passed && CGImageIsMask(cropped) && CGImageIsMask(scaled) &&
+           CFDataGetLength(cropped_bytes) == 1 &&
+           CFDataGetBytePtr(cropped_bytes)[0] == 0xf0 &&
+           CFDataGetLength(scaled_bytes) == 2 &&
+           CFDataGetBytePtr(scaled_bytes)[0] == 0x00 &&
+           CFDataGetBytePtr(scaled_bytes)[1] == 0xff;
+  CFRelease(scaled_bytes);
+  CFRelease(cropped_bytes);
+  CGImageRelease(scaled);
+  CGImageRelease(cropped);
   if (masked)
     CGImageRelease(masked);
   if (mask)

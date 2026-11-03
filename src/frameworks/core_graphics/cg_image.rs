@@ -584,12 +584,25 @@ fn CGImageCreateFlippedVertically(env: &mut Environment, image: CGImageRef) -> C
         pixels.extend_from_slice(&source.image.pixels()[row * stride..(row + 1) * stride]);
     }
     let (interpolate, intent) = (source.should_interpolate, source.rendering_intent);
-    from_image_with_options(
+    let mask = source.mask.as_ref().map(|mask| {
+        let stride = mask.bytes_per_row as usize;
+        let mut samples = Vec::with_capacity(mask.samples.len());
+        for row in (0..height as usize).rev() {
+            samples.extend_from_slice(&mask.samples[row * stride..(row + 1) * stride]);
+        }
+        ImageMask {
+            samples,
+            ..mask.clone()
+        }
+    });
+    let result = from_image_with_options(
         env,
         Image::from_pixel_vec(pixels, (width, height)),
         interpolate,
         intent,
-    )
+    );
+    env.objc.borrow_mut::<CGImageHostObject>(result).mask = mask;
+    result
 }
 
 pub(crate) fn CGImageCreateScaled(
@@ -622,12 +635,37 @@ pub(crate) fn CGImageCreateScaled(
         }
     }
     let (interpolate, intent) = (source.should_interpolate, source.rendering_intent);
-    from_image_with_options(
+    let mask = source.mask.as_ref().map(|mask| {
+        let stride = (u64::from(width) * u64::from(mask.bits)).div_ceil(8) as u32;
+        let mut samples = vec![0u8; (stride * height) as usize];
+        let sample_mask = (1u32 << mask.bits) - 1;
+        for y in 0..height {
+            let sy = (u64::from(y) * u64::from(src_height) / u64::from(height)) as u32;
+            for x in 0..width {
+                let sx = (u64::from(x) * u64::from(src_width) / u64::from(width)) as u32;
+                let old_bit = sx * mask.bits;
+                let byte = mask.samples[(sy * mask.bytes_per_row + old_bit / 8) as usize];
+                let sample = (u32::from(byte) >> (8 - mask.bits - old_bit % 8)) & sample_mask;
+                let bit = u64::from(x) * u64::from(mask.bits);
+                let index = (u64::from(y) * u64::from(stride) + bit / 8) as usize;
+                samples[index] |= (sample << (8 - u64::from(mask.bits) - bit % 8)) as u8;
+            }
+        }
+        ImageMask {
+            samples,
+            bits: mask.bits,
+            bytes_per_row: stride,
+            decode: mask.decode,
+        }
+    });
+    let result = from_image_with_options(
         env,
         Image::from_pixel_vec(pixels, (width, height)),
         interpolate,
         intent,
-    )
+    );
+    env.objc.borrow_mut::<CGImageHostObject>(result).mask = mask;
+    result
 }
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGImageMaskCreate(_, _, _, _, _, _, _, _)),
