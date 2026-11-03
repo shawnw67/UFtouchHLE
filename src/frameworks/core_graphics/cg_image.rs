@@ -667,7 +667,79 @@ pub(crate) fn CGImageCreateScaled(
     env.objc.borrow_mut::<CGImageHostObject>(result).mask = mask;
     result
 }
+fn CGImageCreateWithBitmapData(
+    env: &mut Environment,
+    width: u32,
+    height: u32,
+    data: ConstPtr<u8>,
+    bytes_per_row: u32,
+    bitmap_info: CGBitmapInfo,
+) -> CGImageRef {
+    if width == 0 || height == 0 || data.is_null() {
+        return nil;
+    }
+    let alpha = bitmap_info & kCGBitmapAlphaInfoMask;
+    let order = bitmap_info & kCGBitmapByteOrderMask;
+    if alpha > kCGImageAlphaOnly || bitmap_info != (alpha | order) {
+        return nil;
+    }
+    let components = match alpha {
+        kCGImageAlphaNone => 3,
+        kCGImageAlphaOnly => 1,
+        _ => 4,
+    };
+    if order != kCGImageByteOrderDefault
+        && order != kCGImageByteOrder32Big
+        && !(order == kCGImageByteOrder32Little && components == 4)
+    {
+        return nil;
+    }
+    let Some(row_size) = width.checked_mul(components) else {
+        return nil;
+    };
+    let Some(input_size) = bytes_per_row.checked_mul(height) else {
+        return nil;
+    };
+    let Some(output_size) = width.checked_mul(height).and_then(|v| v.checked_mul(4)) else {
+        return nil;
+    };
+    if bytes_per_row < row_size {
+        return nil;
+    }
+    let input = env.mem.bytes_at(data, input_size);
+    let mut pixels = Vec::new();
+    if pixels.try_reserve_exact(output_size as usize).is_err() {
+        return nil;
+    }
+    for y in 0..height as usize {
+        for x in 0..width as usize {
+            let pos = y * bytes_per_row as usize + x * components as usize;
+            let mut p = [0u8; 4];
+            p[..components as usize].copy_from_slice(&input[pos..pos + components as usize]);
+            if order == kCGImageByteOrder32Little {
+                p.reverse();
+            }
+            let (mut r, mut g, mut b, a) = match alpha {
+                kCGImageAlphaNone => (p[0], p[1], p[2], 255),
+                kCGImageAlphaOnly => (0, 0, 0, p[0]),
+                kCGImageAlphaPremultipliedFirst | kCGImageAlphaFirst => (p[1], p[2], p[3], p[0]),
+                kCGImageAlphaNoneSkipFirst => (p[1], p[2], p[3], 255),
+                kCGImageAlphaNoneSkipLast => (p[0], p[1], p[2], 255),
+                _ => (p[0], p[1], p[2], p[3]),
+            };
+            if alpha == kCGImageAlphaFirst || alpha == kCGImageAlphaLast {
+                r = ((u32::from(r) * u32::from(a) + 127) / 255) as u8;
+                g = ((u32::from(g) * u32::from(a) + 127) / 255) as u8;
+                b = ((u32::from(b) * u32::from(a) + 127) / 255) as u8;
+            }
+            pixels.extend_from_slice(&[r, g, b, a]);
+        }
+    }
+    from_image(env, Image::from_pixel_vec(pixels, (width, height)))
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CGImageCreateWithBitmapData(_, _, _, _, _)),
     export_c_func!(CGImageMaskCreate(_, _, _, _, _, _, _, _)),
     export_c_func!(CGImageCreateWithMask(_, _)),
     export_c_func!(CGImageReadPixels(_, _)),

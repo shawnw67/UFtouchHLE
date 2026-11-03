@@ -150,6 +150,11 @@ extern CGImageRef CGImageCreateFlippedVertically(CGImageRef image);
 extern CGImageRef CGImageCreateScaled(CGImageRef image, unsigned int width,
                                       unsigned int height);
 extern void CGImageReadPixels(CGImageRef image, unsigned char *output);
+extern CGImageRef CGImageCreateWithBitmapData(unsigned int width,
+                                              unsigned int height,
+                                              const void *data,
+                                              unsigned int bytes_per_row,
+                                              unsigned int bitmap_info);
 extern CFTypeRef CGImageSourceCreateWithData(CFDataRef data, CFTypeRef options);
 extern unsigned int CGImageSourceGetCount(CFTypeRef source);
 extern int CGImageSourceGetStatusAtIndex(CFTypeRef source, unsigned int index);
@@ -6422,6 +6427,21 @@ int test_CGImage_packed_mask(void) {
   return passed ? 0 : -1;
 }
 
+int test_CGImage_bitmap_data(void) {
+  const unsigned char source[] = {10, 20, 30, 128, 99, 99, 99, 99,
+                                  4,  8,  16, 255, 99, 99, 99, 99};
+  unsigned char output[8] = {0};
+  CGImageRef image = CGImageCreateWithBitmapData(1, 2, source, 8, 0x2000 | 4);
+  if (!image)
+    return -1;
+  CGImageReadPixels(image, output);
+  int passed = output[0] == 15 && output[1] == 10 && output[2] == 5 &&
+               output[3] == 128 && output[4] == 16 && output[5] == 8 &&
+               output[6] == 4 && output[7] == 255;
+  CGImageRelease(image);
+  return passed ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10694,6 +10714,7 @@ struct {
     FUNC_DEF(test_CGImage_copy_metadata),
     FUNC_DEF(test_CGImage_transform_helpers),
     FUNC_DEF(test_CGImage_packed_mask),
+    FUNC_DEF(test_CGImage_bitmap_data),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
