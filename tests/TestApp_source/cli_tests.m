@@ -10915,6 +10915,9 @@ extern int AudioComponentInstanceNew(void *, void **);
 extern int AudioComponentInstanceDispose(void *);
 extern int AudioUnitInitialize(void *);
 extern int AudioUnitReset(void *, uint32_t, uint32_t);
+extern int AudioUnitSetParameter(void *, uint32_t, uint32_t, uint32_t, float,
+                                 uint32_t);
+extern int AudioUnitGetParameter(void *, uint32_t, uint32_t, uint32_t, float *);
 typedef int (*TestRenderNotify)(void *, uint32_t *, const void *, uint32_t,
                                 uint32_t, void *);
 extern int AudioUnitAddRenderNotify(void *, TestRenderNotify, void *);
@@ -11100,17 +11103,20 @@ static int test_mixer_render(void *ctx, uint32_t *flags, const void *timestamp,
   memset(list->buffers[0].data, 0, list->buffers[0].size);
   return 0;
 }
-int test_augraph_two_input_mixer(void) {
+static int test_augraph_mixer_with_type(int spatial) {
   const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
                                                        0x6170706c, 0, 0};
-  const struct TestAudioComponentDescription mixer = {0x61756d78, 0x6d636d78,
-                                                      0x6170706c, 0, 0};
+  struct TestAudioComponentDescription mixer = {0x61756d78, 0x6d636d78,
+                                                0x6170706c, 0, 0};
+  if (spatial)
+    mixer.subtype = 0x3364656d;
   const struct TestStreamFormat format = {44100.0, 0x6c70636d, 12, 2, 1,
                                           2,       1,          16, 0};
   struct TestMixerState state = {0};
   struct TestRenderCallback callback = {test_mixer_render, &state};
   struct timespec pause = {0, 10000000};
   uint32_t count = 2;
+  float value = 0;
   void *graph = NULL, *unit = NULL;
   int output_node = 0, mixer_node = 0;
   if (NewAUGraph(&graph) || AUGraphAddNode(graph, &output, &output_node) ||
@@ -11121,14 +11127,35 @@ int test_augraph_two_input_mixer(void) {
       AudioUnitSetProperty(unit, 8, 1, 0, &format, sizeof(format)) ||
       AudioUnitSetProperty(unit, 8, 1, 1, &format, sizeof(format)) ||
       AUGraphSetNodeInputCallback(graph, mixer_node, 0, &callback) ||
-      AUGraphSetNodeInputCallback(graph, mixer_node, 1, &callback) ||
-      AUGraphInitialize(graph) || AUGraphStart(graph) ||
+      AUGraphSetNodeInputCallback(graph, mixer_node, 1, &callback))
+    return -1;
+  if (spatial) {
+    if (AudioUnitSetParameter(unit, 0, 1, 0, 30.0f, 0) ||
+        AudioUnitSetParameter(unit, 1, 1, 0, 15.0f, 0) ||
+        AudioUnitSetParameter(unit, 2, 1, 0, 2.0f, 0) ||
+        AudioUnitSetParameter(unit, 3, 1, 0, -6.0f, 0) ||
+        AudioUnitSetParameter(unit, 4, 1, 0, 1.5f, 0) ||
+        AudioUnitGetParameter(unit, 4, 1, 0, &value) || value != 1.5f)
+      return -4;
+  } else if (AudioUnitSetParameter(unit, 0, 1, 0, 0.5f, 0) ||
+             AudioUnitGetParameter(unit, 0, 1, 0, &value) || value != 0.5f ||
+             AudioUnitSetParameter(unit, 1, 1, 1, 0.0f, 0) ||
+             AudioUnitSetParameter(unit, 0, 2, 0, 0.75f, 0))
+    return -5;
+  if (AUGraphInitialize(graph) || AUGraphStart(graph) ||
+      (spatial ? AudioUnitSetParameter(unit, 0, 1, 0, 45.0f, 0)
+               : AudioUnitSetParameter(unit, 1, 1, 1, 1.0f, 0)) ||
       nanosleep(&pause, NULL))
     return -1;
   CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
   if (AUGraphStop(graph) || DisposeAUGraph(graph))
     return -2;
   return !state.bad && state.counts[0] == 1 && state.counts[1] == 1 ? 0 : -3;
+}
+
+int test_augraph_two_input_mixer(void) {
+  int result = test_augraph_mixer_with_type(0);
+  return result ? result : test_augraph_mixer_with_type(1);
 }
 
 static int test_converter_render(void *ctx, uint32_t *flags,
@@ -11179,6 +11206,7 @@ static int test_augraph_converters_with_order(int connect_after_open) {
     if (!AUGraphInitialize(graph) ||
         AudioUnitSetProperty(mixer_unit, 8, 1, 0, &format, sizeof(format)) ||
         AudioUnitSetProperty(mixer_unit, 8, 1, 1, &format, sizeof(format)) ||
+        AudioUnitSetParameter(mixer_unit, 0, 1, 1, 0.5f, 0) ||
         AudioUnitSetProperty(converters[0], 8, 1, 0, &format, sizeof(format)) ||
         AudioUnitSetProperty(converters[1], 8, 1, 0, &format, sizeof(format)) ||
         AUGraphConnectNodeInput(graph, mixer_node, 0, output_node, 0) ||
@@ -11195,6 +11223,11 @@ static int test_augraph_converters_with_order(int connect_after_open) {
                               sizeof(different)) ||
         AUGraphSetNodeInputCallback(graph, nodes[i], 0, &callbacks[i]))
       return -2;
+  }
+  if (connect_after_open) {
+    float value = 0;
+    if (AudioUnitGetParameter(mixer_unit, 0, 1, 1, &value) || value != 0.5f)
+      return -7;
   }
   if (AUGraphInitialize(graph) || AUGraphStart(graph) ||
       nanosleep(&pause, NULL))

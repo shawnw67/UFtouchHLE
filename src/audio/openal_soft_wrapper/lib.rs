@@ -125,6 +125,9 @@ pub mod al_defines {
     pub const AL_EXTENSIONS: ALenum = 0xb004;
 
     pub const AL_BUFFER: ALenum = 0x1009;
+    pub const AL_PITCH: ALenum = 0x1003;
+    pub const AL_POSITION: ALenum = 0x1004;
+    pub const AL_GAIN: ALenum = 0x100A;
 
     pub const AL_MAX_GAIN: ALenum = 0x100E;
 

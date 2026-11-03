@@ -11,7 +11,8 @@ use std::time::Instant;
 
 use crate::audio::openal::al_types::{ALuint, ALvoid};
 use crate::audio::openal::{
-    AL_BUFFERS_PROCESSED, AL_BUFFERS_QUEUED, AL_FORMAT_STEREO16, AL_PLAYING, AL_SOURCE_STATE,
+    AL_BUFFERS_PROCESSED, AL_BUFFERS_QUEUED, AL_FORMAT_STEREO16, AL_GAIN, AL_PITCH, AL_PLAYING,
+    AL_POSITION, AL_SOURCE_STATE,
 };
 
 use crate::abi::{CallFromHost, GuestFunction};
@@ -69,6 +70,48 @@ const kAudioUnitProperty_ElementCount: AudioUnitPropertyID = 11;
 const kAudioOutputUnitProperty_EnableIO: AudioUnitPropertyID = 2003;
 const kAudioOutputUnitProperty_IsRunning: AudioUnitPropertyID = 2001;
 
+fn apply_mixer_voice(env: &mut Environment, unit: AudioUnit) {
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&unit)
+    else {
+        return;
+    };
+    let Some(source) = object.al_source.filter(|_| object.mixer_voice) else {
+        return;
+    };
+    let gain = if object.mixer_enabled && object.mixer_master_enabled {
+        object.mixer_gain * object.mixer_master_gain
+    } else {
+        0.0
+    };
+    let rate = object.mixer_rate;
+    let (azimuth, elevation, distance) = (
+        object.mixer_azimuth.to_radians(),
+        object.mixer_elevation.to_radians(),
+        object.mixer_distance,
+    );
+    let spatial = object.mixer_spatial;
+    let context = env
+        .framework_state
+        .audio_toolbox
+        .al_context
+        .make_al_context_current(env.openal_manager.as_mut());
+    unsafe {
+        context.Sourcef(source, AL_GAIN, gain);
+        context.Sourcef(source, AL_PITCH, rate);
+        if spatial {
+            context.Source3f(
+                source,
+                AL_POSITION,
+                distance * azimuth.sin() * elevation.cos(),
+                distance * elevation.sin(),
+                -distance * azimuth.cos() * elevation.cos(),
+            );
+        }
+    }
+}
+
 pub(super) fn mixer_bus(env: &mut Environment, unit: AudioUnit, bus: u32) -> Option<AudioUnit> {
     if bus >= 256 {
         return None;
@@ -83,14 +126,21 @@ pub(super) fn mixer_bus(env: &mut Environment, unit: AudioUnit, bus: u32) -> Opt
     if let Some(&child) = buses.get(&bus) {
         return Some(child);
     }
-    let (initialized, started) = (object.initialized, object.started);
+    let (initialized, started, master_gain, master_enabled, subtype) = (
+        object.initialized,
+        object.started,
+        object.mixer_master_gain,
+        object.mixer_enabled,
+        object.mixer_subtype,
+    );
     let child = audio_components::create_audio_unit_instance(env);
     let state = audio_components::State::get(&mut env.framework_state);
-    state
-        .audio_component_instances
-        .get_mut(&child)
-        .unwrap()
-        .callback_bus = bus;
+    let child_state = state.audio_component_instances.get_mut(&child).unwrap();
+    child_state.callback_bus = bus;
+    child_state.mixer_master_gain = master_gain;
+    child_state.mixer_master_enabled = master_enabled;
+    child_state.mixer_voice = true;
+    child_state.mixer_spatial = subtype == Some(u32::from_be_bytes(*b"3dem"));
     let object = state.audio_component_instances.get_mut(&unit).unwrap();
     object.mixer_buses.as_mut().unwrap().insert(bus, child);
     object.mixer_bus_count = object.mixer_bus_count.max(bus + 1);
@@ -706,6 +756,178 @@ fn AudioUnitGetPropertyInfo(
     0
 }
 
+fn AudioUnitSetParameter(
+    env: &mut Environment,
+    unit: AudioUnit,
+    parameter: u32,
+    scope: u32,
+    element: u32,
+    value: f32,
+    offset: u32,
+) -> OSStatus {
+    if !value.is_finite() || offset != 0 {
+        return paramErr;
+    }
+    let Some(subtype) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&unit)
+        .and_then(|object| object.mixer_subtype)
+    else {
+        return paramErr;
+    };
+    let spatial = subtype == u32::from_be_bytes(*b"3dem");
+    if scope == kAudioUnitScope_Global || scope == kAudioUnitScope_Output {
+        if element != 0 {
+            return paramErr;
+        }
+        let gain = if spatial && parameter == 3 && (-120.0..=20.0).contains(&value) {
+            Some(10.0_f32.powf(value / 20.0))
+        } else if !spatial && parameter == 0 && (0.0..=10.0).contains(&value) {
+            Some(value)
+        } else {
+            None
+        };
+        let enabled = if !spatial && parameter == 1 && (value == 0.0 || value == 1.0) {
+            Some(value != 0.0)
+        } else {
+            None
+        };
+        if gain.is_none() && enabled.is_none() {
+            return paramErr;
+        }
+        let parent = audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get_mut(&unit)
+            .unwrap();
+        if let Some(gain) = gain {
+            parent.mixer_master_gain = gain;
+        }
+        if let Some(enabled) = enabled {
+            parent.mixer_enabled = enabled;
+        }
+        let (master_gain, master_enabled) = (parent.mixer_master_gain, parent.mixer_enabled);
+        let children: Vec<_> = parent
+            .mixer_buses
+            .as_ref()
+            .unwrap()
+            .values()
+            .copied()
+            .collect();
+        for child in children {
+            let object = audio_components::State::get(&mut env.framework_state)
+                .audio_component_instances
+                .get_mut(&child)
+                .unwrap();
+            object.mixer_master_gain = master_gain;
+            object.mixer_master_enabled = master_enabled;
+            apply_mixer_voice(env, child);
+        }
+        return 0;
+    }
+    if scope != kAudioUnitScope_Input {
+        return paramErr;
+    }
+    let valid = if spatial {
+        match parameter {
+            0 => (-180.0..=180.0).contains(&value),
+            1 => (-90.0..=90.0).contains(&value),
+            2 => (0.0..=10000.0).contains(&value),
+            3 => (-120.0..=20.0).contains(&value),
+            4 => (0.5..=2.0).contains(&value),
+            _ => false,
+        }
+    } else {
+        match parameter {
+            0 => (0.0..=10.0).contains(&value),
+            1 => value == 0.0 || value == 1.0,
+            _ => false,
+        }
+    };
+    if !valid {
+        return paramErr;
+    }
+    let Some(child) = mixer_bus(env, unit, element) else {
+        return paramErr;
+    };
+    let object = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&child)
+        .unwrap();
+    if spatial {
+        match parameter {
+            0 => object.mixer_azimuth = value,
+            1 => object.mixer_elevation = value,
+            2 => object.mixer_distance = value,
+            3 => object.mixer_gain = 10.0_f32.powf(value / 20.0),
+            4 => object.mixer_rate = value,
+            _ => unreachable!(),
+        }
+    } else if parameter == 0 {
+        object.mixer_gain = value;
+    } else {
+        object.mixer_enabled = value != 0.0;
+    }
+    apply_mixer_voice(env, child);
+    0
+}
+
+fn AudioUnitGetParameter(
+    env: &mut Environment,
+    unit: AudioUnit,
+    parameter: u32,
+    scope: u32,
+    element: u32,
+    out_value: MutPtr<f32>,
+) -> OSStatus {
+    return_if_null!(out_value);
+    let Some(parent) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&unit)
+    else {
+        return paramErr;
+    };
+    let Some(subtype) = parent.mixer_subtype else {
+        return paramErr;
+    };
+    let spatial = subtype == u32::from_be_bytes(*b"3dem");
+    let value = if scope == kAudioUnitScope_Global || scope == kAudioUnitScope_Output {
+        if element != 0 {
+            return paramErr;
+        }
+        match (spatial, parameter) {
+            (true, 3) => 20.0 * parent.mixer_master_gain.log10(),
+            (false, 0) => parent.mixer_master_gain,
+            (false, 1) => u8::from(parent.mixer_enabled) as f32,
+            _ => return paramErr,
+        }
+    } else if scope == kAudioUnitScope_Input {
+        if (spatial && parameter > 4) || (!spatial && parameter > 1) {
+            return paramErr;
+        }
+        let Some(child) = mixer_bus(env, unit, element) else {
+            return paramErr;
+        };
+        let object = audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get(&child)
+            .unwrap();
+        match (spatial, parameter) {
+            (true, 0) => object.mixer_azimuth,
+            (true, 1) => object.mixer_elevation,
+            (true, 2) => object.mixer_distance,
+            (true, 3) => 20.0 * object.mixer_gain.log10(),
+            (true, 4) => object.mixer_rate,
+            (false, 0) => object.mixer_gain,
+            (false, 1) => u8::from(object.mixer_enabled) as f32,
+            _ => return paramErr,
+        }
+    } else {
+        return paramErr;
+    };
+    env.mem.write(out_value, value);
+    0
+}
+
 fn AudioUnitReset(env: &mut Environment, unit: AudioUnit, scope: u32, element: u32) -> OSStatus {
     if scope > kAudioUnitScope_Output || element != 0 {
         return paramErr;
@@ -803,6 +1025,7 @@ pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSSt
     audio_unit_state.sample_time = 0.0;
     audio_unit_state.started = true;
 
+    apply_mixer_voice(env, ci);
     notify_property_listeners(
         env,
         ci,
@@ -1007,9 +1230,16 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     // every frame over 2048 until it reaches the provided frame number.
     // TODO: Verify if this behavior is right
     let elapsed_time = now.duration_since(audio_unit_host_object.last_render_time.unwrap());
-    let number_frames = ((elapsed_time.as_secs_f64() * sample_rate) as u32)
-        .min(2048)
-        .min(audio_unit_host_object.maximum_frames_per_slice);
+    let render_rate = if audio_unit_host_object.mixer_voice {
+        sample_rate * f64::from(audio_unit_host_object.mixer_rate)
+    } else {
+        sample_rate
+    };
+    let number_frames = render_frame_count(
+        elapsed_time.as_secs_f64(),
+        render_rate,
+        audio_unit_host_object.maximum_frames_per_slice,
+    );
 
     let bytes_per_channel = stream_format.bits_per_channel / 8;
     let actual_bytes_per_frame = stream_format.channels_per_frame * bytes_per_channel;
@@ -1288,6 +1518,10 @@ fn call_render_notifies(env: &mut Environment, call: &RenderNotification, phase:
     }
 }
 
+fn render_frame_count(elapsed: f64, rate: f64, maximum: u32) -> u32 {
+    ((elapsed * rate) as u32).min(2048).min(maximum)
+}
+
 fn interleave_float_stereo(left: &[u8], right: &[u8]) -> Vec<u8> {
     let left = float_pcm_to_i16(left);
     let right = float_pcm_to_i16(right);
@@ -1320,6 +1554,14 @@ fn planar_float_audio_interleaves_channels() {
     assert_eq!(samples, [16384, -16384, -32767, 32767]);
 }
 
+#[cfg(test)]
+#[test]
+fn mixer_frame_count_tracks_playback_rate_and_caps() {
+    assert_eq!(render_frame_count(0.01, 44100.0 * 0.5, 2048), 220);
+    assert_eq!(render_frame_count(0.01, 44100.0 * 2.0, 2048), 882);
+    assert_eq!(render_frame_count(1.0, 44100.0, 1024), 1024);
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitInitialize(_)),
     export_c_func!(AudioUnitUninitialize(_)),
@@ -1331,6 +1573,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitSetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetPropertyInfo(_, _, _, _, _, _)),
+    export_c_func!(AudioUnitSetParameter(_, _, _, _, _, _)),
+    export_c_func!(AudioUnitGetParameter(_, _, _, _, _)),
     export_c_func!(AudioUnitReset(_, _, _)),
     export_c_func!(AudioOutputUnitStart(_)),
     export_c_func!(AudioOutputUnitStop(_)),

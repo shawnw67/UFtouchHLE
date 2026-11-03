@@ -56,6 +56,17 @@ pub struct AudioComponentInstanceHostObject {
     pub mixer_bus_count: u32,
     pub callback_bus: u32,
     pub passthrough_converter: bool,
+    pub mixer_subtype: Option<u32>,
+    pub mixer_gain: f32,
+    pub mixer_master_gain: f32,
+    pub mixer_enabled: bool,
+    pub mixer_master_enabled: bool,
+    pub mixer_voice: bool,
+    pub mixer_spatial: bool,
+    pub mixer_rate: f32,
+    pub mixer_azimuth: f32,
+    pub mixer_elevation: f32,
+    pub mixer_distance: f32,
 }
 impl Default for AudioComponentInstanceHostObject {
     fn default() -> Self {
@@ -94,6 +105,17 @@ impl Default for AudioComponentInstanceHostObject {
             mixer_bus_count: 1,
             callback_bus: 0,
             passthrough_converter: false,
+            mixer_subtype: None,
+            mixer_gain: 1.0,
+            mixer_master_gain: 1.0,
+            mixer_enabled: true,
+            mixer_master_enabled: true,
+            mixer_voice: false,
+            mixer_spatial: false,
+            mixer_rate: 1.0,
+            mixer_azimuth: 0.0,
+            mixer_elevation: 0.0,
+            mixer_distance: 0.0,
         }
     }
 }

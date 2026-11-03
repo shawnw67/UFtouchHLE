@@ -372,6 +372,20 @@ fn attach_converter(
         .and_then(|buses| buses.get(&bus))
         .copied()
     else {
+        let parent = components.audio_component_instances.get(&mixer).unwrap();
+        let (master_gain, master_enabled, spatial) = (
+            parent.mixer_master_gain,
+            parent.mixer_enabled,
+            parent.mixer_subtype == Some(u32::from_be_bytes(*b"3dem")),
+        );
+        let child = components
+            .audio_component_instances
+            .get_mut(&converter)
+            .unwrap();
+        child.mixer_master_gain = master_gain;
+        child.mixer_master_enabled = master_enabled;
+        child.mixer_voice = true;
+        child.mixer_spatial = spatial;
         let object = components
             .audio_component_instances
             .get_mut(&mixer)
@@ -391,6 +405,18 @@ fn attach_converter(
         return paramErr;
     }
     let format = old.input_stream_format;
+    let controls = (
+        old.mixer_gain,
+        old.mixer_master_gain,
+        old.mixer_enabled,
+        old.mixer_master_enabled,
+        old.mixer_voice,
+        old.mixer_spatial,
+        old.mixer_rate,
+        old.mixer_azimuth,
+        old.mixer_elevation,
+        old.mixer_distance,
+    );
     let Some(new) = components.audio_component_instances.get_mut(&converter) else {
         return paramErr;
     };
@@ -404,6 +430,18 @@ fn attach_converter(
         }
         new.output_stream_format = Some(format);
     }
+    (
+        new.mixer_gain,
+        new.mixer_master_gain,
+        new.mixer_enabled,
+        new.mixer_master_enabled,
+        new.mixer_voice,
+        new.mixer_spatial,
+        new.mixer_rate,
+        new.mixer_azimuth,
+        new.mixer_elevation,
+        new.mixer_distance,
+    ) = controls;
     components
         .audio_component_instances
         .get_mut(&mixer)
@@ -497,14 +535,16 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
     };
     let connections = state.connections.clone();
     let callbacks = state.render_notifies.clone();
+    let mixer_subtype = mixer_node.map(|node| state.nodes[&node].component_sub_type);
     let unit = audio_components::create_audio_unit_instance(env);
     let mixer = mixer_node.map(|node| {
         let mixer = audio_components::create_audio_unit_instance(env);
-        audio_components::State::get(&mut env.framework_state)
+        let object = audio_components::State::get(&mut env.framework_state)
             .audio_component_instances
             .get_mut(&mixer)
-            .unwrap()
-            .mixer_buses = Some(HashMap::new());
+            .unwrap();
+        object.mixer_buses = Some(HashMap::new());
+        object.mixer_subtype = mixer_subtype;
         (node, mixer)
     });
     let mut converter_units = BTreeMap::new();
