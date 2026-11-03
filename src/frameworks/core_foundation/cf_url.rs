@@ -20,10 +20,18 @@ use crate::frameworks::foundation::ns_string::{
 };
 use crate::frameworks::foundation::NSUInteger;
 use crate::mem::{ConstPtr, MutPtr, Ptr};
-use crate::objc::{id, msg, msg_class, nil, release};
+use crate::objc::{id, msg, msg_class, nil, release, retain};
 use crate::Environment;
 
 pub type CFURLRef = super::CFTypeRef;
+
+fn CFURLRetain(env: &mut Environment, url: CFURLRef) -> CFURLRef {
+    retain(env, url)
+}
+
+fn CFURLRelease(env: &mut Environment, url: CFURLRef) {
+    release(env, url);
+}
 
 type CFURLPathStyle = CFIndex;
 const kCFURLPOSIXPathStyle: CFURLPathStyle = 0;
@@ -142,6 +150,17 @@ pub fn CFURLCopyPathExtension(env: &mut Environment, url: CFURLRef) -> CFStringR
     msg![env; ext copy]
 }
 
+fn CFURLCopyLastPathComponent(env: &mut Environment, url: CFURLRef) -> CFStringRef {
+    let path: id = msg![env; url path];
+    let component: id = msg![env; path lastPathComponent];
+    msg![env; component copy]
+}
+
+fn CFURLGetBaseURL(_env: &mut Environment, _url: CFURLRef) -> CFURLRef {
+    // Base URLs are not yet represented by NSURL.
+    nil
+}
+
 fn CFURLCopyScheme(env: &mut Environment, url: CFURLRef) -> CFStringRef {
     let scheme: CFStringRef = msg![env; url scheme];
     msg![env; scheme copy]
@@ -258,6 +277,48 @@ fn CFURLCreateCopyDeletingLastPathComponent(
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
     let new_url = msg![env; url URLByDeletingLastPathComponent];
     msg![env; new_url copy]
+}
+
+fn CFURLCreateCopyAppendingPathExtension(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    url: CFURLRef,
+    extension: CFStringRef,
+) -> CFURLRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
+    if url.is_null() || extension.is_null() {
+        return nil;
+    }
+    let is_file: bool = msg![env; url isFileURL];
+    if !is_file {
+        return nil;
+    }
+    let path: id = msg![env; url path];
+    let path: id = msg![env; path stringByAppendingPathExtension:extension];
+    if path.is_null() {
+        return nil;
+    }
+    let result: id = msg_class![env; NSURL alloc];
+    msg![env; result initFileURLWithPath:path]
+}
+
+fn CFURLCreateCopyDeletingPathExtension(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    url: CFURLRef,
+) -> CFURLRef {
+    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
+    if url.is_null() {
+        return nil;
+    }
+    let is_file: bool = msg![env; url isFileURL];
+    if !is_file {
+        return nil;
+    }
+    let path: id = msg![env; url path];
+    let path: id = msg![env; path stringByDeletingPathExtension];
+    let result: id = msg_class![env; NSURL alloc];
+    msg![env; result initFileURLWithPath:path]
 }
 
 fn CFURLHasDirectoryPath(env: &mut Environment, url: CFURLRef) -> bool {
@@ -447,6 +508,12 @@ fn CFURLCreateStringByReplacingPercentEscapes(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFURLRetain(_)),
+    export_c_func!(CFURLRelease(_)),
+    export_c_func!(CFURLGetBaseURL(_)),
+    export_c_func!(CFURLCopyLastPathComponent(_)),
+    export_c_func!(CFURLCreateCopyAppendingPathExtension(_, _, _)),
+    export_c_func!(CFURLCreateCopyDeletingPathExtension(_, _)),
     export_c_func!(CFURLGetFileSystemRepresentation(_, _, _, _)),
     export_c_func!(CFURLCreateFromFileSystemRepresentation(_, _, _, _)),
     export_c_func!(CFURLCreateWithBytes(_, _, _, _, _)),

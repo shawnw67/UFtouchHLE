@@ -764,6 +764,35 @@ int test_CCCryptor_padded_cbc(void) {
   return passed ? 0 : -1;
 }
 
+int test_CFURL_path_extensions(void) {
+  CFStringRef original =
+      CFStringCreateWithCString(NULL, "/tmp/example", kCFStringEncodingUTF8);
+  CFStringRef extension =
+      CFStringCreateWithCString(NULL, "txt", kCFStringEncodingUTF8);
+  CFStringRef expected =
+      CFStringCreateWithCString(NULL, "example.txt", kCFStringEncodingUTF8);
+  CFURLRef url = CFURLCreateWithFileSystemPath(NULL, original,
+                                               kCFURLPOSIXPathStyle, false);
+  CFURLRef with_extension =
+      CFURLCreateCopyAppendingPathExtension(NULL, url, extension);
+  CFStringRef last = CFURLCopyLastPathComponent(with_extension);
+  int passed = CFEqual(last, expected);
+  CFURLRef without_extension =
+      CFURLCreateCopyDeletingPathExtension(NULL, with_extension);
+  CFStringRef path =
+      CFURLCopyFileSystemPath(without_extension, kCFURLPOSIXPathStyle);
+  passed = passed && CFEqual(path, original);
+  CFRelease(path);
+  CFRelease(without_extension);
+  CFRelease(last);
+  CFRelease(with_extension);
+  CFRelease(url);
+  CFRelease(expected);
+  CFRelease(extension);
+  CFRelease(original);
+  return passed ? 0 : -1;
+}
+
 static void custom_mode_timer_callback(CFRunLoopTimerRef timer, void *info) {
   (void)timer;
   *(int *)info += 1;
@@ -10082,6 +10111,7 @@ struct {
     FUNC_DEF(test_CCKeyDerivationPBKDF),
     FUNC_DEF(test_CCCryptor_stream),
     FUNC_DEF(test_CCCryptor_padded_cbc),
+    FUNC_DEF(test_CFURL_path_extensions),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),
