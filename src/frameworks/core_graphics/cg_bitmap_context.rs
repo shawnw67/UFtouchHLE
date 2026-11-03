@@ -530,6 +530,7 @@ pub struct CGBitmapContextDrawer<'a> {
     blend_mode: CGBlendMode,
     alpha: CGFloat,
     transform: CGAffineTransform,
+    clip: Vec<(Path, bool)>,
     pixels: &'a mut [u8],
 }
 impl CGBitmapContextDrawer<'_> {
@@ -544,6 +545,7 @@ impl CGBitmapContextDrawer<'_> {
             transform,
             blend_mode,
             alpha,
+            ref clip,
             ..
         } = objc.borrow(context);
 
@@ -555,6 +557,7 @@ impl CGBitmapContextDrawer<'_> {
             blend_mode,
             alpha,
             transform,
+            clip: clip.clone(),
             pixels,
         }
     }
@@ -591,6 +594,17 @@ impl CGBitmapContextDrawer<'_> {
         mut color: (CGFloat, CGFloat, CGFloat, CGFloat),
         blend: bool,
     ) {
+        let center = CGPoint {
+            x: coords.0 as CGFloat + 0.5,
+            y: coords.1 as CGFloat + 0.5,
+        };
+        if !self
+            .clip
+            .iter()
+            .all(|(path, even_odd)| path.contains(center, *even_odd))
+        {
+            return;
+        }
         if blend && self.alpha < 1.0 {
             if matches!(
                 self.bitmap_info.alpha_info,
@@ -939,7 +953,7 @@ pub(super) fn fill_rect(env: &mut Environment, context: CGContextRef, rect: CGRe
     // This matters a lot: layers are cleared before every redraw.
     let independent_of_bg =
         clear || (color.3 >= 1.0 && drawer.alpha >= 1.0 && drawer.blend_mode == kCGBlendModeNormal);
-    if independent_of_bg {
+    if independent_of_bg && drawer.clip.is_empty() {
         if let Some((xs, ys)) = drawer.axis_aligned_coverage(rect) {
             let Some(&first_y) = ys.first() else { return };
             let Some(&first_x) = xs.first() else { return };

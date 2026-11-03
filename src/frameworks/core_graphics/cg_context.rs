@@ -100,7 +100,7 @@ pub(super) struct CGContextHostObject {
     /// The current path, in device space.
     pub(super) path: Path,
     /// Paths that clip drawing, in device space: only what's inside all of
-    /// them is drawn. So far this only applies to gradients and paths.
+    /// them is drawn.
     pub(super) clip: Vec<(Path, bool)>,
     pub(super) rgb_stroke_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     pub(super) line_width: CGFloat,

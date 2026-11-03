@@ -1236,7 +1236,7 @@ int test_UIBezierPath_even_odd(void) {
   memset(pixels, 0, sizeof(pixels));
   UIGraphicsPushContext(context);
   [outer addClip];
-  [[UIBezierPath bezierPathWithRect:CGRectMake(0, 0, 8, 8)] fill];
+  CGContextFillRect(context, CGRectMake(0, 0, 8, 8));
   UIGraphicsPopContext();
   passed = passed && pixels[(1 * 8 + 1) * 4 + 3] == 255 &&
            pixels[(4 * 8 + 4) * 4 + 3] == 0;
