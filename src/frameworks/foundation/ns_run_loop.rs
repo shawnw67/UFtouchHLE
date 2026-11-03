@@ -60,11 +60,46 @@ struct NSRunLoopHostObject {
     /// by the run loop. The timer must remove itself when invalidated.
     timers: Vec<id>,
     cf_sources: Vec<id>,
+    cf_streams: Vec<(id, bool)>,
     owner: ThreadId,
     waiting: bool,
     stop_flags: Vec<bool>,
 }
 impl HostObject for NSRunLoopHostObject {}
+
+pub fn add_cf_stream(env: &mut Environment, run_loop: id, stream: id, is_write: bool) {
+    env.objc
+        .borrow_mut::<NSRunLoopHostObject>(run_loop)
+        .cf_streams
+        .push((stream, is_write));
+}
+
+pub fn remove_cf_stream(env: &mut Environment, run_loop: id, stream: id, is_write: bool) {
+    let streams = &mut env
+        .objc
+        .borrow_mut::<NSRunLoopHostObject>(run_loop)
+        .cf_streams;
+    if let Some(index) = streams.iter().position(|&item| item == (stream, is_write)) {
+        streams.remove(index);
+    }
+}
+
+fn handle_cf_streams(env: &mut Environment, run_loop: id) {
+    let streams = env
+        .objc
+        .borrow::<NSRunLoopHostObject>(run_loop)
+        .cf_streams
+        .clone();
+    for &(stream, _) in &streams {
+        retain(env, stream);
+    }
+    for (stream, is_write) in streams {
+        crate::frameworks::core_foundation::cf_stream::perform_events(
+            env, run_loop, stream, is_write,
+        );
+        release(env, stream);
+    }
+}
 
 pub fn cf_run_loop_is_waiting(env: &mut Environment, run_loop: id) -> bool {
     env.objc.borrow::<NSRunLoopHostObject>(run_loop).waiting
@@ -438,6 +473,7 @@ pub fn run_run_loop(
         crate::frameworks::core_foundation::cf_run_loop_source::perform_signaled_sources(
             env, run_loop,
         );
+        handle_cf_streams(env, run_loop);
 
         assert!(timers_tmp.is_empty());
         timers_tmp.extend_from_slice(&env.objc.borrow::<NSRunLoopHostObject>(run_loop).timers);
@@ -611,6 +647,7 @@ fn run_loop_for_thread(env: &mut Environment, this: Class, thread_id: ThreadId) 
             selector_objects: VecDeque::new(),
             timers: Vec::new(),
             cf_sources: Vec::new(),
+            cf_streams: Vec::new(),
             owner: thread_id,
             waiting: false,
             stop_flags: Vec::new(),

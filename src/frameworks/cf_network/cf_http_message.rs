@@ -5,15 +5,14 @@
  */
 //! `CFHTTPMessage`
 
-use crate::abi::GuestFunction;
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::core_foundation::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use crate::frameworks::core_foundation::cf_data::CFDataRef;
 use crate::frameworks::core_foundation::cf_string::CFStringRef;
 use crate::frameworks::core_foundation::cf_url::CFURLRef;
-use crate::frameworks::core_foundation::{CFOptionFlags, CFTypeRef};
+use crate::frameworks::core_foundation::CFTypeRef;
 use crate::frameworks::foundation::ns_string;
-use crate::mem::{MutVoidPtr, Ptr};
+use crate::mem::Ptr;
 use crate::objc::msg;
 use crate::Environment;
 
@@ -93,24 +92,6 @@ fn CFReadStreamSetProperty(
     }
     false
 }
-fn CFReadStreamSetClient(
-    _env: &mut Environment,
-    stream: CFReadStreamRef,
-    stream_events: CFOptionFlags,
-    client_callback: GuestFunction, // TODO: CFReadStreamClientCallBack
-    client_context: MutVoidPtr,     // TODO: CFStreamClientContext *
-) -> bool {
-    if !stream.is_null() {
-        todo!(
-            "CFReadStreamSetClient({:?}, {}, {:?}, {:?})",
-            stream,
-            stream_events,
-            client_callback,
-            client_context
-        );
-    }
-    false
-}
 
 const kCFHTTPVersion1_0: &str = "kCFHTTPVersion1_0";
 const kCFHTTPVersion1_1: &str = "kCFHTTPVersion1_1";
@@ -174,5 +155,4 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFReadStreamCreateForHTTPRequest(_, _)),
     // TODO: move to correct location
     export_c_func!(CFReadStreamSetProperty(_, _, _)),
-    export_c_func!(CFReadStreamSetClient(_, _, _, _)),
 ];

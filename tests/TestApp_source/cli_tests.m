@@ -128,6 +128,20 @@ extern const UInt8 *CFReadStreamGetBuffer(TestCFReadStreamRef stream,
                                           CFIndex maximum, CFIndex *count);
 extern CFIndex CFReadStreamRead(TestCFReadStreamRef stream, UInt8 *buffer,
                                 CFIndex length);
+struct TestStreamClientContext {
+  CFIndex version;
+  void *info;
+  const void *(*retain)(const void *info);
+  void (*release)(const void *info);
+  CFStringRef (*copyDescription)(const void *info);
+};
+extern bool CFReadStreamSetClient(
+    TestCFReadStreamRef stream, unsigned int events,
+    void (*callback)(TestCFReadStreamRef, unsigned int, void *),
+    const struct TestStreamClientContext *context);
+extern void CFReadStreamScheduleWithRunLoop(TestCFReadStreamRef stream,
+                                            CFRunLoopRef loop,
+                                            CFStringRef mode);
 typedef const void *TestCTLineRef;
 typedef const void *TestCTTypesetterRef;
 extern const CFStringRef kCTFontAttributeName;
@@ -296,6 +310,54 @@ int test_CFReadStream_memory(void) {
   const UInt8 *all = CFReadStreamGetBuffer(stream, 0, &count);
   passed = passed && all && count == 5 && all[4] == 5;
   CFRelease(stream);
+  return passed ? 0 : -2;
+}
+
+struct stream_callback_result {
+  int called, byte, retained, released;
+};
+static const void *stream_context_retain(const void *info) {
+  ((struct stream_callback_result *)info)->retained++;
+  return info;
+}
+static void stream_context_release(const void *info) {
+  ((struct stream_callback_result *)info)->released++;
+}
+static void read_stream_callback(TestCFReadStreamRef stream, unsigned int event,
+                                 void *info) {
+  struct stream_callback_result *result = info;
+  UInt8 byte = 0;
+  if (event == 2 && CFReadStreamRead(stream, &byte, 1) == 1) {
+    result->called++;
+    result->byte = byte;
+  }
+  CFReadStreamClose(stream);
+}
+static void *read_stream_callback_worker(void *out) {
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  const UInt8 bytes[] = {42};
+  struct stream_callback_result result = {0};
+  struct TestStreamClientContext context = {0, &result, stream_context_retain,
+                                            stream_context_release, NULL};
+  TestCFReadStreamRef stream =
+      CFReadStreamCreateWithBytesNoCopy(NULL, bytes, 1, kCFAllocatorNull);
+  int ok = CFReadStreamSetClient(stream, 2, read_stream_callback, &context);
+  CFReadStreamScheduleWithRunLoop(stream, CFRunLoopGetCurrent(),
+                                  kCFRunLoopDefaultMode);
+  ok = ok && CFReadStreamOpen(stream);
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  CFRelease(stream);
+  *(int *)out = ok && result.called == 1 && result.byte == 42 &&
+                result.retained == 1 && result.released == 1;
+  [pool drain];
+  return NULL;
+}
+int test_CFReadStream_callback(void) {
+  pthread_t worker;
+  int passed = 0;
+  if (pthread_create(&worker, NULL, read_stream_callback_worker, &passed) ||
+      pthread_join(worker, NULL))
+    return -1;
   return passed ? 0 : -2;
 }
 
@@ -9719,6 +9781,7 @@ struct {
     FUNC_DEF(test_CTFont_graphics_font_round_trip),
     FUNC_DEF(test_CFAttributedString_basic),
     FUNC_DEF(test_CFReadStream_memory),
+    FUNC_DEF(test_CFReadStream_callback),
     FUNC_DEF(test_CFReadStream_file),
     FUNC_DEF(test_CFWriteStream_memory),
     FUNC_DEF(test_CFWriteStream_file),

@@ -7,11 +7,12 @@
 
 use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::{CFIndex, CFTypeRef};
+use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
-use crate::frameworks::foundation::ns_string;
+use crate::frameworks::foundation::{ns_run_loop, ns_string};
 use crate::fs::{GuestFile, GuestOpenOptions, GuestPath};
-use crate::mem::{ConstPtr, MutPtr};
-use crate::objc::{id, msg, nil, objc_classes, ClassExports, HostObject};
+use crate::mem::{ConstPtr, MutPtr, MutVoidPtr, SafeRead};
+use crate::objc::{id, msg, nil, objc_classes, release, retain, ClassExports, HostObject};
 use crate::Environment;
 use std::io::Write;
 
@@ -22,6 +23,45 @@ const OPEN: i32 = 2;
 const AT_END: i32 = 5;
 const CLOSED: i32 = 6;
 const ERROR: i32 = 7;
+const EVENT_OPEN: u32 = 1;
+const EVENT_READABLE: u32 = 2;
+const EVENT_WRITABLE: u32 = 4;
+const EVENT_ERROR: u32 = 8;
+const EVENT_END: u32 = 16;
+
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
+struct StreamClientContext {
+    version: CFIndex,
+    info: MutVoidPtr,
+    retain: GuestFunction,
+    release: GuestFunction,
+    copy_description: GuestFunction,
+}
+unsafe impl SafeRead for StreamClientContext {}
+
+#[derive(Clone, Copy)]
+struct StreamClient {
+    events: u32,
+    callback: GuestFunction,
+    info: MutVoidPtr,
+    release: GuestFunction,
+}
+
+#[derive(Default)]
+struct StreamEvents {
+    client: Option<StreamClient>,
+    pending: u32,
+    run_loops: Vec<id>,
+}
+
+fn release_client(env: &mut Environment, client: Option<StreamClient>) {
+    if let Some(client) = client {
+        if !client.release.to_ptr().is_null() {
+            let _: () = client.release.call_from_host(env, (client.info,));
+        }
+    }
+}
 
 struct MemoryReadStream {
     bytes: ConstPtr<u8>,
@@ -30,6 +70,7 @@ struct MemoryReadStream {
     owns_bytes: bool,
     status: i32,
     file_path: Option<String>,
+    events: StreamEvents,
 }
 impl HostObject for MemoryReadStream {}
 
@@ -49,6 +90,7 @@ enum WriteBuffer {
 struct MemoryWriteStream {
     buffer: WriteBuffer,
     status: i32,
+    events: StreamEvents,
 }
 impl HostObject for MemoryWriteStream {}
 
@@ -70,14 +112,176 @@ pub const CLASSES: ClassExports = objc_classes! {
 @implementation _Podroid_CFMemoryReadStream: NSObject
 - (())dealloc {
     let host = env.objc.borrow::<MemoryReadStream>(this);
-    let (bytes, owns) = (host.bytes, host.owns_bytes);
+    let (bytes, owns, client) = (host.bytes, host.owns_bytes, host.events.client);
     if owns && !bytes.is_null() { env.mem.free(bytes.cast_mut().cast()); }
+    release_client(env, client);
     env.objc.dealloc_object(this, &mut env.mem)
 }
 @end
 @implementation _Podroid_CFMemoryWriteStream: NSObject
+- (())dealloc {
+    let client = env.objc.borrow::<MemoryWriteStream>(this).events.client;
+    release_client(env, client);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
 @end
 };
+
+fn events_mut(env: &mut Environment, stream: id, is_write: bool) -> &mut StreamEvents {
+    if is_write {
+        &mut env.objc.borrow_mut::<MemoryWriteStream>(stream).events
+    } else {
+        &mut env.objc.borrow_mut::<MemoryReadStream>(stream).events
+    }
+}
+
+fn set_client(
+    env: &mut Environment,
+    stream: id,
+    is_write: bool,
+    mask: u32,
+    callback: GuestFunction,
+    context: ConstPtr<StreamClientContext>,
+) -> bool {
+    if stream.is_null() {
+        return false;
+    }
+    let new = if mask == 0 || callback.to_ptr().is_null() {
+        None
+    } else {
+        let (info, release) = if context.is_null() {
+            (MutVoidPtr::null(), GuestFunction::null_ptr())
+        } else {
+            let value = env.mem.read(context);
+            if value.version != 0 {
+                return false;
+            }
+            let retain_callback = value.retain;
+            let info = if retain_callback.to_ptr().is_null() {
+                value.info
+            } else {
+                retain_callback.call_from_host(env, (value.info,))
+            };
+            (info, value.release)
+        };
+        Some(StreamClient {
+            events: mask,
+            callback,
+            info,
+            release,
+        })
+    };
+    let old = std::mem::replace(&mut events_mut(env, stream, is_write).client, new);
+    release_client(env, old);
+    true
+}
+
+fn CFReadStreamSetClient(
+    env: &mut Environment,
+    stream: CFReadStreamRef,
+    mask: u32,
+    callback: GuestFunction,
+    context: ConstPtr<StreamClientContext>,
+) -> bool {
+    set_client(env, stream, false, mask, callback, context)
+}
+
+fn CFWriteStreamSetClient(
+    env: &mut Environment,
+    stream: CFWriteStreamRef,
+    mask: u32,
+    callback: GuestFunction,
+    context: ConstPtr<StreamClientContext>,
+) -> bool {
+    set_client(env, stream, true, mask, callback, context)
+}
+
+fn schedule(env: &mut Environment, stream: id, run_loop: id, mode: id, is_write: bool) {
+    if stream.is_null()
+        || run_loop.is_null()
+        || mode.is_null()
+        || events_mut(env, stream, is_write)
+            .run_loops
+            .contains(&run_loop)
+    {
+        return;
+    }
+    retain(env, stream);
+    events_mut(env, stream, is_write).run_loops.push(run_loop);
+    ns_run_loop::add_cf_stream(env, run_loop, stream, is_write);
+}
+
+fn unschedule(env: &mut Environment, stream: id, run_loop: id, is_write: bool) {
+    if stream.is_null() || run_loop.is_null() {
+        return;
+    }
+    let events = events_mut(env, stream, is_write);
+    if let Some(index) = events.run_loops.iter().position(|&item| item == run_loop) {
+        events.run_loops.remove(index);
+        ns_run_loop::remove_cf_stream(env, run_loop, stream, is_write);
+        release(env, stream);
+    }
+}
+
+fn CFReadStreamScheduleWithRunLoop(
+    env: &mut Environment,
+    stream: CFReadStreamRef,
+    run_loop: id,
+    mode: id,
+) {
+    schedule(env, stream, run_loop, mode, false);
+}
+fn CFReadStreamUnscheduleFromRunLoop(
+    env: &mut Environment,
+    stream: CFReadStreamRef,
+    run_loop: id,
+    _mode: id,
+) {
+    unschedule(env, stream, run_loop, false);
+}
+fn CFWriteStreamScheduleWithRunLoop(
+    env: &mut Environment,
+    stream: CFWriteStreamRef,
+    run_loop: id,
+    mode: id,
+) {
+    schedule(env, stream, run_loop, mode, true);
+}
+fn CFWriteStreamUnscheduleFromRunLoop(
+    env: &mut Environment,
+    stream: CFWriteStreamRef,
+    run_loop: id,
+    _mode: id,
+) {
+    unschedule(env, stream, run_loop, true);
+}
+
+fn unschedule_all(env: &mut Environment, stream: id, is_write: bool) {
+    retain(env, stream);
+    while let Some(run_loop) = events_mut(env, stream, is_write).run_loops.last().copied() {
+        unschedule(env, stream, run_loop, is_write);
+    }
+    release(env, stream);
+}
+
+pub fn perform_events(env: &mut Environment, run_loop: id, stream: id, is_write: bool) {
+    let events = events_mut(env, stream, is_write);
+    if !events.run_loops.contains(&run_loop) {
+        return;
+    }
+    let Some(client) = events.client else {
+        return;
+    };
+    let ready = events.pending & client.events;
+    if ready == 0 {
+        return;
+    }
+    let event = 1 << ready.trailing_zeros();
+    events.pending &= !event;
+    let _: () = client
+        .callback
+        .call_from_host(env, (stream, event, client.info));
+}
 
 fn allocate_write_stream(env: &mut Environment, buffer: WriteBuffer) -> CFWriteStreamRef {
     let class = env
@@ -88,6 +292,7 @@ fn allocate_write_stream(env: &mut Environment, buffer: WriteBuffer) -> CFWriteS
         Box::new(MemoryWriteStream {
             buffer,
             status: NOT_OPEN,
+            events: StreamEvents::default(),
         }),
         &mut env.mem,
     )
@@ -202,7 +407,9 @@ fn CFWriteStreamOpen(env: &mut Environment, stream: CFWriteStreamRef) -> bool {
             options.truncate();
         }
         let Ok(opened) = env.fs.open_with_options(GuestPath::new(&path), options) else {
-            env.objc.borrow_mut::<MemoryWriteStream>(stream).status = ERROR;
+            let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
+            host.status = ERROR;
+            host.events.pending |= EVENT_ERROR;
             return false;
         };
         let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
@@ -212,6 +419,7 @@ fn CFWriteStreamOpen(env: &mut Environment, stream: CFWriteStreamRef) -> bool {
     }
     let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
     host.status = OPEN;
+    host.events.pending |= EVENT_OPEN | EVENT_WRITABLE;
     true
 }
 
@@ -221,6 +429,7 @@ fn CFWriteStreamClose(env: &mut Environment, stream: CFWriteStreamRef) {
         *file = None;
     }
     host.status = CLOSED;
+    unschedule_all(env, stream, true);
 }
 
 fn CFWriteStreamGetStatus(env: &mut Environment, stream: CFWriteStreamRef) -> i32 {
@@ -275,21 +484,31 @@ fn CFWriteStreamWrite(
             *offset += count;
             if *offset == *capacity {
                 host.status = AT_END;
+                host.events.pending &= !EVENT_WRITABLE;
+                host.events.pending |= EVENT_END;
+            } else {
+                host.events.pending |= EVENT_WRITABLE;
             }
             count as CFIndex
         }
         WriteBuffer::Allocated(buffer) => {
             if buffer.try_reserve(data.len()).is_err() {
                 host.status = ERROR;
+                host.events.pending |= EVENT_ERROR;
                 return -1;
             }
             buffer.extend_from_slice(&data);
+            host.events.pending |= EVENT_WRITABLE;
             length
         }
         WriteBuffer::File { file, .. } => match file.as_mut().unwrap().write(&data) {
-            Ok(count) => count as CFIndex,
+            Ok(count) => {
+                host.events.pending |= EVENT_WRITABLE;
+                count as CFIndex
+            }
             Err(_) => {
                 host.status = ERROR;
+                host.events.pending |= EVENT_ERROR;
                 -1
             }
         },
@@ -358,6 +577,7 @@ fn CFReadStreamCreateWithBytesNoCopy(
             owns_bytes,
             status: NOT_OPEN,
             file_path: None,
+            events: StreamEvents::default(),
         }),
         &mut env.mem,
     )
@@ -394,6 +614,7 @@ fn CFReadStreamCreateWithFile(
             owns_bytes: false,
             status: NOT_OPEN,
             file_path: Some(path),
+            events: StreamEvents::default(),
         }),
         &mut env.mem,
     )
@@ -407,11 +628,15 @@ fn CFReadStreamOpen(env: &mut Environment, stream: CFReadStreamRef) -> bool {
     let path = host.file_path.clone();
     if let Some(path) = path {
         let Ok(data) = env.fs.read(GuestPath::new(&path)) else {
-            env.objc.borrow_mut::<MemoryReadStream>(stream).status = ERROR;
+            let host = env.objc.borrow_mut::<MemoryReadStream>(stream);
+            host.status = ERROR;
+            host.events.pending |= EVENT_ERROR;
             return false;
         };
         let Ok(length) = u32::try_from(data.len()) else {
-            env.objc.borrow_mut::<MemoryReadStream>(stream).status = ERROR;
+            let host = env.objc.borrow_mut::<MemoryReadStream>(stream);
+            host.status = ERROR;
+            host.events.pending |= EVENT_ERROR;
             return false;
         };
         if length > 0 {
@@ -425,11 +650,18 @@ fn CFReadStreamOpen(env: &mut Environment, stream: CFReadStreamRef) -> bool {
     }
     let host = env.objc.borrow_mut::<MemoryReadStream>(stream);
     host.status = OPEN;
+    host.events.pending |= EVENT_OPEN;
+    if host.length > 0 {
+        host.events.pending |= EVENT_READABLE;
+    } else {
+        host.events.pending |= EVENT_END;
+    }
     true
 }
 
 fn CFReadStreamClose(env: &mut Environment, stream: CFReadStreamRef) {
     env.objc.borrow_mut::<MemoryReadStream>(stream).status = CLOSED;
+    unschedule_all(env, stream, false);
 }
 
 fn CFReadStreamGetStatus(env: &mut Environment, stream: CFReadStreamRef) -> i32 {
@@ -456,12 +688,18 @@ fn consume(
     let count = (maximum as u32).min(host.length - host.offset);
     if count == 0 {
         host.status = AT_END;
+        host.events.pending &= !EVENT_READABLE;
+        host.events.pending |= EVENT_END;
         return (ConstPtr::null(), 0);
     }
     let result = host.bytes + host.offset;
     host.offset += count;
     if host.offset == host.length {
         host.status = AT_END;
+        host.events.pending &= !EVENT_READABLE;
+        host.events.pending |= EVENT_END;
+    } else {
+        host.events.pending |= EVENT_READABLE;
     }
     (result, count as CFIndex)
 }
@@ -520,6 +758,12 @@ fn CFReadStreamRead(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFReadStreamSetClient(_, _, _, _)),
+    export_c_func!(CFWriteStreamSetClient(_, _, _, _)),
+    export_c_func!(CFReadStreamScheduleWithRunLoop(_, _, _)),
+    export_c_func!(CFReadStreamUnscheduleFromRunLoop(_, _, _)),
+    export_c_func!(CFWriteStreamScheduleWithRunLoop(_, _, _)),
+    export_c_func!(CFWriteStreamUnscheduleFromRunLoop(_, _, _)),
     export_c_func!(CFWriteStreamCreateWithBuffer(_, _, _)),
     export_c_func!(CFWriteStreamCreateWithAllocatedBuffers(_, _)),
     export_c_func!(CFWriteStreamCreateWithFile(_, _)),
