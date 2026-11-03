@@ -703,8 +703,8 @@ pub fn decode_buffer(
 
 fn float_pcm_to_i16(input: &[u8]) -> Vec<u8> {
     let mut output = Vec::with_capacity(input.len() / 2);
-    for sample in input.chunks_exact(4) {
-        let value = f32::from_le_bytes(sample.try_into().unwrap());
+    for &sample in input.as_chunks::<4>().0 {
+        let value = f32::from_le_bytes(sample);
         let value = if value.is_nan() {
             0.0
         } else {
