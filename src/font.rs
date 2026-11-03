@@ -20,6 +20,7 @@ use owned_ttf_parser::AsFaceRef;
 use rusttype::{vector, GlyphId, Point, Scale};
 use std::io::Read;
 
+#[derive(Clone)]
 pub struct Font {
     font: rusttype::Font<'static>,
     scale_factor: f32,

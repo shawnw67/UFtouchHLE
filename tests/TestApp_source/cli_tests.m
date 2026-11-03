@@ -88,6 +88,39 @@ extern void CGContextSetFillColor(CGContextRef context,
                                   const CGFloat *components);
 extern void CGContextSetStrokeColor(CGContextRef context,
                                     const CGFloat *components);
+typedef const void *TestCTFontRef;
+extern TestCTFontRef CTFontCreateWithName(CFStringRef name, CGFloat size,
+                                          const CGAffineTransform *matrix);
+extern CGFontRef CTFontCopyGraphicsFont(TestCTFontRef font, void *attributes);
+extern TestCTFontRef
+CTFontCreateWithGraphicsFont(CGFontRef font, CGFloat size,
+                             const CGAffineTransform *matrix,
+                             const void *attributes);
+extern CGFloat CTFontGetSize(TestCTFontRef font);
+extern bool CTFontGetGlyphsForCharacters(TestCTFontRef font,
+                                         const UniChar *chars, CGGlyph *glyphs,
+                                         CFIndex count);
+
+int test_CTFont_graphics_font_round_trip(void) {
+  CFStringRef name =
+      CFStringCreateWithCString(NULL, "Helvetica", kCFStringEncodingUTF8);
+  TestCTFontRef original = CTFontCreateWithName(name, 12, NULL);
+  CGFontRef graphics = CTFontCopyGraphicsFont(original, NULL);
+  TestCTFontRef created =
+      CTFontCreateWithGraphicsFont(graphics, 20, NULL, NULL);
+  UniChar character = 'A';
+  CGGlyph original_glyph = 0, created_glyph = 0;
+  int passed =
+      created && CTFontGetSize(created) == 20 &&
+      CTFontGetGlyphsForCharacters(original, &character, &original_glyph, 1) &&
+      CTFontGetGlyphsForCharacters(created, &character, &created_glyph, 1) &&
+      original_glyph == created_glyph;
+  CFRelease(created);
+  CFRelease(graphics);
+  CFRelease(original);
+  CFRelease(name);
+  return passed ? 0 : -1;
+}
 
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
@@ -9408,6 +9441,7 @@ struct {
     FUNC_DEF(test_CFBundle_resource_urls),
     FUNC_DEF(test_CFString_split_join_and_replace),
     FUNC_DEF(test_CFString_encoding_queries),
+    FUNC_DEF(test_CTFont_graphics_font_round_trip),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),

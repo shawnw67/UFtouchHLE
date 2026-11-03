@@ -16,7 +16,9 @@ use crate::font::Font;
 use crate::frameworks::core_foundation::{CFIndex, CFRelease, CFTypeRef};
 use crate::frameworks::core_graphics::cg_affine_transform::CGAffineTransform;
 use crate::frameworks::core_graphics::cg_context::{show_glyphs_with_font, CGContextRef};
-use crate::frameworks::core_graphics::cg_font::{from_font, CGFontHostObject, CGFontRef, CGGlyph};
+use crate::frameworks::core_graphics::cg_font::{
+    from_font, CGFontHostObject, CGFontRef, CGFontRetain, CGGlyph,
+};
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::{ns_string, unichar};
 use crate::mem::{ConstPtr, GuestUSize, MutPtr};
@@ -38,6 +40,7 @@ struct CTFontHostObject {
     /// `CGFontRef`s, retained: the main font and the fallback font.
     cg_fonts: [CGFontRef; 2],
     size: CGFloat,
+    uses_fallback: bool,
 }
 
 /// Bit set in glyph IDs from the fallback font. Both fonts have fewer than
@@ -64,14 +67,15 @@ const CLASSES: ClassExports = objc_classes! {
 };
 
 fn font_and_size(env: &Environment, font: CTFontRef) -> (&Font, CGFloat) {
-    let &CTFontHostObject { cg_fonts, size } = env.objc.borrow(font);
+    let &CTFontHostObject { cg_fonts, size, .. } = env.objc.borrow(font);
     (&env.objc.borrow::<CGFontHostObject>(cg_fonts[0]).font, size)
 }
 
 /// The font to use for a glyph ID, and the glyph ID in that font.
 fn font_for_glyph(env: &Environment, font: CTFontRef, glyph: CGGlyph) -> (CGFontRef, CGGlyph) {
-    let cg_fonts = env.objc.borrow::<CTFontHostObject>(font).cg_fonts;
-    if glyph & FALLBACK_GLYPH != 0 {
+    let host = env.objc.borrow::<CTFontHostObject>(font);
+    let cg_fonts = host.cg_fonts;
+    if host.uses_fallback && glyph & FALLBACK_GLYPH != 0 {
         (cg_fonts[1], glyph & !FALLBACK_GLYPH)
     } else {
         (cg_fonts[0], glyph)
@@ -109,15 +113,20 @@ fn CTFontCreateWithName(
     assert!(ja.number_of_glyphs() < FALLBACK_GLYPH && sc.number_of_glyphs() < FALLBACK_GLYPH);
     // Han characters look different in Chinese and Japanese, so prefer the
     // user's language.
-    let chinese = crate::window::get_preferred_language_codes(env)
-        .first()
-        .is_some_and(|language| language.starts_with("zh"));
+    let chinese = env.window.is_some()
+        && crate::window::get_preferred_language_codes(env)
+            .first()
+            .is_some_and(|language| language.starts_with("zh"));
     let (main, fallback) = if chinese { (sc, ja) } else { (ja, sc) };
     let cg_fonts = [
         from_font(env, main.with_em_size()),
         from_font(env, fallback.with_em_size()),
     ];
-    let host_object = Box::new(CTFontHostObject { cg_fonts, size });
+    let host_object = Box::new(CTFontHostObject {
+        cg_fonts,
+        size,
+        uses_fallback: true,
+    });
     let class = env.objc.get_known_class("_Podroid_CTFont", &mut env.mem);
     env.objc.alloc_object(class, host_object, &mut env.mem)
 }
@@ -143,6 +152,64 @@ fn CTFontGetDescent(env: &mut Environment, font: CTFontRef) -> CGFloat {
     let (_, size) = font_and_size(env, font);
     // Core Text's descent is positive.
     DESCENT_EM * size
+}
+
+fn CTFontGetLeading(env: &mut Environment, font: CTFontRef) -> CGFloat {
+    let (face, size) = font_and_size(env, font);
+    face.line_gap(size)
+}
+
+fn CTFontCopyGraphicsFont(
+    env: &mut Environment,
+    font: CTFontRef,
+    attributes: MutPtr<id>,
+) -> CGFontRef {
+    if !attributes.is_null() {
+        env.mem.write(attributes, id::null());
+    }
+    if font.is_null() {
+        return id::null();
+    }
+    let main = env.objc.borrow::<CTFontHostObject>(font).cg_fonts[0];
+    CGFontRetain(env, main)
+}
+
+fn CTFontCreateWithGraphicsFont(
+    env: &mut Environment,
+    graphics_font: CGFontRef,
+    size: CGFloat,
+    matrix: ConstPtr<CGAffineTransform>,
+    attributes: id,
+) -> CTFontRef {
+    if graphics_font.is_null() {
+        return id::null();
+    }
+    if !matrix.is_null() {
+        log!("TODO: CTFontCreateWithGraphicsFont() with a matrix (ignored)");
+    }
+    if !attributes.is_null() {
+        log!("TODO: CTFontCreateWithGraphicsFont() attributes (ignored)");
+    }
+    let size = if size <= 0.0 { 12.0 } else { size };
+    // Core Text sizes refer to the em square, unlike rusttype's default.
+    let face = env
+        .objc
+        .borrow::<CGFontHostObject>(graphics_font)
+        .font
+        .clone()
+        .with_em_size();
+    let main = from_font(env, face);
+    let cg_fonts = [main, CGFontRetain(env, main)];
+    let class = env.objc.get_known_class("_Podroid_CTFont", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CTFontHostObject {
+            cg_fonts,
+            size,
+            uses_fallback: false,
+        }),
+        &mut env.mem,
+    )
 }
 
 fn CTFontGetGlyphsForCharacters(
@@ -302,6 +369,9 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(CTFontGetSize(_)),
     export_c_func!(CTFontGetAscent(_)),
     export_c_func!(CTFontGetDescent(_)),
+    export_c_func!(CTFontGetLeading(_)),
+    export_c_func!(CTFontCopyGraphicsFont(_, _)),
+    export_c_func!(CTFontCreateWithGraphicsFont(_, _, _, _)),
     export_c_func!(CTFontGetGlyphsForCharacters(_, _, _, _)),
     export_c_func!(CTFontGetBoundingRectsForGlyphs(_, _, _, _, _)),
     export_c_func!(CTFontGetAdvancesForGlyphs(_, _, _, _, _)),
