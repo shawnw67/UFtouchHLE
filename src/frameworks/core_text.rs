@@ -20,8 +20,8 @@ use crate::frameworks::core_graphics::cg_font::{
     from_font, CGFontHostObject, CGFontRef, CGFontRetain, CGGlyph,
 };
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
-use crate::frameworks::foundation::{ns_string, unichar, NSRange, NSUInteger};
-use crate::mem::{ConstPtr, GuestUSize, MutPtr};
+use crate::frameworks::foundation::{ns_array, ns_string, unichar, NSRange, NSUInteger};
+use crate::mem::{guest_size_of, ConstPtr, GuestUSize, MutPtr};
 use crate::objc::{id, msg, nil, objc_classes, release, retain, ClassExports, HostObject};
 use crate::Environment;
 
@@ -46,8 +46,19 @@ struct CTFontHostObject {
 struct CTLineHostObject {
     text: id,
     font: CTFontRef,
+    attributes: id,
+    runs: id,
 }
 impl HostObject for CTLineHostObject {}
+
+struct CTRunHostObject {
+    attributes: id,
+    glyphs: Vec<CGGlyph>,
+    positions: Vec<CGPoint>,
+    glyphs_ptr: MutPtr<CGGlyph>,
+    positions_ptr: MutPtr<CGPoint>,
+}
+impl HostObject for CTRunHostObject {}
 
 struct CTTypesetterHostObject {
     attributed: id,
@@ -78,9 +89,22 @@ const CLASSES: ClassExports = objc_classes! {
 @implementation _Podroid_CTLine: NSObject
 - (())dealloc {
     let host = env.objc.borrow::<CTLineHostObject>(this);
-    let (text, font) = (host.text, host.font);
+    let (text, font, attributes, runs) = (host.text, host.font, host.attributes, host.runs);
     release(env, text);
     release(env, font);
+    release(env, attributes);
+    release(env, runs);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+@end
+
+@implementation _Podroid_CTRun: NSObject
+- (())dealloc {
+    let host = env.objc.borrow::<CTRunHostObject>(this);
+    let (attributes, glyphs, positions) = (host.attributes, host.glyphs_ptr, host.positions_ptr);
+    release(env, attributes);
+    if !glyphs.is_null() { env.mem.free(glyphs.cast()); }
+    if !positions.is_null() { env.mem.free(positions.cast()); }
     env.objc.dealloc_object(this, &mut env.mem)
 }
 @end
@@ -196,10 +220,12 @@ fn CTLineCreateWithAttributedString(env: &mut Environment, attributed: id) -> id
     let text: id = msg![env; source copy];
     let length: NSUInteger = msg![env; source length];
     let mut font = nil;
+    let mut attributes = nil;
     if length != 0 {
         let range: MutPtr<NSRange> = MutPtr::null();
         let attrs: id =
             msg![env; attributed attributesAtIndex:(0 as NSUInteger) effectiveRange:range];
+        attributes = retain(env, attrs);
         let key = ns_string::get_static_str(env, "NSFont");
         let candidate: id = msg![env; attrs objectForKey:key];
         if !candidate.is_null() {
@@ -216,7 +242,12 @@ fn CTLineCreateWithAttributedString(env: &mut Environment, attributed: id) -> id
     let class = env.objc.get_known_class("_Podroid_CTLine", &mut env.mem);
     env.objc.alloc_object(
         class,
-        Box::new(CTLineHostObject { text, font }),
+        Box::new(CTLineHostObject {
+            text,
+            font,
+            attributes,
+            runs: nil,
+        }),
         &mut env.mem,
     )
 }
@@ -269,6 +300,160 @@ fn CTLineGetGlyphCount(env: &mut Environment, line: id) -> CFIndex {
     let text = env.objc.borrow::<CTLineHostObject>(line).text;
     let length: NSUInteger = msg![env; text length];
     length.try_into().unwrap_or(CFIndex::MAX)
+}
+
+fn CTLineGetGlyphRuns(env: &mut Environment, line: id) -> id {
+    let host = env.objc.borrow::<CTLineHostObject>(line);
+    if !host.runs.is_null() {
+        return host.runs;
+    }
+    let (text, font, attributes) = (host.text, host.font, host.attributes);
+    let mut units = Vec::new();
+    ns_string::for_each_code_unit(env, text, |_, unit| units.push(unit));
+    let host = env.objc.borrow::<CTFontHostObject>(font);
+    let (fonts, size, uses_fallback) = (host.cg_fonts, host.size, host.uses_fallback);
+    let mut glyphs = Vec::with_capacity(units.len());
+    let mut positions = Vec::with_capacity(units.len());
+    let mut x = 0.0;
+    for unit in units {
+        let mut glyph = if (0xd800..=0xdfff).contains(&unit) {
+            0
+        } else {
+            env.objc
+                .borrow::<CGFontHostObject>(fonts[0])
+                .font
+                .glyph_id_for_char(unit)
+                .0
+        };
+        let mut selected = fonts[0];
+        if glyph == 0 && uses_fallback && !(0xd800..=0xdfff).contains(&unit) {
+            let fallback = &env.objc.borrow::<CGFontHostObject>(fonts[1]).font;
+            let id = fallback.glyph_id_for_char(unit).0;
+            if id != 0 {
+                glyph = id | FALLBACK_GLYPH;
+                selected = fonts[1];
+            }
+        }
+        let face = &env.objc.borrow::<CGFontHostObject>(selected).font;
+        let actual = if selected == fonts[1] && uses_fallback {
+            glyph & !FALLBACK_GLYPH
+        } else {
+            glyph
+        };
+        positions.push(CGPoint { x, y: 0.0 });
+        glyphs.push(glyph);
+        x += face.glyph_hor_advance(actual).unwrap_or(0) as CGFloat * size
+            / face.units_per_em() as CGFloat;
+    }
+    let mut entries = Vec::new();
+    if !glyphs.is_empty() {
+        retain(env, attributes);
+        let class = env.objc.get_known_class("_Podroid_CTRun", &mut env.mem);
+        let run = env.objc.alloc_object(
+            class,
+            Box::new(CTRunHostObject {
+                attributes,
+                glyphs,
+                positions,
+                glyphs_ptr: MutPtr::null(),
+                positions_ptr: MutPtr::null(),
+            }),
+            &mut env.mem,
+        );
+        entries.push(run);
+    }
+    let runs = ns_array::from_vec(env, entries);
+    env.objc.borrow_mut::<CTLineHostObject>(line).runs = runs;
+    runs
+}
+
+fn CTRunGetGlyphCount(env: &mut Environment, run: id) -> CFIndex {
+    env.objc
+        .borrow::<CTRunHostObject>(run)
+        .glyphs
+        .len()
+        .try_into()
+        .unwrap_or(CFIndex::MAX)
+}
+
+fn CTRunGetAttributes(env: &mut Environment, run: id) -> id {
+    env.objc.borrow::<CTRunHostObject>(run).attributes
+}
+
+fn run_range(range: CFRange, length: usize) -> Option<std::ops::Range<usize>> {
+    let start = usize::try_from(range.location).ok()?;
+    if start > length {
+        return None;
+    }
+    let count = usize::try_from(range.length).ok()?;
+    let end = if count == 0 {
+        length
+    } else {
+        start.checked_add(count)?
+    };
+    (end <= length).then_some(start..end)
+}
+
+fn CTRunGetGlyphs(env: &mut Environment, run: id, range: CFRange, output: MutPtr<CGGlyph>) {
+    let host = env.objc.borrow::<CTRunHostObject>(run);
+    let Some(range) = run_range(range, host.glyphs.len()) else {
+        return;
+    };
+    let glyphs = host.glyphs[range].to_vec();
+    for (index, glyph) in glyphs.into_iter().enumerate() {
+        env.mem.write(output + index as u32, glyph);
+    }
+}
+
+fn CTRunGetPositions(env: &mut Environment, run: id, range: CFRange, output: MutPtr<CGPoint>) {
+    let host = env.objc.borrow::<CTRunHostObject>(run);
+    let Some(range) = run_range(range, host.positions.len()) else {
+        return;
+    };
+    let positions = host.positions[range].to_vec();
+    for (index, point) in positions.into_iter().enumerate() {
+        env.mem.write(output + index as u32, point);
+    }
+}
+
+fn CTRunGetGlyphsPtr(env: &mut Environment, run: id) -> ConstPtr<CGGlyph> {
+    let host = env.objc.borrow::<CTRunHostObject>(run);
+    if !host.glyphs_ptr.is_null() {
+        return host.glyphs_ptr.cast_const();
+    }
+    if host.glyphs.is_empty() {
+        return ConstPtr::null();
+    }
+    let glyphs = host.glyphs.clone();
+    let bytes = (glyphs.len() as u32)
+        .checked_mul(guest_size_of::<CGGlyph>())
+        .unwrap();
+    let ptr: MutPtr<CGGlyph> = env.mem.alloc(bytes).cast();
+    for (index, glyph) in glyphs.into_iter().enumerate() {
+        env.mem.write(ptr + index as u32, glyph);
+    }
+    env.objc.borrow_mut::<CTRunHostObject>(run).glyphs_ptr = ptr;
+    ptr.cast_const()
+}
+
+fn CTRunGetPositionsPtr(env: &mut Environment, run: id) -> ConstPtr<CGPoint> {
+    let host = env.objc.borrow::<CTRunHostObject>(run);
+    if !host.positions_ptr.is_null() {
+        return host.positions_ptr.cast_const();
+    }
+    if host.positions.is_empty() {
+        return ConstPtr::null();
+    }
+    let positions = host.positions.clone();
+    let bytes = (positions.len() as u32)
+        .checked_mul(guest_size_of::<CGPoint>())
+        .unwrap();
+    let ptr: MutPtr<CGPoint> = env.mem.alloc(bytes).cast();
+    for (index, point) in positions.into_iter().enumerate() {
+        env.mem.write(ptr + index as u32, point);
+    }
+    env.objc.borrow_mut::<CTRunHostObject>(run).positions_ptr = ptr;
+    ptr.cast_const()
 }
 
 fn CTLineGetTypographicBounds(
@@ -578,6 +763,13 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(CTTypesetterCreateWithAttributedString(_)),
     export_c_func!(CTTypesetterCreateLine(_, _)),
     export_c_func!(CTLineGetGlyphCount(_)),
+    export_c_func!(CTLineGetGlyphRuns(_)),
+    export_c_func!(CTRunGetGlyphCount(_)),
+    export_c_func!(CTRunGetAttributes(_)),
+    export_c_func!(CTRunGetGlyphs(_, _, _)),
+    export_c_func!(CTRunGetPositions(_, _, _)),
+    export_c_func!(CTRunGetGlyphsPtr(_)),
+    export_c_func!(CTRunGetPositionsPtr(_)),
     export_c_func!(CTLineGetTypographicBounds(_, _, _, _)),
     export_c_func!(CTLineDraw(_, _)),
     export_c_func!(CTFontCopyGraphicsFont(_, _)),

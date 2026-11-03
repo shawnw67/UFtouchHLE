@@ -148,11 +148,18 @@ extern void CFReadStreamScheduleWithRunLoop(TestCFReadStreamRef stream,
                                             CFRunLoopRef loop,
                                             CFStringRef mode);
 typedef const void *TestCTLineRef;
+typedef const void *TestCTRunRef;
 typedef const void *TestCTTypesetterRef;
 extern const CFStringRef kCTFontAttributeName;
 extern TestCTLineRef
 CTLineCreateWithAttributedString(CFAttributedStringRef string);
 extern CFIndex CTLineGetGlyphCount(TestCTLineRef line);
+extern CFArrayRef CTLineGetGlyphRuns(TestCTLineRef line);
+extern CFIndex CTRunGetGlyphCount(TestCTRunRef run);
+extern void CTRunGetGlyphs(TestCTRunRef run, CFRange range, CGGlyph *output);
+extern void CTRunGetPositions(TestCTRunRef run, CFRange range, CGPoint *output);
+extern const CGGlyph *CTRunGetGlyphsPtr(TestCTRunRef run);
+extern const CGPoint *CTRunGetPositionsPtr(TestCTRunRef run);
 extern double CTLineGetTypographicBounds(TestCTLineRef line, CGFloat *ascent,
                                          CGFloat *descent, CGFloat *leading);
 extern void CTLineDraw(TestCTLineRef line, CGContextRef context);
@@ -431,6 +438,31 @@ int test_CTLine_draw(void) {
   CGContextRelease(context);
   CGColorSpaceRelease(space);
   return painted > 0 && position.x == 4 && position.y == 8 ? 0 : -1;
+}
+
+int test_CTLine_glyph_runs(void) {
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "abc", kCFStringEncodingUTF8);
+  CFAttributedStringRef attributed = CFAttributedStringCreate(NULL, text, NULL);
+  TestCTLineRef line = CTLineCreateWithAttributedString(attributed);
+  CFArrayRef runs = CTLineGetGlyphRuns(line);
+  CFRetain(runs);
+  CFRelease(line);
+  int passed = CFArrayGetCount(runs) == 1;
+  TestCTRunRef run = CFArrayGetValueAtIndex(runs, 0);
+  CGGlyph glyphs[3] = {0};
+  CGPoint positions[3] = {{0}};
+  CTRunGetGlyphs(run, CFRangeMake(0, 0), glyphs);
+  CTRunGetPositions(run, CFRangeMake(0, 0), positions);
+  const CGGlyph *glyph_ptr = CTRunGetGlyphsPtr(run);
+  const CGPoint *pos_ptr = CTRunGetPositionsPtr(run);
+  passed = passed && CTRunGetGlyphCount(run) == 3 && glyph_ptr && pos_ptr &&
+           glyphs[0] && glyphs[1] && glyph_ptr[1] == glyphs[1] &&
+           positions[1].x > positions[0].x && pos_ptr[2].x == positions[2].x;
+  CFRelease(runs);
+  CFRelease(attributed);
+  CFRelease(text);
+  return passed ? 0 : -1;
 }
 
 int test_CTTypesetter_line_range(void) {
@@ -9809,6 +9841,7 @@ struct {
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),
+    FUNC_DEF(test_CTLine_glyph_runs),
     FUNC_DEF(test_CTTypesetter_line_range),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
