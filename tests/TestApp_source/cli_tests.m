@@ -97,6 +97,7 @@ typedef const void *TestCFReadStreamRef;
 typedef const void *TestCFWriteStreamRef;
 extern const CFStringRef kCFStreamPropertyDataWritten;
 extern const CFStringRef kCFStreamPropertyAppendToFile;
+extern const CFStringRef kCFStreamPropertyFileCurrentOffset;
 extern TestCFWriteStreamRef
 CFWriteStreamCreateWithBuffer(CFAllocatorRef allocator, UInt8 *buffer,
                               CFIndex capacity);
@@ -124,6 +125,10 @@ extern bool CFReadStreamOpen(TestCFReadStreamRef stream);
 extern void CFReadStreamClose(TestCFReadStreamRef stream);
 extern int CFReadStreamGetStatus(TestCFReadStreamRef stream);
 extern bool CFReadStreamHasBytesAvailable(TestCFReadStreamRef stream);
+extern bool CFReadStreamSetProperty(TestCFReadStreamRef stream,
+                                    CFStringRef name, CFTypeRef value);
+extern CFTypeRef CFReadStreamCopyProperty(TestCFReadStreamRef stream,
+                                          CFStringRef name);
 extern const UInt8 *CFReadStreamGetBuffer(TestCFReadStreamRef stream,
                                           CFIndex maximum, CFIndex *count);
 extern CFIndex CFReadStreamRead(TestCFReadStreamRef stream, UInt8 *buffer,
@@ -212,6 +217,22 @@ int test_CFReadStream_file(void) {
   UInt8 bytes[16] = {0};
   int passed = stream && CFReadStreamOpen(stream) &&
                CFReadStreamRead(stream, bytes, 16) > 0;
+  int64_t zero = 0;
+  CFNumberRef zero_number = CFNumberCreate(NULL, kCFNumberSInt64Type, &zero);
+  passed = passed &&
+           CFReadStreamSetProperty(stream, kCFStreamPropertyFileCurrentOffset,
+                                   zero_number);
+  CFNumberRef position = (CFNumberRef)CFReadStreamCopyProperty(
+      stream, kCFStreamPropertyFileCurrentOffset);
+  UInt8 again[16] = {0};
+  passed = passed && position &&
+           CFNumberCompare(position, zero_number, NULL) == kCFCompareEqualTo &&
+           CFReadStreamRead(stream, again, 16) > 0 &&
+           memcmp(bytes, again, 16) == 0 &&
+           !CFReadStreamSetProperty(stream, filename, zero_number);
+  if (position)
+    CFRelease(position);
+  CFRelease(zero_number);
   if (stream) {
     CFReadStreamClose(stream);
     CFRelease(stream);

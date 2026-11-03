@@ -12,9 +12,11 @@ use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant}
 use crate::frameworks::foundation::{ns_run_loop, ns_string};
 use crate::fs::{GuestFile, GuestOpenOptions, GuestPath};
 use crate::mem::{ConstPtr, MutPtr, MutVoidPtr, SafeRead};
-use crate::objc::{id, msg, nil, objc_classes, release, retain, ClassExports, HostObject};
+use crate::objc::{
+    id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
+};
 use crate::Environment;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 
 type CFReadStreamRef = CFTypeRef;
 type CFWriteStreamRef = CFTypeRef;
@@ -96,6 +98,7 @@ impl HostObject for MemoryWriteStream {}
 
 const DATA_WRITTEN: &str = "kCFStreamPropertyDataWritten";
 const APPEND_TO_FILE: &str = "kCFStreamPropertyAppendToFile";
+const FILE_OFFSET: &str = "kCFStreamPropertyFileCurrentOffset";
 pub const CONSTANTS: ConstantExports = &[
     (
         "_kCFStreamPropertyDataWritten",
@@ -104,6 +107,10 @@ pub const CONSTANTS: ConstantExports = &[
     (
         "_kCFStreamPropertyAppendToFile",
         HostConstant::NSString(APPEND_TO_FILE),
+    ),
+    (
+        "_kCFStreamPropertyFileCurrentOffset",
+        HostConstant::NSString(FILE_OFFSET),
     ),
 ];
 
@@ -369,7 +376,29 @@ fn CFWriteStreamSetProperty(
     name: id,
     value: id,
 ) -> bool {
-    if name.is_null() || value.is_null() || ns_string::to_rust_string(env, name) != APPEND_TO_FILE {
+    if stream.is_null() || name.is_null() || value.is_null() {
+        return false;
+    }
+    let key = ns_string::to_rust_string(env, name).into_owned();
+    if key == FILE_OFFSET {
+        let offset: i64 = msg![env; value longLongValue];
+        if offset < 0 {
+            return false;
+        }
+        let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
+        if host.status != OPEN {
+            return false;
+        }
+        return if let WriteBuffer::File {
+            file: Some(file), ..
+        } = &mut host.buffer
+        {
+            file.seek(SeekFrom::Start(offset as u64)).is_ok()
+        } else {
+            false
+        };
+    }
+    if key != APPEND_TO_FILE {
         return false;
     }
     let append: bool = msg![env; value boolValue];
@@ -520,7 +549,28 @@ fn CFWriteStreamCopyProperty(
     stream: CFWriteStreamRef,
     name: id,
 ) -> CFTypeRef {
-    if name.is_null() || ns_string::to_rust_string(env, name) != DATA_WRITTEN {
+    if stream.is_null() || name.is_null() {
+        return nil;
+    }
+    let key = ns_string::to_rust_string(env, name).into_owned();
+    if key == FILE_OFFSET {
+        let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
+        let WriteBuffer::File {
+            file: Some(file), ..
+        } = &mut host.buffer
+        else {
+            return nil;
+        };
+        let Ok(offset) = file.stream_position() else {
+            return nil;
+        };
+        let Ok(offset) = i64::try_from(offset) else {
+            return nil;
+        };
+        let number: id = msg_class![env; NSNumber numberWithLongLong:offset];
+        return retain(env, number);
+    }
+    if key != DATA_WRITTEN {
         return nil;
     }
     let host = env.objc.borrow::<MemoryWriteStream>(stream);
@@ -538,6 +588,52 @@ fn CFWriteStreamCopyProperty(
     let result = super::cf_data::CFDataCreate(env, kCFAllocatorDefault, bytes.cast_const(), length);
     env.mem.free(bytes.cast());
     result
+}
+
+fn CFReadStreamSetProperty(
+    env: &mut Environment,
+    stream: CFReadStreamRef,
+    name: id,
+    value: id,
+) -> bool {
+    if stream.is_null()
+        || name.is_null()
+        || value.is_null()
+        || ns_string::to_rust_string(env, name) != FILE_OFFSET
+    {
+        return false;
+    }
+    let offset: i64 = msg![env; value longLongValue];
+    let Ok(offset) = u32::try_from(offset) else {
+        return false;
+    };
+    let host = env.objc.borrow_mut::<MemoryReadStream>(stream);
+    if host.file_path.is_none() || (host.status != OPEN && host.status != AT_END) {
+        return false;
+    }
+    host.offset = offset;
+    host.events.pending &= !(EVENT_END | EVENT_READABLE);
+    if offset >= host.length {
+        host.status = AT_END;
+        host.events.pending |= EVENT_END;
+    } else {
+        host.status = OPEN;
+        host.events.pending |= EVENT_READABLE;
+    }
+    true
+}
+
+fn CFReadStreamCopyProperty(env: &mut Environment, stream: CFReadStreamRef, name: id) -> CFTypeRef {
+    if stream.is_null() || name.is_null() || ns_string::to_rust_string(env, name) != FILE_OFFSET {
+        return nil;
+    }
+    let host = env.objc.borrow::<MemoryReadStream>(stream);
+    if host.file_path.is_none() || (host.status != OPEN && host.status != AT_END) {
+        return nil;
+    }
+    let offset = i64::from(host.offset);
+    let number: id = msg_class![env; NSNumber numberWithLongLong:offset];
+    retain(env, number)
 }
 
 fn CFReadStreamCreateWithBytesNoCopy(
@@ -685,7 +781,7 @@ fn consume(
     if host.status != OPEN {
         return (ConstPtr::null(), 0);
     }
-    let count = (maximum as u32).min(host.length - host.offset);
+    let count = (maximum as u32).min(host.length.saturating_sub(host.offset));
     if count == 0 {
         host.status = AT_END;
         host.events.pending &= !EVENT_READABLE;
@@ -759,6 +855,8 @@ fn CFReadStreamRead(
 
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFReadStreamSetClient(_, _, _, _)),
+    export_c_func!(CFReadStreamSetProperty(_, _, _)),
+    export_c_func!(CFReadStreamCopyProperty(_, _)),
     export_c_func!(CFWriteStreamSetClient(_, _, _, _)),
     export_c_func!(CFReadStreamScheduleWithRunLoop(_, _, _)),
     export_c_func!(CFReadStreamUnscheduleFromRunLoop(_, _, _)),

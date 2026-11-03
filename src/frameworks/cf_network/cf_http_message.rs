@@ -76,23 +76,6 @@ fn CFReadStreamCreateForHTTPRequest(
     Ptr::null()
 }
 
-fn CFReadStreamSetProperty(
-    env: &mut Environment,
-    stream: CFReadStreamRef,
-    property_name: CFStringRef,
-    property_value: CFTypeRef,
-) -> bool {
-    if !stream.is_null() {
-        todo!(
-            "CFReadStreamSetProperty({:?}, {}, {:?})",
-            stream,
-            ns_string::to_rust_string(env, property_name),
-            property_value
-        );
-    }
-    false
-}
-
 const kCFHTTPVersion1_0: &str = "kCFHTTPVersion1_0";
 const kCFHTTPVersion1_1: &str = "kCFHTTPVersion1_1";
 
@@ -154,5 +137,4 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFHTTPMessageSetBody(_, _)),
     export_c_func!(CFReadStreamCreateForHTTPRequest(_, _)),
     // TODO: move to correct location
-    export_c_func!(CFReadStreamSetProperty(_, _, _)),
 ];
