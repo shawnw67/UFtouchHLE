@@ -19,7 +19,7 @@ use crate::libc::semaphore::{host_create_semaphore, sem_t};
 use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, MutVoidPtr};
 use crate::objc::{id, msg_class, objc_classes, ClassExports};
 use crate::Environment;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[allow(non_camel_case_types)]
@@ -55,6 +55,7 @@ pub struct State {
     queue_specifics: HashMap<(ConstVoidPtr, ConstVoidPtr), (MutVoidPtr, GuestFunction)>,
     contexts: HashMap<MutVoidPtr, MutVoidPtr>,
     current_queues: HashMap<usize, Vec<ConstVoidPtr>>,
+    once_in_progress: HashSet<MutPtr<i32>>,
     draining: bool,
 }
 
@@ -613,11 +614,11 @@ fn dispatch_once_f(
     context: MutVoidPtr,
     function: GuestFunction,
 ) {
-    if env.mem.read(predicate) == !0 {
+    if !begin_once(env, predicate) {
         return;
     }
-    env.mem.write(predicate, !0);
     let _: () = function.call_from_host(env, (context,));
+    finish_once(env, predicate);
 }
 fn dispatch_apply_f(
     env: &mut Environment,
@@ -722,11 +723,27 @@ fn dispatch_after(
 
 /// `dispatch_once_t` is a `long`, which is ~0 once the block has run.
 fn dispatch_once(env: &mut Environment, predicate: MutPtr<i32>, block: ConstVoidPtr) {
-    if env.mem.read(predicate) == !0 {
+    if !begin_once(env, predicate) {
         return;
     }
-    env.mem.write(predicate, !0);
     invoke_block(env, block);
+    finish_once(env, predicate);
+}
+
+fn begin_once(env: &mut Environment, predicate: MutPtr<i32>) -> bool {
+    loop {
+        if env.mem.read(predicate) == !0 {
+            return false;
+        }
+        if env.libc_state.dispatch.once_in_progress.insert(predicate) {
+            return true;
+        }
+        env.sleep(Duration::from_millis(1));
+    }
+}
+fn finish_once(env: &mut Environment, predicate: MutPtr<i32>) {
+    env.mem.write(predicate, !0);
+    env.libc_state.dispatch.once_in_progress.remove(&predicate);
 }
 
 // Dispatch objects are never freed.

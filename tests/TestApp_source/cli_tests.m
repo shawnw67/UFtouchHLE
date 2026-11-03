@@ -6624,6 +6624,34 @@ int test_dispatch_data_sources(void) {
   return passed ? 0 : -1;
 }
 
+struct dispatch_once_probe {
+  int predicate;
+  int entered;
+  int finished;
+};
+static void test_dispatch_once_slow(void *context) {
+  struct dispatch_once_probe *probe = context;
+  probe->entered++;
+  usleep(2000);
+  probe->finished = 1;
+}
+static void *test_dispatch_once_worker(void *context) {
+  struct dispatch_once_probe *probe = context;
+  dispatch_once_f(&probe->predicate, probe, test_dispatch_once_slow);
+  return (void *)(uintptr_t)(probe->finished == 1);
+}
+int test_dispatch_once_concurrent(void) {
+  struct dispatch_once_probe probe = {0, 0, 0};
+  pthread_t first, second;
+  void *a = NULL, *b = NULL;
+  if (pthread_create(&first, NULL, test_dispatch_once_worker, &probe) ||
+      pthread_create(&second, NULL, test_dispatch_once_worker, &probe))
+    return -1;
+  pthread_join(first, &a);
+  pthread_join(second, &b);
+  return probe.entered == 1 && (uintptr_t)a == 1 && (uintptr_t)b == 1 ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10902,6 +10930,7 @@ struct {
     FUNC_DEF(test_dispatch_group_counting),
     FUNC_DEF(test_dispatch_timer_functions),
     FUNC_DEF(test_dispatch_data_sources),
+    FUNC_DEF(test_dispatch_once_concurrent),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
