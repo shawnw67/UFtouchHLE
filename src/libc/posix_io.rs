@@ -12,7 +12,7 @@ use crate::abi::DotDotDot;
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::fs::{FsError, GuestFile, GuestOpenOptions, GuestPath};
 use crate::libc::errno::{
-    set_errno, EACCES, EBADF, EEXIST, EFAULT, EINTR, EINVAL, EIO, EISDIR, ENOENT, ENOTDIR,
+    set_errno, EACCES, EBADF, EEXIST, EFAULT, EINTR, EINVAL, EIO, EISDIR, ENOENT, ENOTDIR, ENOTSUP,
     EOVERFLOW, ESPIPE,
 };
 use crate::libc::sys::socket::close_socket;
@@ -88,6 +88,7 @@ pub const O_NOCTTY: OpenFlag = 0x20000;
 /// This alias is for readability, POSIX just uses `int`.
 pub type FileControlCommand = i32;
 const F_GETFD: FileControlCommand = 1;
+const F_DUPFD: FileControlCommand = 0;
 const F_SETFD: FileControlCommand = 2;
 const F_GETLK: FileControlCommand = 7;
 const F_SETLK: FileControlCommand = 8;
@@ -117,6 +118,91 @@ struct flock {
     whence: i16,
 }
 unsafe impl SafeRead for flock {}
+
+// HyperHLE's Subway Surfers compatibility work identified dup() as necessary
+// when the game opens its data file. Descriptors share the underlying file.
+fn duplicate_file(env: &mut Environment, fd: FileDescriptor) -> Option<PosixFileHostObject> {
+    if fd < NORMAL_FILENO_BASE {
+        set_errno(env, EBADF);
+        return None;
+    }
+    let Some(source) = env.libc_state.posix_io.file_for_fd(fd) else {
+        set_errno(env, EBADF);
+        return None;
+    };
+    let Some(file) = source.file.share() else {
+        set_errno(env, ENOTSUP);
+        return None;
+    };
+    Some(PosixFileHostObject {
+        file,
+        needs_flush: source.needs_flush,
+        reached_eof: false,
+        flags: 0,
+        save_dump: source.save_dump,
+    })
+}
+
+fn duplicate_min(env: &mut Environment, fd: FileDescriptor, min: FileDescriptor) -> FileDescriptor {
+    if !(0..10240).contains(&min) {
+        set_errno(env, EINVAL);
+        return -1;
+    }
+    let Some(file) = duplicate_file(env, fd) else {
+        return -1;
+    };
+    let first = fd_to_file_idx(min.max(NORMAL_FILENO_BASE));
+    let files = &mut env.libc_state.posix_io.files;
+    let idx = (first..files.len())
+        .find(|&i| files[i].is_none())
+        .unwrap_or(files.len().max(first));
+    if idx >= fd_to_file_idx(10240) {
+        set_errno(env, EINVAL);
+        return -1;
+    }
+    if files.len() <= idx {
+        files.resize_with(idx + 1, || None);
+    }
+    files[idx] = Some(file);
+    file_idx_to_fd(idx)
+}
+
+fn dup(env: &mut Environment, fd: FileDescriptor) -> FileDescriptor {
+    duplicate_min(env, fd, 0)
+}
+
+fn dup2(env: &mut Environment, fd: FileDescriptor, target: FileDescriptor) -> FileDescriptor {
+    if !(NORMAL_FILENO_BASE..10240).contains(&target) {
+        set_errno(env, EBADF);
+        return -1;
+    }
+    if fd == target {
+        if env.libc_state.posix_io.file_for_fd(fd).is_some() {
+            return target;
+        }
+        set_errno(env, EBADF);
+        return -1;
+    }
+    let Some(file) = duplicate_file(env, fd) else {
+        return -1;
+    };
+    let idx = fd_to_file_idx(target);
+    if env
+        .libc_state
+        .posix_io
+        .files
+        .get(idx)
+        .is_some_and(Option::is_some)
+    {
+        close(env, target);
+    }
+    let files = &mut env.libc_state.posix_io.files;
+    if files.len() <= idx {
+        files.resize_with(idx + 1, || None);
+    }
+    files[idx] = Some(file);
+    target
+}
 
 pub type FLockFlag = i32;
 pub const LOCK_SH: FLockFlag = 1;
@@ -859,6 +945,10 @@ fn fcntl(
     }
 
     match cmd {
+        F_DUPFD => {
+            let min: i32 = args.start().next(env);
+            return duplicate_min(env, fd, min);
+        }
         F_GETFD => {
             let file = env.libc_state.posix_io.file_for_fd(fd).unwrap();
             return file.flags;
@@ -1046,6 +1136,8 @@ fn setxattr(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(dup(_)),
+    export_c_func!(dup2(_, _)),
     export_c_func!(setxattr(_, _, _, _, _, _)),
     export_c_func!(open(_, _, _)),
     export_c_func!(read(_, _, _)),

@@ -39,6 +39,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
@@ -6554,6 +6555,35 @@ int test_close() {
   return 0;
 }
 
+int test_dup_file_offsets(void) {
+  char path[1024];
+  const char *home = getenv("HOME");
+  if (!home || snprintf(path, sizeof(path), "%s/tmp/podroid_dup_test", home) >=
+                   sizeof(path))
+    return -1;
+  int fd = open(path, O_CREAT | O_TRUNC | O_RDWR, 0600);
+  if (fd < 0)
+    return -1;
+  int copy = dup(fd);
+  int replacement = dup2(fd, 90);
+  int from_fcntl = fcntl(fd, F_DUPFD, 91);
+  int passed = copy >= 0 && replacement == 90 && from_fcntl >= 91 &&
+               write(fd, "abcd", 4) == 4 && lseek(copy, 0, SEEK_CUR) == 4 &&
+               lseek(replacement, 1, SEEK_SET) == 1;
+  struct stat info;
+  passed = passed && fstat(copy, &info) == 0 && info.st_size == 4;
+  char c = 0;
+  passed = passed && read(from_fcntl, &c, 1) == 1 && c == 'b' &&
+           lseek(fd, 0, SEEK_CUR) == 2;
+  close(fd);
+  passed = passed && read(copy, &c, 1) == 1 && c == 'c';
+  close(copy);
+  close(replacement);
+  close(from_fcntl);
+  unlink(path);
+  return passed ? 0 : -1;
+}
+
 int test_CFMutableDictionary_NullCallbacks() {
   CFMutableDictionaryRef dict = CFDictionaryCreateMutable(NULL, 0, NULL, NULL);
   if (dict == NULL) {
@@ -10268,6 +10298,7 @@ struct {
     FUNC_DEF(test_flockfile_io_while_locked),
     FUNC_DEF(test_open),
     FUNC_DEF(test_close),
+    FUNC_DEF(test_dup_file_offsets),
     FUNC_DEF(test_cond_var),
     FUNC_DEF(test_cond_var_static),
     FUNC_DEF(test_cond_timedwait_signaled_before_timeout),

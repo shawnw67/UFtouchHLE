@@ -103,7 +103,12 @@ fn fstat_inner(env: &mut Environment, fd: FileDescriptor, buf: MutPtr<stat>) -> 
     let mut stat = stat::default();
 
     match file.file {
-        GuestFile::File(_) | GuestFile::IpaBundleFile(_) | GuestFile::ResourceFile(_) => {
+        GuestFile::File(_)
+        | GuestFile::IpaBundleFile(_)
+        | GuestFile::ResourceFile(_)
+        | GuestFile::Shared(_)
+            if !file.file.is_directory() =>
+        {
             stat.st_mode |= S_IFREG;
 
             // TODO: use `std::fs::metadata()` instead
@@ -111,7 +116,7 @@ fn fstat_inner(env: &mut Environment, fd: FileDescriptor, buf: MutPtr<stat>) -> 
             // Obtain file size
             stat.st_size = file.file.stream_len().unwrap().try_into().unwrap();
         }
-        GuestFile::Directory => {
+        GuestFile::Directory | GuestFile::Shared(_) => {
             stat.st_mode |= S_IFDIR;
 
             // TODO: st_size

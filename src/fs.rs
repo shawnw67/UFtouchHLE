@@ -30,11 +30,13 @@ pub use bundle::BundleData;
 
 use crate::fs::bundle::{IpaFile, IpaFileRef};
 use crate::paths;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::UNIX_EPOCH;
 
 /// The actual location of a file outside the virtual filesystem, e.g. a host
@@ -381,9 +383,24 @@ pub enum GuestFile {
     IpaBundleFile(IpaFile),
     ResourceFile(paths::ResourceFile),
     Socket,
+    Shared(Rc<RefCell<GuestFile>>),
 }
 
 impl GuestFile {
+    /// Share one open file description, including its current seek position.
+    pub fn share(&mut self) -> Option<GuestFile> {
+        if matches!(self, GuestFile::Socket) {
+            return None;
+        }
+        if !matches!(self, GuestFile::Shared(_)) {
+            let original = std::mem::replace(self, GuestFile::Directory);
+            *self = GuestFile::Shared(Rc::new(RefCell::new(original)));
+        }
+        match self {
+            GuestFile::Shared(file) => Some(GuestFile::Shared(Rc::clone(file))),
+            _ => unreachable!(),
+        }
+    }
     fn from_host_file(file: File) -> GuestFile {
         GuestFile::File(file)
     }
@@ -402,6 +419,7 @@ impl GuestFile {
 
     pub fn sync_all(&self) -> std::io::Result<()> {
         match self {
+            GuestFile::Shared(file) => file.borrow().sync_all(),
             GuestFile::File(file) => file.sync_all(),
             GuestFile::IpaBundleFile(_) | GuestFile::ResourceFile(_) => Ok(()),
             GuestFile::Directory => {
@@ -416,6 +434,7 @@ impl GuestFile {
     }
     pub fn set_len(&self, len: u64) -> std::io::Result<()> {
         match self {
+            GuestFile::Shared(file) => file.borrow().set_len(len),
             GuestFile::File(file) => file.set_len(len),
             GuestFile::IpaBundleFile(file) => {
                 panic!("Attempt to resize a read-only file: {file:?}")
@@ -439,13 +458,26 @@ impl GuestFile {
     pub fn is_seekable(&self) -> bool {
         // Due to legacy directory iteration support, directories are seekable
         // https://stackoverflow.com/questions/65911066/what-does-lseek-mean-for-a-directory-file-descriptor
-        !matches!(self, GuestFile::Socket)
+        match self {
+            GuestFile::Shared(file) => file.borrow().is_seekable(),
+            GuestFile::Socket => false,
+            _ => true,
+        }
+    }
+
+    pub fn is_directory(&self) -> bool {
+        match self {
+            GuestFile::Shared(file) => file.borrow().is_directory(),
+            GuestFile::Directory => true,
+            _ => false,
+        }
     }
 }
 
 impl Read for GuestFile {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
+            GuestFile::Shared(file) => file.borrow_mut().read(buf),
             GuestFile::File(file) => file.read(buf),
             GuestFile::IpaBundleFile(file) => file.read(buf),
             GuestFile::ResourceFile(file) => file.get().read(buf),
@@ -461,6 +493,7 @@ impl Read for GuestFile {
 impl Write for GuestFile {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match self {
+            GuestFile::Shared(file) => file.borrow_mut().write(buf),
             GuestFile::File(file) => file.write(buf),
             GuestFile::IpaBundleFile(file) => {
                 panic!("Attempt to write to a read-only file: {file:?}")
@@ -475,6 +508,7 @@ impl Write for GuestFile {
 
     fn flush(&mut self) -> std::io::Result<()> {
         match self {
+            GuestFile::Shared(file) => file.borrow_mut().flush(),
             GuestFile::File(file) => file.flush(),
             GuestFile::IpaBundleFile(file) => Err(std::io::Error::new(
                 std::io::ErrorKind::ReadOnlyFilesystem,
@@ -492,6 +526,7 @@ impl Write for GuestFile {
 impl Seek for GuestFile {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         match self {
+            GuestFile::Shared(file) => file.borrow_mut().seek(pos),
             GuestFile::File(file) => file.seek(pos),
             GuestFile::IpaBundleFile(file) => file.seek(pos),
             GuestFile::ResourceFile(file) => file.get().seek(pos),
