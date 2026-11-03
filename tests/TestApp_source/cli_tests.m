@@ -10938,6 +10938,7 @@ int test_audio_component_enumeration(void) {
   unsigned char writable = 0;
   double rate = 22050.0, actual = 0;
   int notifications = 0;
+  uint32_t running = 1, running_size = sizeof(running);
   if (!component || AudioComponentFindNext(component, &description) ||
       AudioComponentInstanceNew(component, &unit) || !unit ||
       AudioUnitGetPropertyInfo(unit, 2, 0, 0, &size, &writable) || size != 8 ||
@@ -10949,7 +10950,8 @@ int test_audio_component_enumeration(void) {
           unit, 2, test_audio_property_listener, &notifications) ||
       AudioUnitSetProperty(unit, 2, 0, 0, &rate, 8) || notifications != 1 ||
       AudioUnitGetProperty(unit, 2, 0, 0, &actual, &size) || actual != rate ||
-      !AudioUnitSetProperty(unit, 99999, 0, 0, &rate, 8) ||
+      AudioUnitGetProperty(unit, 2001, 0, 0, &running, &running_size) ||
+      running != 0 || !AudioUnitSetProperty(unit, 99999, 0, 0, &rate, 8) ||
       !AudioUnitGetProperty(unit, 99999, 0, 0, &actual, &size) ||
       AudioComponentInstanceDispose(unit) ||
       !AudioComponentInstanceNew(NULL, &unit))

@@ -61,6 +61,7 @@ const kAudioUnitProperty_MaximumFramesPerSlice: AudioUnitPropertyID = 14;
 const kAudioUnitProperty_StreamFormat: AudioUnitPropertyID = 8;
 
 const kAudioOutputUnitProperty_EnableIO: AudioUnitPropertyID = 2003;
+const kAudioOutputUnitProperty_IsRunning: AudioUnitPropertyID = 2001;
 
 pub(super) fn AudioUnitInitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
     let run_loop = CFRunLoopGetMain(env);
@@ -300,6 +301,16 @@ fn AudioUnitGetProperty(
     };
 
     match in_id {
+        kAudioOutputUnitProperty_IsRunning => {
+            if in_scope != kAudioUnitScope_Global
+                || env.mem.read(io_data_size) < guest_size_of::<u32>()
+            {
+                return paramErr;
+            }
+            env.mem
+                .write(out_data.cast(), u32::from(host_object.started));
+            env.mem.write(io_data_size, guest_size_of::<u32>());
+        }
         kAudioUnitProperty_MaximumFramesPerSlice => {
             if in_scope != kAudioUnitScope_Global
                 || env.mem.read(io_data_size) < guest_size_of::<u32>()
@@ -375,14 +386,17 @@ fn AudioUnitGetPropertyInfo(
     {
         return paramErr;
     }
-    let size = match property {
-        kAudioUnitProperty_StreamFormat => guest_size_of::<AudioStreamBasicDescription>(),
-        kAudioUnitProperty_SampleRate => guest_size_of::<f64>(),
+    let (size, writable) = match property {
+        kAudioUnitProperty_StreamFormat => (guest_size_of::<AudioStreamBasicDescription>(), true),
+        kAudioUnitProperty_SampleRate => (guest_size_of::<f64>(), true),
+        kAudioOutputUnitProperty_IsRunning if scope == kAudioUnitScope_Global => {
+            (guest_size_of::<u32>(), false)
+        }
         kAudioUnitProperty_MaximumFramesPerSlice if scope == kAudioUnitScope_Global => {
-            guest_size_of::<u32>()
+            (guest_size_of::<u32>(), true)
         }
         kAudioUnitProperty_SetRenderCallback if scope == kAudioUnitScope_Global => {
-            guest_size_of::<AURenderCallbackStruct>()
+            (guest_size_of::<AURenderCallbackStruct>(), true)
         }
         _ => return paramErr,
     };
@@ -390,7 +404,7 @@ fn AudioUnitGetPropertyInfo(
         env.mem.write(out_size, size);
     }
     if !out_writable.is_null() {
-        env.mem.write(out_writable, 1);
+        env.mem.write(out_writable, u8::from(writable));
     }
     0
 }
@@ -426,12 +440,23 @@ pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSSt
     audio_unit_state.sample_time = 0.0;
     audio_unit_state.started = true;
 
+    notify_property_listeners(
+        env,
+        ci,
+        kAudioOutputUnitProperty_IsRunning,
+        kAudioUnitScope_Global,
+        0,
+    );
     let result = 0; // Success
     log_dbg!("AudioOutputUnitStart({:?}) -> {:?}", ci, result);
     result
 }
 
 pub(super) fn AudioOutputUnitStop(env: &mut Environment, ci: AudioUnit) -> OSStatus {
+    let was_running = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&ci)
+        .is_some_and(|unit| unit.started);
     let at_state = &mut env.framework_state.audio_toolbox;
     let context = at_state
         .al_context
@@ -457,6 +482,15 @@ pub(super) fn AudioOutputUnitStop(env: &mut Environment, ci: AudioUnit) -> OSSta
     } else {
         -1
     };
+    if result == 0 && was_running {
+        notify_property_listeners(
+            env,
+            ci,
+            kAudioOutputUnitProperty_IsRunning,
+            kAudioUnitScope_Global,
+            0,
+        );
+    }
     log_dbg!("AudioOutputUnitStop({:?}) -> {:?}", ci, result);
     result
 }
