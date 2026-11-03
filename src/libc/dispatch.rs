@@ -97,6 +97,7 @@ struct TimerSource {
     /// Sources are created suspended.
     suspend_count: i32,
     cancelled: bool,
+    cancel_queued: bool,
     queue: ConstVoidPtr,
     handle: u32,
     mask: u32,
@@ -948,6 +949,7 @@ fn dispatch_source_create(
             interval: None,
             suspend_count: 1,
             cancelled: false,
+            cancel_queued: false,
             queue,
             handle,
             mask,
@@ -1057,6 +1059,15 @@ fn dispatch_source_cancel(env: &mut Environment, source: MutVoidPtr) {
         return;
     }
     timer.cancelled = true;
+    queue_source_cancel(env, source);
+}
+
+fn queue_source_cancel(env: &mut Environment, source: MutVoidPtr) {
+    let timer = timer_source(env, source);
+    if !timer.cancelled || timer.cancel_queued || timer.suspend_count > 0 || timer.event_queued {
+        return;
+    }
+    timer.cancel_queued = true;
     let cancel_handler = timer.cancel_handler.take();
     let queue = timer.queue;
     if let Some(handler) = cancel_handler {
@@ -1086,7 +1097,12 @@ fn dispatch_resume(env: &mut Environment, object: MutVoidPtr) {
     if let Some(DispatchObject::TimerSource(timer)) =
         env.libc_state.dispatch.objects.get_mut(&object)
     {
-        timer.suspend_count -= 1;
+        if timer.suspend_count > 0 {
+            timer.suspend_count -= 1;
+        }
+        if timer.cancelled {
+            queue_source_cancel(env, object);
+        }
     } else {
         log!("TODO: dispatch_resume({:?}) (ignored)", object);
     }
@@ -1208,9 +1224,10 @@ fn run_work(env: &mut Environment, work: DispatchWork) {
         DispatchWork::SourceEvent { source, data, work } => {
             timer_source(env, source).delivering_data = Some(data);
             run_work(env, *work);
-            let source = timer_source(env, source);
-            source.delivering_data = None;
-            source.event_queued = false;
+            let timer = timer_source(env, source);
+            timer.delivering_data = None;
+            timer.event_queued = false;
+            queue_source_cancel(env, source);
         }
     }
 }

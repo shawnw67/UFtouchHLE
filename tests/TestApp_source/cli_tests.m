@@ -6583,6 +6583,17 @@ int test_dispatch_timer_functions(void) {
   dispatch_source_cancel(source);
   dispatch_semaphore_wait(semaphore, 0);
   passed = passed && value == 2 && dispatch_source_testcancel(source);
+  void *suspended =
+      dispatch_source_create(&_dispatch_source_type_timer, 0, 0, queue);
+  int cancelled = 0;
+  dispatch_set_context(suspended, &cancelled);
+  dispatch_source_set_cancel_handler_f(suspended, test_dispatch_add_one);
+  dispatch_source_cancel(suspended);
+  dispatch_semaphore_wait(semaphore, 0);
+  passed = passed && cancelled == 0;
+  dispatch_resume(suspended);
+  dispatch_semaphore_wait(semaphore, 0);
+  passed = passed && cancelled == 1;
   return passed ? 0 : -1;
 }
 
