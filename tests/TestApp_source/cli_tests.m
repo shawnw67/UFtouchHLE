@@ -11143,7 +11143,7 @@ static int test_converter_render(void *ctx, uint32_t *flags,
   memset(list->buffers[0].data, 0, list->buffers[0].size);
   return 0;
 }
-int test_augraph_passthrough_converters(void) {
+static int test_augraph_converters_with_order(int connect_after_open) {
   const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
                                                        0x6170706c, 0, 0};
   const struct TestAudioComponentDescription mixer = {0x61756d78, 0x6d636d78,
@@ -11162,16 +11162,32 @@ int test_augraph_passthrough_converters(void) {
   if (NewAUGraph(&graph) || AUGraphAddNode(graph, &output, &output_node) ||
       AUGraphAddNode(graph, &mixer, &mixer_node) ||
       AUGraphAddNode(graph, &converter, &nodes[0]) ||
-      AUGraphAddNode(graph, &converter, &nodes[1]) ||
-      AUGraphConnectNodeInput(graph, mixer_node, 0, output_node, 0) ||
-      AUGraphConnectNodeInput(graph, nodes[0], 0, mixer_node, 0) ||
-      AUGraphConnectNodeInput(graph, nodes[1], 0, mixer_node, 1) ||
-      AUGraphOpen(graph) ||
+      AUGraphAddNode(graph, &converter, &nodes[1]))
+    return -1;
+  if (!connect_after_open &&
+      (AUGraphConnectNodeInput(graph, mixer_node, 0, output_node, 0) ||
+       AUGraphConnectNodeInput(graph, nodes[0], 0, mixer_node, 0) ||
+       AUGraphConnectNodeInput(graph, nodes[1], 0, mixer_node, 1)))
+    return -1;
+  if (AUGraphOpen(graph) ||
       AUGraphNodeInfo(graph, mixer_node, NULL, &mixer_unit) ||
       AUGraphNodeInfo(graph, nodes[0], NULL, &converters[0]) ||
       AUGraphNodeInfo(graph, nodes[1], NULL, &converters[1]) ||
       !converters[0] || !converters[1] || converters[0] == converters[1])
     return -1;
+  if (connect_after_open) {
+    if (!AUGraphInitialize(graph) ||
+        AudioUnitSetProperty(mixer_unit, 8, 1, 0, &format, sizeof(format)) ||
+        AudioUnitSetProperty(mixer_unit, 8, 1, 1, &format, sizeof(format)) ||
+        AudioUnitSetProperty(converters[0], 8, 1, 0, &format, sizeof(format)) ||
+        AudioUnitSetProperty(converters[1], 8, 1, 0, &format, sizeof(format)) ||
+        AUGraphConnectNodeInput(graph, mixer_node, 0, output_node, 0) ||
+        AUGraphConnectNodeInput(graph, nodes[0], 0, mixer_node, 0) ||
+        AUGraphConnectNodeInput(graph, nodes[1], 0, mixer_node, 1) ||
+        AUGraphDisconnectNodeInput(graph, mixer_node, 1) ||
+        AUGraphConnectNodeInput(graph, nodes[1], 0, mixer_node, 1))
+      return -6;
+  }
   for (uint32_t i = 0; i < 2; ++i) {
     if (AudioUnitSetProperty(converters[i], 8, 1, 0, &format, sizeof(format)) ||
         AudioUnitSetProperty(mixer_unit, 8, 1, i, &format, sizeof(format)) ||
@@ -11187,6 +11203,11 @@ int test_augraph_passthrough_converters(void) {
   if (AUGraphStop(graph) || DisposeAUGraph(graph))
     return -4;
   return counts[0] == 1 && counts[1] == 1 ? 0 : -5;
+}
+
+int test_augraph_passthrough_converters(void) {
+  int before = test_augraph_converters_with_order(0);
+  return before ? before : test_augraph_converters_with_order(1);
 }
 
 int test_augraph_single_output_lifecycle(void) {

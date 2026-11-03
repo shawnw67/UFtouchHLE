@@ -198,31 +198,75 @@ fn AUGraphConnectNodeInput(
     destination: AUNode,
     destination_bus: u32,
 ) -> OSStatus {
-    let Some(state) = env
-        .framework_state
-        .audio_toolbox
-        .au_graph
-        .graphs
-        .get_mut(&graph)
-    else {
-        return paramErr;
-    };
-    if !state.nodes.contains_key(&source)
-        || !state.nodes.contains_key(&destination)
-        || state.unit.is_some()
-        || state
-            .connections
-            .iter()
-            .any(|c| c.destination == destination && c.destination_bus == destination_bus)
-    {
-        return paramErr;
-    }
-    state.connections.push(Connection {
+    let connection = Connection {
         source,
         _source_bus: source_bus,
         destination,
         destination_bus,
-    });
+    };
+    let (opened, mixer, converter, output) = {
+        let Some(state) = env
+            .framework_state
+            .audio_toolbox
+            .au_graph
+            .graphs
+            .get_mut(&graph)
+        else {
+            return paramErr;
+        };
+        if !state.nodes.contains_key(&source)
+            || !state.nodes.contains_key(&destination)
+            || state.initialized
+            || state
+                .connections
+                .iter()
+                .any(|c| c.destination == destination && c.destination_bus == destination_bus)
+        {
+            return paramErr;
+        }
+        let opened = state.unit.is_some();
+        if opened {
+            state.connections.push(connection);
+            let valid = analyze_graph(state, false).is_some();
+            state.connections.pop();
+            if !valid {
+                return paramErr;
+            }
+        }
+        (
+            opened,
+            state.mixer,
+            state.converters.get(&source).copied(),
+            state.unit,
+        )
+    };
+    if opened {
+        if let (Some((mixer_node, mixer_unit)), Some(converter)) = (mixer, converter) {
+            if destination == mixer_node {
+                let result = attach_converter(env, mixer_unit, destination_bus, converter);
+                if result != 0 {
+                    return result;
+                }
+            }
+        } else if let (Some((mixer_node, _)), Some(output)) = (mixer, output) {
+            if source == mixer_node
+                && audio_components::State::get(&mut env.framework_state)
+                    .audio_component_instances
+                    .get(&output)
+                    .is_some_and(|unit| unit.render_callback.is_some())
+            {
+                return paramErr;
+            }
+        }
+    }
+    env.framework_state
+        .audio_toolbox
+        .au_graph
+        .graphs
+        .get_mut(&graph)
+        .unwrap()
+        .connections
+        .push(connection);
     0
 }
 
@@ -232,27 +276,44 @@ fn AUGraphDisconnectNodeInput(
     destination: AUNode,
     destination_bus: u32,
 ) -> OSStatus {
-    let Some(state) = env
-        .framework_state
-        .audio_toolbox
-        .au_graph
-        .graphs
-        .get_mut(&graph)
-    else {
-        return paramErr;
+    let (connection, mixer, converter) = {
+        let Some(state) = env
+            .framework_state
+            .audio_toolbox
+            .au_graph
+            .graphs
+            .get_mut(&graph)
+        else {
+            return paramErr;
+        };
+        if !state.nodes.contains_key(&destination) || state.initialized {
+            return paramErr;
+        }
+        let Some(index) = state
+            .connections
+            .iter()
+            .position(|c| c.destination == destination && c.destination_bus == destination_bus)
+        else {
+            return paramErr;
+        };
+        let connection = state.connections.remove(index);
+        (
+            connection,
+            state.mixer,
+            state.converters.get(&connection.source).copied(),
+        )
     };
-    if !state.nodes.contains_key(&destination) {
-        return paramErr;
-    }
-    if state.unit.is_some() {
-        return paramErr;
-    }
-    let old_len = state.connections.len();
-    state.connections.retain(|connection| {
-        connection.destination != destination || connection.destination_bus != destination_bus
-    });
-    if old_len == state.connections.len() {
-        return paramErr;
+    if let (Some((mixer_node, mixer)), Some(converter)) = (mixer, converter) {
+        if connection.destination == mixer_node {
+            let object = audio_components::State::get(&mut env.framework_state)
+                .audio_component_instances
+                .get_mut(&mixer)
+                .unwrap();
+            let buses = object.mixer_buses.as_mut().unwrap();
+            if buses.get(&destination_bus) == Some(&converter) {
+                buses.remove(&destination_bus);
+            }
+        }
     }
     0
 }
@@ -297,6 +358,127 @@ fn AUGraphNodeInfo(
     0
 }
 
+fn attach_converter(
+    env: &mut Environment,
+    mixer: AudioUnit,
+    bus: u32,
+    converter: AudioUnit,
+) -> OSStatus {
+    let components = audio_components::State::get(&mut env.framework_state);
+    let Some(existing) = components
+        .audio_component_instances
+        .get(&mixer)
+        .and_then(|unit| unit.mixer_buses.as_ref())
+        .and_then(|buses| buses.get(&bus))
+        .copied()
+    else {
+        let object = components
+            .audio_component_instances
+            .get_mut(&mixer)
+            .unwrap();
+        object.mixer_buses.as_mut().unwrap().insert(bus, converter);
+        object.mixer_bus_count = object.mixer_bus_count.max(bus + 1);
+        return 0;
+    };
+    if existing == converter {
+        return 0;
+    }
+    let Some(old) = components.audio_component_instances.get(&existing) else {
+        return paramErr;
+    };
+    if old.passthrough_converter || old.render_callback.is_some() || old.initialized || old.started
+    {
+        return paramErr;
+    }
+    let format = old.input_stream_format;
+    let Some(new) = components.audio_component_instances.get_mut(&converter) else {
+        return paramErr;
+    };
+    if let Some(format) = format {
+        if new.input_stream_format.is_some_and(|input| input != format)
+            || new
+                .output_stream_format
+                .is_some_and(|output| output != format)
+        {
+            return paramErr;
+        }
+        new.output_stream_format = Some(format);
+    }
+    components
+        .audio_component_instances
+        .get_mut(&mixer)
+        .unwrap()
+        .mixer_buses
+        .as_mut()
+        .unwrap()
+        .insert(bus, converter);
+    audio_components::AudioComponentInstanceDispose(env, existing);
+    0
+}
+
+fn analyze_graph(state: &Graph, complete: bool) -> Option<(AUNode, Option<AUNode>, Vec<AUNode>)> {
+    let (mut output, mut mixer, mut converters) = (None, None, Vec::new());
+    for (&node, desc) in &state.nodes {
+        if desc.component_manufacturer != u32::from_be_bytes(*b"appl") {
+            return None;
+        }
+        if desc.component_type == u32::from_be_bytes(*b"auou")
+            && desc.component_sub_type == u32::from_be_bytes(*b"rioc")
+            && output.is_none()
+        {
+            output = Some(node);
+        } else if desc.component_type == u32::from_be_bytes(*b"aumx")
+            && (desc.component_sub_type == u32::from_be_bytes(*b"mcmx")
+                || desc.component_sub_type == u32::from_be_bytes(*b"3dem"))
+            && mixer.is_none()
+        {
+            mixer = Some(node);
+        } else if desc.component_type == u32::from_be_bytes(*b"aufc")
+            && desc.component_sub_type == u32::from_be_bytes(*b"conv")
+        {
+            converters.push(node);
+        } else {
+            return None;
+        }
+    }
+    let output = output?;
+    if mixer.is_none() && (!converters.is_empty() || !state.connections.is_empty()) {
+        return None;
+    }
+    let mut converter_sources = std::collections::HashSet::new();
+    let mut output_connected = false;
+    for connection in &state.connections {
+        if connection._source_bus != 0 {
+            return None;
+        }
+        if Some(connection.source) == mixer
+            && connection.destination == output
+            && connection.destination_bus == 0
+        {
+            if output_connected {
+                return None;
+            }
+            output_connected = true;
+        } else if converters.contains(&connection.source)
+            && Some(connection.destination) == mixer
+            && connection.destination_bus < 256
+        {
+            if !converter_sources.insert(connection.source) {
+                return None;
+            }
+        } else {
+            return None;
+        }
+    }
+    if complete
+        && mixer.is_some()
+        && (!output_connected || converter_sources.len() != converters.len())
+    {
+        return None;
+    }
+    Some((output, mixer, converters))
+}
+
 fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
     let Some(state) = env
         .framework_state
@@ -310,63 +492,10 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
     if state.unit.is_some() {
         return 0;
     }
-    let mut output_node = None;
-    let mut mixer_node = None;
-    let mut converters = Vec::new();
-    for (&node, desc) in &state.nodes {
-        if desc.component_manufacturer != u32::from_be_bytes(*b"appl") {
-            return paramErr;
-        }
-        if desc.component_type == u32::from_be_bytes(*b"auou")
-            && desc.component_sub_type == u32::from_be_bytes(*b"rioc")
-            && output_node.is_none()
-        {
-            output_node = Some(node);
-        } else if desc.component_type == u32::from_be_bytes(*b"aumx")
-            && (desc.component_sub_type == u32::from_be_bytes(*b"mcmx")
-                || desc.component_sub_type == u32::from_be_bytes(*b"3dem"))
-            && mixer_node.is_none()
-        {
-            mixer_node = Some(node);
-        } else if desc.component_type == u32::from_be_bytes(*b"aufc")
-            && desc.component_sub_type == u32::from_be_bytes(*b"conv")
-        {
-            converters.push(node);
-        } else {
-            return paramErr;
-        }
-    }
-    let Some(output_node) = output_node else {
+    let Some((_, mixer_node, converters)) = analyze_graph(state, false) else {
         return paramErr;
     };
-    let mut converter_buses = Vec::new();
-    match mixer_node {
-        None if state.connections.is_empty() && converters.is_empty() => {}
-        Some(mixer_node) => {
-            if state.connections.len() != converters.len() + 1
-                || !state.connections.iter().any(|c| {
-                    c.source == mixer_node
-                        && c._source_bus == 0
-                        && c.destination == output_node
-                        && c.destination_bus == 0
-                })
-            {
-                return paramErr;
-            }
-            for converter in converters {
-                let Some(connection) = state.connections.iter().find(|c| {
-                    c.source == converter && c._source_bus == 0 && c.destination == mixer_node
-                }) else {
-                    return paramErr;
-                };
-                if connection.destination_bus >= 256 {
-                    return paramErr;
-                }
-                converter_buses.push((converter, connection.destination_bus));
-            }
-        }
-        _ => return paramErr,
-    }
+    let connections = state.connections.clone();
     let callbacks = state.render_notifies.clone();
     let unit = audio_components::create_audio_unit_instance(env);
     let mixer = mixer_node.map(|node| {
@@ -379,16 +508,23 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
         (node, mixer)
     });
     let mut converter_units = BTreeMap::new();
-    if let Some((_, mixer_unit)) = mixer {
-        for (node, bus) in converter_buses {
-            let converter = audio_unit::mixer_bus(env, mixer_unit, bus).unwrap();
-            let object = audio_components::State::get(&mut env.framework_state)
-                .audio_component_instances
-                .get_mut(&converter)
-                .unwrap();
-            object.callback_bus = 0;
-            object.passthrough_converter = true;
-            converter_units.insert(node, converter);
+    for node in converters {
+        let converter = audio_components::create_audio_unit_instance(env);
+        audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get_mut(&converter)
+            .unwrap()
+            .passthrough_converter = true;
+        converter_units.insert(node, converter);
+    }
+    if let Some((mixer_node, mixer_unit)) = mixer {
+        for connection in &connections {
+            if connection.destination == mixer_node {
+                let converter = converter_units[&connection.source];
+                if attach_converter(env, mixer_unit, connection.destination_bus, converter) != 0 {
+                    unreachable!();
+                }
+            }
         }
     }
     for (callback, context) in callbacks {
@@ -420,6 +556,9 @@ fn AUGraphInitialize(env: &mut Environment, graph: AUGraph) -> OSStatus {
     let Some(unit) = state.unit else {
         return paramErr;
     };
+    if analyze_graph(state, true).is_none() {
+        return paramErr;
+    }
     if state.initialized {
         return 0;
     }
@@ -580,9 +719,17 @@ fn AUGraphClose(env: &mut Environment, graph: AUGraph) -> OSStatus {
         .unwrap();
     let unit = state.unit.take();
     let mixer = state.mixer.take().map(|(_, unit)| unit);
-    state.converters.clear();
+    let converters = std::mem::take(&mut state.converters);
     if let Some(mixer) = mixer {
         audio_components::AudioComponentInstanceDispose(env, mixer);
+    }
+    for converter in converters.into_values() {
+        if audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .contains_key(&converter)
+        {
+            audio_components::AudioComponentInstanceDispose(env, converter);
+        }
     }
     if let Some(unit) = unit {
         return audio_components::AudioComponentInstanceDispose(env, unit);
@@ -663,7 +810,12 @@ fn AUGraphSetNodeInputCallback(
     else {
         return paramErr;
     };
-    if !state.nodes.contains_key(&node) {
+    if !state.nodes.contains_key(&node)
+        || state
+            .connections
+            .iter()
+            .any(|connection| connection.destination == node && connection.destination_bus == bus)
+    {
         return paramErr;
     }
     let unit = if let Some(&converter) = state.converters.get(&node) {
