@@ -11214,6 +11214,38 @@ int test_mach_vm_partial_deallocation(void) {
 }
 #endif
 
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+extern int __cxa_guard_acquire(uint64_t *);
+extern void __cxa_guard_release(uint64_t *);
+extern void __cxa_guard_abort(uint64_t *);
+struct TestCxxGuard {
+  uint64_t guard;
+  int worker_acquired;
+};
+static void *test_cxx_guard_worker(void *arg) {
+  struct TestCxxGuard *state = arg;
+  if (__cxa_guard_acquire(&state->guard)) {
+    state->worker_acquired = 1;
+    __cxa_guard_release(&state->guard);
+  }
+  return NULL;
+}
+int test_cxx_guard_retry_and_threads(void) {
+  struct TestCxxGuard state = {0};
+  struct timespec pause = {0, 3000000};
+  pthread_t worker;
+  if (!__cxa_guard_acquire(&state.guard) ||
+      pthread_create(&worker, NULL, test_cxx_guard_worker, &state) ||
+      nanosleep(&pause, NULL) || state.worker_acquired)
+    return -1;
+  __cxa_guard_abort(&state.guard);
+  if (pthread_join(worker, NULL) || !state.worker_acquired ||
+      __cxa_guard_acquire(&state.guard))
+    return -2;
+  return 0;
+}
+#endif
+
 // clang-format off
 #define FUNC_DEF(func)                                                         \
   { &func, #func }
@@ -11417,6 +11449,7 @@ struct {
     FUNC_DEF(test_dispatch_data_sources),
     FUNC_DEF(test_dispatch_once_concurrent),
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+    FUNC_DEF(test_cxx_guard_retry_and_threads),
     FUNC_DEF(test_mach_vm_partial_deallocation),
     FUNC_DEF(test_mach_vm_read_overwrite),
     FUNC_DEF(test_mach_semaphore_timedwait),
