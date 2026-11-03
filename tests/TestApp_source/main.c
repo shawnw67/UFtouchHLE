@@ -18,6 +18,9 @@ int TestApp_cli_tests_main(void);
 int TestApp_gui_tests_main(int argc, char **argv);
 int TestApp_fortify_failure_main(const char *mode);
 int TestApp_allocation_exhaustion_main(void);
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+int TestApp_cxx_exit_main(void);
+#endif
 
 int main(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "--cli-tests")) {
@@ -28,6 +31,10 @@ int main(int argc, char **argv) {
     return TestApp_fortify_failure_main(argv[1]);
   } else if (argc == 2 && !strcmp(argv[1], "--allocation-exhaustion")) {
     return TestApp_allocation_exhaustion_main();
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+  } else if (argc == 2 && !strcmp(argv[1], "--cxx-exit-handlers")) {
+    return TestApp_cxx_exit_main();
+#endif
   } else if (argc == 1) {
     printf("Running UIKit test app (pass --cli-tests for other tests).\n");
     return TestApp_gui_tests_main(argc, argv);

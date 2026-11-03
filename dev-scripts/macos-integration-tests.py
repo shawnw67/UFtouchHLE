@@ -227,6 +227,16 @@ def main():
             "PASS allocation exhaustion and reallocf release" not in exhaustion_output):
         sys.exit("Guest allocation exhaustion check failed:\n" + exhaustion_output[-3000:])
     print("PASS ARM guest address-space exhaustion and reallocf release")
+    exit_test = subprocess.run(
+        [TOUCHHLE, APP, "--headless", "--args", "--cxx-exit-handlers"],
+        capture_output=True, text=True, timeout=30,
+    )
+    exit_output = exit_test.stdout + exit_test.stderr
+    markers = ["CXX_EXIT_LAST", "CXX_EXIT_MIDDLE", "CXX_EXIT_FIRST"]
+    positions = [exit_output.find(marker) for marker in markers]
+    if exit_test.returncode != 0 or any(pos < 0 for pos in positions) or positions != sorted(positions):
+        sys.exit("Guest exit handler order check failed:\n" + exit_output[-3000:])
+    print("PASS ARM guest C and C++ exit handler order")
 
 
 if __name__ == "__main__":

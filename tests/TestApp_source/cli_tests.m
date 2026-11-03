@@ -11219,6 +11219,16 @@ extern void __cxa_guard_release(uint64_t *);
 extern void __cxa_guard_abort(uint64_t *);
 extern int __cxa_atexit(void (*)(void *), void *, void *);
 extern void __cxa_finalize(void *);
+static void test_c_exit_first(void) { puts("CXX_EXIT_FIRST"); }
+static void test_c_exit_last(void) { puts("CXX_EXIT_LAST"); }
+static void test_cxx_exit_middle(void *unused) { puts("CXX_EXIT_MIDDLE"); }
+int TestApp_cxx_exit_main(void) {
+  if (atexit(test_c_exit_first) ||
+      __cxa_atexit(test_cxx_exit_middle, NULL, NULL) ||
+      atexit(test_c_exit_last))
+    return -1;
+  exit(0);
+}
 static int test_cxx_finalizer_order[4], test_cxx_finalizer_count;
 static char test_cxx_dso_one, test_cxx_dso_two;
 static void test_cxx_destructor(void *arg) {
