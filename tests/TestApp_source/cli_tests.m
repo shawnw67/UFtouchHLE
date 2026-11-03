@@ -10986,6 +10986,30 @@ int test_augraph_single_output_lifecycle(void) {
 }
 #endif
 
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+struct TestMachTimespec {
+  unsigned int seconds, nanoseconds;
+};
+extern int semaphore_create(uint32_t, void **, int, int);
+extern int semaphore_destroy(uint32_t, void *);
+extern int semaphore_signal(void *);
+extern int semaphore_trywait(void *);
+extern int semaphore_timedwait(void *, struct TestMachTimespec);
+int test_mach_semaphore_timedwait(void) {
+  const uint32_t task = 0x7461736b;
+  struct TestMachTimespec now = {0, 0}, short_wait = {0, 2000000};
+  void *semaphore = NULL;
+  if (semaphore_create(task, &semaphore, 0, 1) ||
+      semaphore_timedwait(semaphore, now) ||
+      semaphore_trywait(semaphore) != 49 ||
+      semaphore_timedwait(semaphore, short_wait) != 49 ||
+      semaphore_signal(semaphore) || semaphore_timedwait(semaphore, now) ||
+      semaphore_destroy(task, semaphore))
+    return -1;
+  return 0;
+}
+#endif
+
 // clang-format off
 #define FUNC_DEF(func)                                                         \
   { &func, #func }
@@ -11189,6 +11213,7 @@ struct {
     FUNC_DEF(test_dispatch_data_sources),
     FUNC_DEF(test_dispatch_once_concurrent),
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+    FUNC_DEF(test_mach_semaphore_timedwait),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
 #endif

@@ -9,6 +9,8 @@
 
 #![allow(non_camel_case_types)]
 
+use std::time::{Duration, Instant};
+
 use crate::dyld::FunctionExports;
 use crate::environment::Environment;
 use crate::export_c_func;
@@ -22,6 +24,8 @@ use crate::mem::MutPtr;
 // TODO: `semaphore_t` should be `mach_port_t`
 type semaphore = sem_t;
 type semaphore_t = MutPtr<semaphore>;
+const KERN_INVALID_ARGUMENT: kern_return_t = 4;
+const KERN_OPERATION_TIMED_OUT: kern_return_t = 49;
 
 fn semaphore_create(
     env: &mut Environment,
@@ -51,17 +55,68 @@ fn semaphore_create(
 }
 
 fn semaphore_signal(env: &mut Environment, semaphore: semaphore_t) -> kern_return_t {
-    assert_eq!(sem_post(env, semaphore), 0);
-    let result = KERN_SUCCESS;
+    let result = if sem_post(env, semaphore) == 0 {
+        KERN_SUCCESS
+    } else {
+        KERN_INVALID_ARGUMENT
+    };
     log_dbg!("semaphore_signal({:?}) -> {:?}", semaphore, result);
     result
 }
 
 fn semaphore_wait(env: &mut Environment, semaphore: semaphore_t) -> kern_return_t {
-    assert_eq!(sem_wait(env, semaphore), 0);
-    let result = KERN_SUCCESS;
+    let result = if sem_wait(env, semaphore) == 0 {
+        KERN_SUCCESS
+    } else {
+        KERN_INVALID_ARGUMENT
+    };
     log_dbg!("semaphore_wait({:?}) -> {:?}", semaphore, result);
     result
+}
+
+fn semaphore_trywait(env: &mut Environment, semaphore: semaphore_t) -> kern_return_t {
+    if !env
+        .libc_state
+        .semaphore
+        .open_semaphores
+        .contains_key(&semaphore)
+    {
+        return KERN_INVALID_ARGUMENT;
+    }
+    if env.sem_decrement(semaphore, false) {
+        KERN_SUCCESS
+    } else {
+        KERN_OPERATION_TIMED_OUT
+    }
+}
+
+// The 32-bit guest ABI passes mach_timespec_t as consecutive u32 words.
+fn semaphore_timedwait(
+    env: &mut Environment,
+    semaphore: semaphore_t,
+    seconds: u32,
+    nanos: u32,
+) -> kern_return_t {
+    if nanos >= 1_000_000_000 {
+        return KERN_INVALID_ARGUMENT;
+    }
+    let timeout = Duration::new(u64::from(seconds), nanos);
+    let Some(deadline) = Instant::now().checked_add(timeout) else {
+        return KERN_INVALID_ARGUMENT;
+    };
+    loop {
+        let result = semaphore_trywait(env, semaphore);
+        if result != KERN_OPERATION_TIMED_OUT {
+            return result;
+        }
+        let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+            return KERN_OPERATION_TIMED_OUT;
+        };
+        if remaining.is_zero() {
+            return KERN_OPERATION_TIMED_OUT;
+        }
+        env.sleep(remaining.min(Duration::from_millis(1)));
+    }
 }
 
 fn semaphore_destroy(env: &mut Environment, task: task_t, semaphore: semaphore_t) -> kern_return_t {
@@ -78,5 +133,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(semaphore_create(_, _, _, _)),
     export_c_func!(semaphore_signal(_)),
     export_c_func!(semaphore_wait(_)),
+    export_c_func!(semaphore_trywait(_)),
+    export_c_func!(semaphore_timedwait(_, _, _)),
     export_c_func!(semaphore_destroy(_, _)),
 ];
