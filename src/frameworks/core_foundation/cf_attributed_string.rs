@@ -10,12 +10,12 @@ use super::cf_dictionary::CFDictionaryRef;
 use super::cf_string::CFStringRef;
 use super::{CFIndex, CFRange, CFTypeRef};
 use crate::dyld::{export_c_func, FunctionExports};
-use crate::frameworks::foundation::NSUInteger;
+use crate::frameworks::foundation::{NSRange, NSUInteger};
 use crate::mem::MutPtr;
 use crate::objc::{id, msg, msg_class, nil};
 use crate::Environment;
 
-type CFAttributedStringRef = CFTypeRef;
+pub(crate) type CFAttributedStringRef = CFTypeRef;
 
 fn CFAttributedStringCreate(
     env: &mut Environment,
@@ -45,7 +45,41 @@ fn CFAttributedStringCreateCopy(
     msg![env; string copy]
 }
 
-fn CFAttributedStringGetLength(env: &mut Environment, string: CFAttributedStringRef) -> CFIndex {
+pub(crate) fn CFAttributedStringCreateWithSubstring(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    string: CFAttributedStringRef,
+    range: CFRange,
+) -> CFAttributedStringRef {
+    if string.is_null()
+        || !(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default())
+        || range.location < 0
+        || range.length < 0
+        || range
+            .location
+            .checked_add(range.length)
+            .is_none_or(|end| end > CFAttributedStringGetLength(env, string))
+    {
+        return nil;
+    }
+    let text = CFAttributedStringGetString(env, string);
+    let ns_range = NSRange {
+        location: range.location as NSUInteger,
+        length: range.length as NSUInteger,
+    };
+    let substring: id = msg![env; text substringWithRange:ns_range];
+    let attrs = if range.length == 0 {
+        nil
+    } else {
+        CFAttributedStringGetAttributes(env, string, range.location, MutPtr::null())
+    };
+    CFAttributedStringCreate(env, allocator, substring, attrs)
+}
+
+pub(crate) fn CFAttributedStringGetLength(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+) -> CFIndex {
     if string.is_null() {
         return 0;
     }
@@ -104,6 +138,7 @@ fn CFAttributedStringGetAttribute(
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFAttributedStringCreate(_, _, _)),
     export_c_func!(CFAttributedStringCreateCopy(_, _)),
+    export_c_func!(CFAttributedStringCreateWithSubstring(_, _, _)),
     export_c_func!(CFAttributedStringGetLength(_)),
     export_c_func!(CFAttributedStringGetString(_)),
     export_c_func!(CFAttributedStringGetAttributes(_, _, _)),

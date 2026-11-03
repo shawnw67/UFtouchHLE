@@ -13,7 +13,7 @@
 
 use crate::dyld::{export_c_func, FunctionExports, HostConstant, HostDylib};
 use crate::font::Font;
-use crate::frameworks::core_foundation::{CFIndex, CFRelease, CFTypeRef};
+use crate::frameworks::core_foundation::{CFIndex, CFRange, CFRelease, CFTypeRef};
 use crate::frameworks::core_graphics::cg_affine_transform::CGAffineTransform;
 use crate::frameworks::core_graphics::cg_context::{show_glyphs_with_font, CGContextRef};
 use crate::frameworks::core_graphics::cg_font::{
@@ -49,6 +49,11 @@ struct CTLineHostObject {
 }
 impl HostObject for CTLineHostObject {}
 
+struct CTTypesetterHostObject {
+    attributed: id,
+}
+impl HostObject for CTTypesetterHostObject {}
+
 /// Bit set in glyph IDs from the fallback font. Both fonts have fewer than
 /// 0x8000 glyphs.
 const FALLBACK_GLYPH: CGGlyph = 0x8000;
@@ -76,6 +81,14 @@ const CLASSES: ClassExports = objc_classes! {
     let (text, font) = (host.text, host.font);
     release(env, text);
     release(env, font);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+@end
+
+@implementation _Podroid_CTTypesetter: NSObject
+- (())dealloc {
+    let attributed = env.objc.borrow::<CTTypesetterHostObject>(this).attributed;
+    release(env, attributed);
     env.objc.dealloc_object(this, &mut env.mem)
 }
 @end
@@ -206,6 +219,50 @@ fn CTLineCreateWithAttributedString(env: &mut Environment, attributed: id) -> id
         Box::new(CTLineHostObject { text, font }),
         &mut env.mem,
     )
+}
+
+fn CTTypesetterCreateWithAttributedString(env: &mut Environment, attributed: id) -> id {
+    if attributed.is_null() {
+        return nil;
+    }
+    retain(env, attributed);
+    let class = env
+        .objc
+        .get_known_class("_Podroid_CTTypesetter", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CTTypesetterHostObject { attributed }),
+        &mut env.mem,
+    )
+}
+
+fn CTTypesetterCreateLine(env: &mut Environment, typesetter: id, mut range: CFRange) -> id {
+    if typesetter.is_null() {
+        return nil;
+    }
+    let attributed = env
+        .objc
+        .borrow::<CTTypesetterHostObject>(typesetter)
+        .attributed;
+    let length =
+        crate::frameworks::core_foundation::cf_attributed_string::CFAttributedStringGetLength(
+            env, attributed,
+        );
+    if range.location < 0 || range.location > length || range.length < 0 {
+        return nil;
+    }
+    if range.length == 0 {
+        range.length = length - range.location;
+    }
+    let substring = crate::frameworks::core_foundation::cf_attributed_string::CFAttributedStringCreateWithSubstring(
+        env, crate::frameworks::core_foundation::cf_allocator::kCFAllocatorDefault, attributed, range,
+    );
+    if substring.is_null() {
+        return nil;
+    }
+    let line = CTLineCreateWithAttributedString(env, substring);
+    release(env, substring);
+    line
 }
 
 fn CTLineGetGlyphCount(env: &mut Environment, line: id) -> CFIndex {
@@ -518,6 +575,8 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(CTFontGetDescent(_)),
     export_c_func!(CTFontGetLeading(_)),
     export_c_func!(CTLineCreateWithAttributedString(_)),
+    export_c_func!(CTTypesetterCreateWithAttributedString(_)),
+    export_c_func!(CTTypesetterCreateLine(_, _)),
     export_c_func!(CTLineGetGlyphCount(_)),
     export_c_func!(CTLineGetTypographicBounds(_, _, _, _)),
     export_c_func!(CTLineDraw(_, _)),

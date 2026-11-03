@@ -94,6 +94,7 @@ extern void CGContextSetStrokeColor(CGContextRef context,
                                     const CGFloat *components);
 typedef const void *TestCTFontRef;
 typedef const void *TestCTLineRef;
+typedef const void *TestCTTypesetterRef;
 extern const CFStringRef kCTFontAttributeName;
 extern TestCTLineRef
 CTLineCreateWithAttributedString(CFAttributedStringRef string);
@@ -101,6 +102,10 @@ extern CFIndex CTLineGetGlyphCount(TestCTLineRef line);
 extern double CTLineGetTypographicBounds(TestCTLineRef line, CGFloat *ascent,
                                          CGFloat *descent, CGFloat *leading);
 extern void CTLineDraw(TestCTLineRef line, CGContextRef context);
+extern TestCTTypesetterRef
+CTTypesetterCreateWithAttributedString(CFAttributedStringRef string);
+extern TestCTLineRef CTTypesetterCreateLine(TestCTTypesetterRef typesetter,
+                                            CFRange range);
 extern TestCTFontRef CTFontCreateWithName(CFStringRef name, CGFloat size,
                                           const CGAffineTransform *matrix);
 extern CGFontRef CTFontCopyGraphicsFont(TestCTFontRef font, void *attributes);
@@ -197,6 +202,25 @@ int test_CTLine_draw(void) {
   CGContextRelease(context);
   CGColorSpaceRelease(space);
   return painted > 0 && position.x == 4 && position.y == 8 ? 0 : -1;
+}
+
+int test_CTTypesetter_line_range(void) {
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "hello", kCFStringEncodingUTF8);
+  CFAttributedStringRef attributed = CFAttributedStringCreate(NULL, text, NULL);
+  TestCTTypesetterRef typesetter =
+      CTTypesetterCreateWithAttributedString(attributed);
+  TestCTLineRef two = CTTypesetterCreateLine(typesetter, CFRangeMake(1, 2));
+  TestCTLineRef rest = CTTypesetterCreateLine(typesetter, CFRangeMake(2, 0));
+  TestCTLineRef invalid = CTTypesetterCreateLine(typesetter, CFRangeMake(4, 3));
+  CFRelease(typesetter);
+  CFRelease(attributed);
+  int passed = two && rest && !invalid && CTLineGetGlyphCount(two) == 2 &&
+               CTLineGetGlyphCount(rest) == 3;
+  CFRelease(two);
+  CFRelease(rest);
+  CFRelease(text);
+  return passed ? 0 : -1;
 }
 
 int test_CFAttributedString_attributes(void) {
@@ -9551,6 +9575,7 @@ struct {
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),
+    FUNC_DEF(test_CTTypesetter_line_range),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
