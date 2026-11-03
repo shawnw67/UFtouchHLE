@@ -711,6 +711,9 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         && stream_format.channels_per_frame == 2
         && stream_format.bits_per_channel == 32
         && stream_format.bytes_per_frame == 4
+        && stream_format.sample_rate.is_finite()
+        && stream_format.sample_rate > 0.0
+        && stream_format.sample_rate <= f64::from(i32::MAX)
         && stream_format.format_flags
             & (kAudioFormatFlagIsFloat | kAudioFormatFlagIsNonInterleaved)
             == (kAudioFormatFlagIsFloat | kAudioFormatFlagIsNonInterleaved)

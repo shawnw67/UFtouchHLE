@@ -529,6 +529,7 @@ pub fn is_supported_audio_format(format: &AudioStreamBasicDescription) -> bool {
         channels_per_frame,
         bits_per_channel,
         bytes_per_frame,
+        sample_rate,
         ..
     } = format;
     match format_id {
@@ -537,6 +538,12 @@ pub fn is_supported_audio_format(format: &AudioStreamBasicDescription) -> bool {
             // TODO: support more PCM formats
             (channels_per_frame == 1 || channels_per_frame == 2)
                 && (bits_per_channel == 8 || bits_per_channel == 16 || bits_per_channel == 32)
+                && sample_rate.is_finite()
+                && sample_rate > 0.0
+                && sample_rate <= f64::from(i32::MAX)
+                && bytes_per_frame >= bits_per_channel / 8
+                && bytes_per_frame <= channels_per_frame * (bits_per_channel / 8)
+                && bytes_per_frame.is_multiple_of(bits_per_channel / 8)
                 && (channels_per_frame == 1 || format_flags & kAudioFormatFlagIsNonInterleaved == 0)
                 && (bits_per_channel != 32
                     || format_flags & (kAudioFormatFlagIsFloat | kAudioFormatFlagIsSignedInteger)
@@ -768,6 +775,14 @@ fn planar_stereo_is_not_misidentified_as_interleaved() {
     };
     assert!(is_supported_audio_format(&format));
     format.format_flags |= kAudioFormatFlagIsNonInterleaved;
+    assert!(!is_supported_audio_format(&format));
+    format.format_flags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+    format.bytes_per_frame = 0;
+    assert!(!is_supported_audio_format(&format));
+    format.bytes_per_frame = 8;
+    assert!(!is_supported_audio_format(&format));
+    format.bytes_per_frame = 4;
+    format.sample_rate = f64::NAN;
     assert!(!is_supported_audio_format(&format));
 }
 
