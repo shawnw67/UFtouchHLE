@@ -579,7 +579,9 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         && output_stream_format.is_some()
         && input_stream_format != output_stream_format
     {
-        unimplemented!("AudioUnit {:?} has non default and different input {:?} and output {:?} stream formats, conversion is needed", audio_unit, input_stream_format, output_stream_format);
+        log_once!("AudioUnit stream format conversion is not implemented");
+        audio_unit_host_object.is_running_handler = false;
+        return;
     } else {
         // For purposes, the only important part is that format is supported
         // and playable by OpenAL. Thus, it doesn't really matter if input or
@@ -598,7 +600,11 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         stream_format.sample_rate
     };
 
-    assert!(is_supported_audio_format(&stream_format));
+    if !is_supported_audio_format(&stream_format) {
+        log_once!("AudioUnit stream format is not supported");
+        audio_unit_host_object.is_running_handler = false;
+        return;
+    }
 
     let al_source = audio_unit_host_object.al_source.unwrap();
     let render_started_at = audio_unit_host_object.last_render_time;
