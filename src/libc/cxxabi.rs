@@ -34,7 +34,10 @@ pub(super) fn register_atexit(env: &mut Environment, function: GuestFunction) ->
     if function.to_ptr().is_null() {
         return -1;
     }
-    if let Some(register) = env.dyld.guest_cxxabi_export("___cxa_atexit") {
+    if let (Some(register), Some(_)) = (
+        env.dyld.guest_cxxabi_export("___cxa_atexit"),
+        env.dyld.guest_cxxabi_export("___cxa_finalize"),
+    ) {
         return register.call_from_host(env, (function, MutVoidPtr::null(), MutVoidPtr::null()));
     }
     env.libc_state
