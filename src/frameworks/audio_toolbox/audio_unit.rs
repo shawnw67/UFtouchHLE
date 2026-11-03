@@ -95,6 +95,48 @@ fn AudioUnitSetProperty(
 
     let result;
     match in_id {
+        kAudioUnitProperty_SampleRate => {
+            if in_data.is_null() || in_data_size != guest_size_of::<f64>() {
+                return paramErr;
+            }
+            let rate = env.mem.read(in_data.cast::<f64>());
+            if !rate.is_finite() || rate <= 0.0 {
+                return paramErr;
+            }
+            match in_scope {
+                kAudioUnitScope_Global => host_object.global_stream_format.sample_rate = rate,
+                kAudioUnitScope_Input => {
+                    let mut format = host_object
+                        .input_stream_format
+                        .unwrap_or(host_object.global_stream_format);
+                    format.sample_rate = rate;
+                    host_object.input_stream_format = Some(format);
+                }
+                kAudioUnitScope_Output => {
+                    let mut format = host_object
+                        .output_stream_format
+                        .unwrap_or(host_object.global_stream_format);
+                    format.sample_rate = rate;
+                    host_object.output_stream_format = Some(format);
+                }
+                _ => return paramErr,
+            }
+            result = 0;
+        }
+        kAudioUnitProperty_MaximumFramesPerSlice => {
+            if in_data.is_null()
+                || in_data_size != guest_size_of::<u32>()
+                || in_scope != kAudioUnitScope_Global
+            {
+                return paramErr;
+            }
+            let frames = env.mem.read(in_data.cast::<u32>());
+            if frames == 0 {
+                return paramErr;
+            }
+            host_object.maximum_frames_per_slice = frames;
+            result = 0;
+        }
         kAudioUnitProperty_SetRenderCallback => {
             assert_eq!(in_scope, kAudioUnitScope_Global);
             assert_eq!(in_data_size, guest_size_of::<AURenderCallbackStruct>());
@@ -161,8 +203,12 @@ fn AudioUnitGetProperty(
             );
             let stream_format = match in_scope {
                 kAudioUnitScope_Global => host_object.global_stream_format,
-                kAudioUnitScope_Output => host_object.output_stream_format.unwrap(),
-                kAudioUnitScope_Input => host_object.input_stream_format.unwrap(),
+                kAudioUnitScope_Output => host_object
+                    .output_stream_format
+                    .unwrap_or(host_object.global_stream_format),
+                kAudioUnitScope_Input => host_object
+                    .input_stream_format
+                    .unwrap_or(host_object.global_stream_format),
                 _ => unimplemented!(),
             };
             env.mem.write(out_data.cast(), stream_format);
@@ -195,6 +241,43 @@ fn AudioUnitGetProperty(
         _ => unimplemented!("in_id {}", in_id),
     };
     0 // success
+}
+
+fn AudioUnitGetPropertyInfo(
+    env: &mut Environment,
+    unit: AudioUnit,
+    property: AudioUnitPropertyID,
+    scope: AudioUnitScope,
+    element: AudioUnitElement,
+    out_size: MutPtr<u32>,
+    out_writable: MutPtr<u8>,
+) -> OSStatus {
+    if element != 0
+        || scope > kAudioUnitScope_Output
+        || !audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .contains_key(&unit)
+    {
+        return paramErr;
+    }
+    let size = match property {
+        kAudioUnitProperty_StreamFormat => guest_size_of::<AudioStreamBasicDescription>(),
+        kAudioUnitProperty_SampleRate => guest_size_of::<f64>(),
+        kAudioUnitProperty_MaximumFramesPerSlice if scope == kAudioUnitScope_Global => {
+            guest_size_of::<u32>()
+        }
+        kAudioUnitProperty_SetRenderCallback if scope == kAudioUnitScope_Global => {
+            guest_size_of::<AURenderCallbackStruct>()
+        }
+        _ => return paramErr,
+    };
+    if !out_size.is_null() {
+        env.mem.write(out_size, size);
+    }
+    if !out_writable.is_null() {
+        env.mem.write(out_writable, 1);
+    }
+    0
 }
 
 pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSStatus {
@@ -351,7 +434,9 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     // every frame over 2048 until it reaches the provided frame number.
     // TODO: Verify if this behavior is right
     let elapsed_time = now.duration_since(audio_unit_host_object.last_render_time.unwrap());
-    let number_frames = ((elapsed_time.as_secs_f64() * sample_rate) as u32).min(2048);
+    let number_frames = ((elapsed_time.as_secs_f64() * sample_rate) as u32)
+        .min(2048)
+        .min(audio_unit_host_object.maximum_frames_per_slice);
 
     let bytes_per_channel = stream_format.bits_per_channel / 8;
     let actual_bytes_per_frame = stream_format.channels_per_frame * bytes_per_channel;
@@ -490,6 +575,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitUninitialize(_)),
     export_c_func!(AudioUnitSetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetProperty(_, _, _, _, _, _)),
+    export_c_func!(AudioUnitGetPropertyInfo(_, _, _, _, _, _)),
     export_c_func!(AudioOutputUnitStart(_)),
     export_c_func!(AudioOutputUnitStop(_)),
 ];
