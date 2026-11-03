@@ -150,14 +150,7 @@ fn AudioComponentInstanceNew(
     in_component: AudioComponent,
     out_instance: MutPtr<AudioComponentInstance>,
 ) -> OSStatus {
-    let host_object = AudioComponentInstanceHostObject::default();
-
-    let guest_instance: AudioComponentInstance = env
-        .mem
-        .alloc_and_write(OpaqueAudioComponentInstance { _pad: 0 });
-    State::get(&mut env.framework_state)
-        .audio_component_instances
-        .insert(guest_instance, host_object);
+    let guest_instance = create_audio_unit_instance(env);
 
     env.mem.write(out_instance, guest_instance);
 
@@ -171,7 +164,17 @@ fn AudioComponentInstanceNew(
     result
 }
 
-fn AudioComponentInstanceDispose(
+pub(super) fn create_audio_unit_instance(env: &mut Environment) -> AudioComponentInstance {
+    let guest_instance = env
+        .mem
+        .alloc_and_write(OpaqueAudioComponentInstance { _pad: 0 });
+    State::get(&mut env.framework_state)
+        .audio_component_instances
+        .insert(guest_instance, AudioComponentInstanceHostObject::default());
+    guest_instance
+}
+
+pub(super) fn AudioComponentInstanceDispose(
     env: &mut Environment,
     in_instance: AudioComponentInstance,
 ) -> OSStatus {

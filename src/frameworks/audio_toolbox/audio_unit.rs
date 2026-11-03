@@ -63,13 +63,13 @@ const kAudioUnitProperty_StreamFormat: AudioUnitPropertyID = 8;
 
 const kAudioOutputUnitProperty_EnableIO: AudioUnitPropertyID = 2003;
 
-fn AudioUnitInitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
+pub(super) fn AudioUnitInitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
     let run_loop = CFRunLoopGetMain(env);
     ns_run_loop::add_audio_unit(env, run_loop, in_unit);
     0 // success
 }
 
-fn AudioUnitUninitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
+pub(super) fn AudioUnitUninitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
     let run_loop = CFRunLoopGetMain(env);
     match ns_run_loop::remove_audio_unit(env, run_loop, in_unit) {
         Ok(_) => 0,
@@ -197,7 +197,7 @@ fn AudioUnitGetProperty(
     0 // success
 }
 
-fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSStatus {
+pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSStatus {
     let context = env
         .framework_state
         .audio_toolbox
@@ -224,7 +224,7 @@ fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSStatus {
     result
 }
 
-fn AudioOutputUnitStop(env: &mut Environment, ci: AudioUnit) -> OSStatus {
+pub(super) fn AudioOutputUnitStop(env: &mut Environment, ci: AudioUnit) -> OSStatus {
     let at_state = &mut env.framework_state.audio_toolbox;
     let context = at_state
         .al_context
