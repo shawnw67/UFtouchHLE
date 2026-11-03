@@ -11046,6 +11046,18 @@ int test_mach_semaphore_timedwait(void) {
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
 extern int vm_allocate(uint32_t, uint32_t *, uint32_t, int);
 extern int vm_deallocate(uint32_t, uint32_t, uint32_t);
+extern int vm_read_overwrite(uint32_t, uint32_t, uint32_t, uint32_t,
+                             uint32_t *);
+int test_mach_vm_read_overwrite(void) {
+  unsigned char bytes[] = {1, 2, 3, 4, 5, 6};
+  uint32_t copied = 99, address = (uint32_t)(uintptr_t)bytes;
+  if (vm_read_overwrite(0x7461736b, address, 4, address + 1, &copied) ||
+      copied != 4 || memcmp(bytes, "\1\1\2\3\4\6", 6) ||
+      !vm_read_overwrite(0x7461736b, 0xfffffffcu, 8, address, &copied) ||
+      vm_read_overwrite(0x7461736b, 0, 0, 0, &copied) || copied != 0)
+    return -1;
+  return 0;
+}
 int test_mach_vm_partial_deallocation(void) {
   const uint32_t task = 0x7461736b, page = 4096;
   uint32_t base = 0, reuse;
@@ -11272,6 +11284,7 @@ struct {
     FUNC_DEF(test_dispatch_once_concurrent),
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
     FUNC_DEF(test_mach_vm_partial_deallocation),
+    FUNC_DEF(test_mach_vm_read_overwrite),
     FUNC_DEF(test_mach_semaphore_timedwait),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),

@@ -110,6 +110,43 @@ fn vm_deallocate(
     KERN_SUCCESS
 }
 
+fn vm_read_overwrite(
+    env: &mut Environment,
+    target_task: vm_map_t,
+    address: mach_vm_address_t,
+    size: mach_vm_size_t,
+    data: mach_vm_address_t,
+    outsize: MutPtr<mach_vm_size_t>,
+) -> kern_return_t {
+    if target_task != MACH_TASK_SELF || outsize.is_null() || size >= 0x8000_0000 {
+        return KERN_INVALID_ARGUMENT;
+    }
+    if env
+        .mem
+        .get_bytes_fallible(outsize.cast_const().cast(), 4)
+        .is_none()
+    {
+        return KERN_INVALID_ADDRESS;
+    }
+    if size != 0 {
+        if env
+            .mem
+            .get_bytes_fallible(Ptr::from_bits(address), size)
+            .is_none()
+            || env
+                .mem
+                .get_bytes_fallible(Ptr::from_bits(data), size)
+                .is_none()
+        {
+            return KERN_INVALID_ADDRESS;
+        }
+        env.mem
+            .memmove(Ptr::from_bits(data), Ptr::from_bits(address), size);
+    }
+    env.mem.write(outsize, size);
+    KERN_SUCCESS
+}
+
 fn vm_purgable_control(
     _env: &mut Environment,
     target_task: vm_map_t,
@@ -125,5 +162,6 @@ fn vm_purgable_control(
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(vm_allocate(_, _, _, _)),
     export_c_func!(vm_deallocate(_, _, _)),
+    export_c_func!(vm_read_overwrite(_, _, _, _, _)),
     export_c_func!(vm_purgable_control(_, _, _, _)),
 ];
