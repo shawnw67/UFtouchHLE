@@ -11131,6 +11131,64 @@ int test_augraph_two_input_mixer(void) {
   return !state.bad && state.counts[0] == 1 && state.counts[1] == 1 ? 0 : -3;
 }
 
+static int test_converter_render(void *ctx, uint32_t *flags,
+                                 const void *timestamp, uint32_t bus,
+                                 uint32_t frames, void *data) {
+  int *count = ctx;
+  struct TestAudioBufferList *list = data;
+  if (!timestamp || bus != 0 || list->count != 1 ||
+      list->buffers[0].channels != 1 || list->buffers[0].size != frames * 2)
+    return -1;
+  ++*count;
+  memset(list->buffers[0].data, 0, list->buffers[0].size);
+  return 0;
+}
+int test_augraph_passthrough_converters(void) {
+  const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
+                                                       0x6170706c, 0, 0};
+  const struct TestAudioComponentDescription mixer = {0x61756d78, 0x6d636d78,
+                                                      0x6170706c, 0, 0};
+  const struct TestAudioComponentDescription converter = {
+      0x61756663, 0x636f6e76, 0x6170706c, 0, 0};
+  const struct TestStreamFormat format = {44100.0, 0x6c70636d, 12, 2, 1,
+                                          2,       1,          16, 0};
+  struct TestStreamFormat different = format;
+  different.rate = 22050.0;
+  int counts[2] = {0}, nodes[2] = {0}, output_node = 0, mixer_node = 0;
+  void *graph = NULL, *mixer_unit = NULL, *converters[2] = {NULL, NULL};
+  struct TestRenderCallback callbacks[2] = {
+      {test_converter_render, &counts[0]}, {test_converter_render, &counts[1]}};
+  struct timespec pause = {0, 10000000};
+  if (NewAUGraph(&graph) || AUGraphAddNode(graph, &output, &output_node) ||
+      AUGraphAddNode(graph, &mixer, &mixer_node) ||
+      AUGraphAddNode(graph, &converter, &nodes[0]) ||
+      AUGraphAddNode(graph, &converter, &nodes[1]) ||
+      AUGraphConnectNodeInput(graph, mixer_node, 0, output_node, 0) ||
+      AUGraphConnectNodeInput(graph, nodes[0], 0, mixer_node, 0) ||
+      AUGraphConnectNodeInput(graph, nodes[1], 0, mixer_node, 1) ||
+      AUGraphOpen(graph) ||
+      AUGraphNodeInfo(graph, mixer_node, NULL, &mixer_unit) ||
+      AUGraphNodeInfo(graph, nodes[0], NULL, &converters[0]) ||
+      AUGraphNodeInfo(graph, nodes[1], NULL, &converters[1]) ||
+      !converters[0] || !converters[1] || converters[0] == converters[1])
+    return -1;
+  for (uint32_t i = 0; i < 2; ++i) {
+    if (AudioUnitSetProperty(converters[i], 8, 1, 0, &format, sizeof(format)) ||
+        AudioUnitSetProperty(mixer_unit, 8, 1, i, &format, sizeof(format)) ||
+        !AudioUnitSetProperty(converters[i], 8, 2, 0, &different,
+                              sizeof(different)) ||
+        AUGraphSetNodeInputCallback(graph, nodes[i], 0, &callbacks[i]))
+      return -2;
+  }
+  if (AUGraphInitialize(graph) || AUGraphStart(graph) ||
+      nanosleep(&pause, NULL))
+    return -3;
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  if (AUGraphStop(graph) || DisposeAUGraph(graph))
+    return -4;
+  return counts[0] == 1 && counts[1] == 1 ? 0 : -5;
+}
+
 int test_augraph_single_output_lifecycle(void) {
   const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
                                                        0x6170706c, 0, 0};
@@ -11542,6 +11600,7 @@ struct {
     FUNC_DEF(test_mach_semaphore_wait_signal),
     FUNC_DEF(test_audio_planar_render_callbacks),
     FUNC_DEF(test_augraph_two_input_mixer),
+    FUNC_DEF(test_augraph_passthrough_converters),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
 #endif

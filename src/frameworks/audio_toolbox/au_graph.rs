@@ -50,6 +50,7 @@ struct Graph {
     next_node: AUNode,
     unit: Option<AudioUnit>,
     mixer: Option<(AUNode, AudioUnit)>,
+    converters: BTreeMap<AUNode, AudioUnit>,
     initialized: bool,
     render_notifies: Vec<(GuestFunction, ConstVoidPtr)>,
 }
@@ -276,9 +277,15 @@ fn AUGraphNodeInfo(
         return paramErr;
     };
     let unit = state
-        .mixer
-        .filter(|(mixer_node, _)| *mixer_node == node)
-        .map(|(_, unit)| unit)
+        .converters
+        .get(&node)
+        .copied()
+        .or_else(|| {
+            state
+                .mixer
+                .filter(|(mixer_node, _)| *mixer_node == node)
+                .map(|(_, unit)| unit)
+        })
         .or(state.unit)
         .unwrap_or_else(MutPtr::null);
     if !out_desc.is_null() {
@@ -305,6 +312,7 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
     }
     let mut output_node = None;
     let mut mixer_node = None;
+    let mut converters = Vec::new();
     for (&node, desc) in &state.nodes {
         if desc.component_manufacturer != u32::from_be_bytes(*b"appl") {
             return paramErr;
@@ -320,6 +328,10 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
             && mixer_node.is_none()
         {
             mixer_node = Some(node);
+        } else if desc.component_type == u32::from_be_bytes(*b"aufc")
+            && desc.component_sub_type == u32::from_be_bytes(*b"conv")
+        {
+            converters.push(node);
         } else {
             return paramErr;
         }
@@ -327,14 +339,32 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
     let Some(output_node) = output_node else {
         return paramErr;
     };
+    let mut converter_buses = Vec::new();
     match mixer_node {
-        None if state.connections.is_empty() => {}
-        Some(mixer_node)
-            if state.connections.len() == 1
-                && state.connections[0].source == mixer_node
-                && state.connections[0]._source_bus == 0
-                && state.connections[0].destination == output_node
-                && state.connections[0].destination_bus == 0 => {}
+        None if state.connections.is_empty() && converters.is_empty() => {}
+        Some(mixer_node) => {
+            if state.connections.len() != converters.len() + 1
+                || !state.connections.iter().any(|c| {
+                    c.source == mixer_node
+                        && c._source_bus == 0
+                        && c.destination == output_node
+                        && c.destination_bus == 0
+                })
+            {
+                return paramErr;
+            }
+            for converter in converters {
+                let Some(connection) = state.connections.iter().find(|c| {
+                    c.source == converter && c._source_bus == 0 && c.destination == mixer_node
+                }) else {
+                    return paramErr;
+                };
+                if connection.destination_bus >= 256 {
+                    return paramErr;
+                }
+                converter_buses.push((converter, connection.destination_bus));
+            }
+        }
         _ => return paramErr,
     }
     let callbacks = state.render_notifies.clone();
@@ -348,6 +378,19 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
             .mixer_buses = Some(HashMap::new());
         (node, mixer)
     });
+    let mut converter_units = BTreeMap::new();
+    if let Some((_, mixer_unit)) = mixer {
+        for (node, bus) in converter_buses {
+            let converter = audio_unit::mixer_bus(env, mixer_unit, bus).unwrap();
+            let object = audio_components::State::get(&mut env.framework_state)
+                .audio_component_instances
+                .get_mut(&converter)
+                .unwrap();
+            object.callback_bus = 0;
+            object.passthrough_converter = true;
+            converter_units.insert(node, converter);
+        }
+    }
     for (callback, context) in callbacks {
         audio_unit::add_render_notify(env, unit, callback, context, graph.to_bits());
     }
@@ -360,6 +403,7 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
         .unwrap();
     state.unit = Some(unit);
     state.mixer = mixer;
+    state.converters = converter_units;
     0
 }
 
@@ -536,6 +580,7 @@ fn AUGraphClose(env: &mut Environment, graph: AUGraph) -> OSStatus {
         .unwrap();
     let unit = state.unit.take();
     let mixer = state.mixer.take().map(|(_, unit)| unit);
+    state.converters.clear();
     if let Some(mixer) = mixer {
         audio_components::AudioComponentInstanceDispose(env, mixer);
     }
@@ -621,7 +666,13 @@ fn AUGraphSetNodeInputCallback(
     if !state.nodes.contains_key(&node) {
         return paramErr;
     }
-    let unit = if let Some((mixer_node, mixer)) = state.mixer {
+    let unit = if let Some(&converter) = state.converters.get(&node) {
+        if bus == 0 {
+            Some(converter)
+        } else {
+            None
+        }
+    } else if let Some((mixer_node, mixer)) = state.mixer {
         if mixer_node == node {
             Some(mixer)
         } else if bus == 0 {

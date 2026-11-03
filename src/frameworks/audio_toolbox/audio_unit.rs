@@ -381,7 +381,19 @@ pub(super) fn AudioUnitSetProperty(
         let Some(child) = mixer_bus(env, in_unit, in_element) else {
             return paramErr;
         };
-        return AudioUnitSetProperty(env, child, in_id, in_scope, 0, in_data, in_data_size);
+        let converter = audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get(&child)
+            .is_some_and(|unit| unit.passthrough_converter);
+        if converter && in_id == kAudioUnitProperty_SetRenderCallback {
+            return paramErr;
+        }
+        let child_scope = if converter {
+            kAudioUnitScope_Output
+        } else {
+            in_scope
+        };
+        return AudioUnitSetProperty(env, child, in_id, child_scope, 0, in_data, in_data_size);
     }
     if in_element != 0 {
         return paramErr;
@@ -403,6 +415,16 @@ pub(super) fn AudioUnitSetProperty(
             let rate = env.mem.read(in_data.cast::<f64>());
             if !rate.is_finite() || rate <= 0.0 {
                 return paramErr;
+            }
+            if host_object.passthrough_converter {
+                let other = match in_scope {
+                    kAudioUnitScope_Input => host_object.output_stream_format,
+                    kAudioUnitScope_Output => host_object.input_stream_format,
+                    _ => None,
+                };
+                if other.is_some_and(|format| format.sample_rate != rate) {
+                    return paramErr;
+                }
             }
             match in_scope {
                 kAudioUnitScope_Global => host_object.global_stream_format.sample_rate = rate,
@@ -459,6 +481,16 @@ pub(super) fn AudioUnitSetProperty(
             }
             let stream_format = env.mem.read(in_data.cast::<AudioStreamBasicDescription>());
             log_if_broken_audio_format(&stream_format);
+            if host_object.passthrough_converter {
+                let other = match in_scope {
+                    kAudioUnitScope_Input => host_object.output_stream_format,
+                    kAudioUnitScope_Output => host_object.input_stream_format,
+                    _ => None,
+                };
+                if other.is_some_and(|format| format != stream_format) {
+                    return paramErr;
+                }
+            }
             match in_scope {
                 kAudioUnitScope_Global => host_object.global_stream_format = stream_format,
                 kAudioUnitScope_Output => host_object.output_stream_format = Some(stream_format),
@@ -532,7 +564,16 @@ fn AudioUnitGetProperty(
         let Some(child) = mixer_bus(env, in_unit, in_element) else {
             return paramErr;
         };
-        return AudioUnitGetProperty(env, child, in_id, in_scope, 0, out_data, io_data_size);
+        let converter = audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get(&child)
+            .is_some_and(|unit| unit.passthrough_converter);
+        let child_scope = if converter {
+            kAudioUnitScope_Output
+        } else {
+            in_scope
+        };
+        return AudioUnitGetProperty(env, child, in_id, child_scope, 0, out_data, io_data_size);
     }
     if in_element != 0 {
         return paramErr;

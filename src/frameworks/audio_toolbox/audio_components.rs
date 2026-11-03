@@ -55,6 +55,7 @@ pub struct AudioComponentInstanceHostObject {
     pub mixer_buses: Option<HashMap<u32, AudioComponentInstance>>,
     pub mixer_bus_count: u32,
     pub callback_bus: u32,
+    pub passthrough_converter: bool,
 }
 impl Default for AudioComponentInstanceHostObject {
     fn default() -> Self {
@@ -92,6 +93,7 @@ impl Default for AudioComponentInstanceHostObject {
             mixer_buses: None,
             mixer_bus_count: 1,
             callback_bus: 0,
+            passthrough_converter: false,
         }
     }
 }
