@@ -80,6 +80,7 @@ type ContextState = (
     Vec<Path>,                            // clip paths
     (CGFloat, CGFloat, CGFloat, CGFloat), // RGB stroke color
     CGFloat,                              // line width
+    CGFloat,                              // global alpha
 );
 
 pub(super) struct CGContextHostObject {
@@ -101,6 +102,7 @@ pub(super) struct CGContextHostObject {
     pub(super) clip: Vec<Path>,
     pub(super) rgb_stroke_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     pub(super) line_width: CGFloat,
+    pub(super) alpha: CGFloat,
 }
 impl HostObject for CGContextHostObject {}
 
@@ -127,6 +129,10 @@ fn CGContextSetBlendMode(env: &mut Environment, context: CGContextRef, blend_mod
     env.objc
         .borrow_mut::<CGContextHostObject>(context)
         .blend_mode = blend_mode;
+}
+
+fn CGContextSetAlpha(env: &mut Environment, context: CGContextRef, alpha: CGFloat) {
+    env.objc.borrow_mut::<CGContextHostObject>(context).alpha = alpha.clamp(0.0, 1.0);
 }
 
 fn CGContextSetFillColorSpace(
@@ -301,6 +307,7 @@ fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) {
         host_obj.clip.clone(),
         host_obj.rgb_stroke_color,
         host_obj.line_width,
+        host_obj.alpha,
     ));
     CGFontRetain(env, env.objc.borrow::<CGContextHostObject>(context).font);
 }
@@ -322,6 +329,7 @@ fn CGContextRestoreGState(env: &mut Environment, context: CGContextRef) {
     host_obj.clip = state.5;
     host_obj.rgb_stroke_color = state.6;
     host_obj.line_width = state.7;
+    host_obj.alpha = state.8;
 }
 
 fn CGContextSetInterpolationQuality(
@@ -984,6 +992,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextRetain(_)),
     export_c_func!(CGContextRelease(_)),
     export_c_func!(CGContextSetBlendMode(_, _)),
+    export_c_func!(CGContextSetAlpha(_, _)),
     export_c_func!(CGContextSetFillColorSpace(_, _)),
     export_c_func!(CGContextSetFillColorWithColor(_, _)),
     export_c_func!(CGContextSetStrokeColorWithColor(_, _)),

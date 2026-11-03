@@ -120,6 +120,7 @@ pub fn CGBitmapContextCreate(
         clip: Vec::new(),
         // TODO: is this the correct default?
         rgb_stroke_color: (0.0, 0.0, 0.0, 1.0),
+        alpha: 1.0,
         line_width: 1.0,
     };
     let isa = env.objc.get_known_class("_Podroid_CGContext", &mut env.mem);
@@ -525,6 +526,7 @@ pub struct CGBitmapContextDrawer<'a> {
     bitmap_info: CGBitmapContextData,
     rgb_fill_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     blend_mode: CGBlendMode,
+    alpha: CGFloat,
     transform: CGAffineTransform,
     pixels: &'a mut [u8],
 }
@@ -539,6 +541,7 @@ impl CGBitmapContextDrawer<'_> {
             rgb_fill_color,
             transform,
             blend_mode,
+            alpha,
             ..
         } = objc.borrow(context);
 
@@ -548,6 +551,7 @@ impl CGBitmapContextDrawer<'_> {
             bitmap_info,
             rgb_fill_color,
             blend_mode,
+            alpha,
             transform,
             pixels,
         }
@@ -582,9 +586,20 @@ impl CGBitmapContextDrawer<'_> {
     pub fn put_pixel(
         &mut self,
         coords: (i32, i32),
-        color: (CGFloat, CGFloat, CGFloat, CGFloat),
+        mut color: (CGFloat, CGFloat, CGFloat, CGFloat),
         blend: bool,
     ) {
+        if blend && self.alpha < 1.0 {
+            if matches!(
+                self.bitmap_info.alpha_info,
+                kCGImageAlphaPremultipliedLast | kCGImageAlphaPremultipliedFirst
+            ) {
+                color.0 = gamma_decode(gamma_encode(color.0) * self.alpha);
+                color.1 = gamma_decode(gamma_encode(color.1) * self.alpha);
+                color.2 = gamma_decode(gamma_encode(color.2) * self.alpha);
+            }
+            color.3 *= self.alpha;
+        }
         put_pixel(
             &self.bitmap_info,
             self.pixels,
@@ -741,6 +756,7 @@ fn test_iter_transformed_pixels() {
             .with_layout(),
             rgb_fill_color: (0.0, 0.0, 0.0, 0.0),
             blend_mode: kCGBlendModeNormal,
+            alpha: 1.0,
             transform,
             pixels: &mut [],
         }
@@ -866,6 +882,7 @@ fn test_axis_aligned_coverage_matches_iter_transformed_pixels() {
             .with_layout(),
             rgb_fill_color: (0.0, 0.0, 0.0, 0.0),
             blend_mode: kCGBlendModeNormal,
+            alpha: 1.0,
             transform,
             pixels: &mut [],
         };
@@ -918,7 +935,8 @@ pub(super) fn fill_rect(env: &mut Environment, context: CGContextRef, rect: CGRe
     // opaque fill in the normal blend mode), compute the pixel's bytes once
     // and copy them, rather than blending and gamma-encoding every pixel.
     // This matters a lot: layers are cleared before every redraw.
-    let independent_of_bg = clear || (color.3 >= 1.0 && drawer.blend_mode == kCGBlendModeNormal);
+    let independent_of_bg =
+        clear || (color.3 >= 1.0 && drawer.alpha >= 1.0 && drawer.blend_mode == kCGBlendModeNormal);
     if independent_of_bg {
         if let Some((xs, ys)) = drawer.axis_aligned_coverage(rect) {
             let Some(&first_y) = ys.first() else { return };

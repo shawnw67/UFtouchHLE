@@ -78,6 +78,7 @@ extern CGAffineTransform CGContextGetTextMatrix(CGContextRef context);
 extern void CGContextSetStrokeColorWithColor(CGContextRef context,
                                              CGColorRef color);
 extern void CGContextStrokeRect(CGContextRef context, CGRect rect);
+extern void CGContextSetAlpha(CGContextRef context, CGFloat alpha);
 
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
@@ -383,6 +384,30 @@ int test_CGContext_text_matrix_and_stroke_color(void) {
   int passed = result.a == 2 && result.b == 3 && result.c == 4 &&
                result.d == 5 && result.tx == 6 && result.ty == 7 && painted > 0;
   CFRelease(color);
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
+}
+
+int test_CGContext_global_alpha(void) {
+  unsigned char pixels[3 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 3, 1, 8, 3 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  CGContextFillRect(context, CGRectMake(0, 0, 1, 1));
+  CGContextSetRGBFillColor(context, 0, 1, 0, 1);
+  CGContextFillRect(context, CGRectMake(1, 0, 1, 1));
+  CGContextSetRGBFillColor(context, 0, 0, 1, 1);
+  CGContextSetAlpha(context, 0.5);
+  CGContextFillRect(context, CGRectMake(0, 0, 2, 1));
+  CGContextSaveGState(context);
+  CGContextSetAlpha(context, 1);
+  CGContextRestoreGState(context);
+  CGContextFillRect(context, CGRectMake(2, 0, 1, 1));
+  int passed = pixels[0] > 0 && pixels[4] == 0 && pixels[5] > 0 &&
+               pixels[2] > 0 && pixels[6] > 0 && pixels[11] >= 126 &&
+               pixels[11] <= 128;
   CGContextRelease(context);
   CGColorSpaceRelease(space);
   return passed ? 0 : -1;
@@ -9337,6 +9362,7 @@ struct {
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),
+    FUNC_DEF(test_CGContext_global_alpha),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
