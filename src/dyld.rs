@@ -323,6 +323,13 @@ fn write_return_to_host_routine(mem: &mut Mem, svc: u32) -> GuestFunction {
     assert!(!ptr.is_thumb());
     ptr
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CxxAbiTypeInfoKind {
+    Class,
+    SingleInheritance,
+    MultipleInheritance,
+}
+
 pub struct Dyld {
     /// List of host functions that have been "linked" and had SVCs assigned.
     ///
@@ -333,6 +340,7 @@ pub struct Dyld {
     thread_exit_routine: Option<GuestFunction>,
     constants_to_link_later: Vec<(MutPtr<ConstVoidPtr>, &'static HostConstant, u32)>,
     non_lazy_host_functions: HashMap<&'static str, GuestFunction>,
+    cxxabi_typeinfo_vtables: HashMap<u32, CxxAbiTypeInfoKind>,
 }
 
 impl Dyld {
@@ -362,6 +370,7 @@ impl Dyld {
             thread_exit_routine: None,
             constants_to_link_later: Vec::new(),
             non_lazy_host_functions: HashMap::new(),
+            cxxabi_typeinfo_vtables: HashMap::new(),
         }
     }
 
@@ -388,6 +397,24 @@ impl Dyld {
         objc.register_host_selectors(mem);
 
         for bin in bins {
+            for (name, &address) in &bin.exported_symbols {
+                let kind = match name.as_str() {
+                    "__ZTVN10__cxxabiv117__class_type_infoE" => CxxAbiTypeInfoKind::Class,
+                    "__ZTVN10__cxxabiv120__si_class_type_infoE" => {
+                        CxxAbiTypeInfoKind::SingleInheritance
+                    }
+                    "__ZTVN10__cxxabiv121__vmi_class_type_infoE" => {
+                        CxxAbiTypeInfoKind::MultipleInheritance
+                    }
+                    _ => continue,
+                };
+                self.cxxabi_typeinfo_vtables.insert(address, kind);
+                if let Some(point) = address.checked_add(8) {
+                    self.cxxabi_typeinfo_vtables.insert(point, kind);
+                }
+            }
+        }
+        for bin in bins {
             self.setup_lazy_linking(bin, mem);
             // Must happen before `register_bin_classes`, else superclass
             // pointers will be wrong.
@@ -398,6 +425,10 @@ impl Dyld {
         objc.register_bin_categories(&bins[0], mem);
 
         ns_string::register_constant_strings(&bins[0], mem, objc);
+    }
+
+    pub(crate) fn cxxabi_typeinfo_kind(&self, address: u32) -> Option<CxxAbiTypeInfoKind> {
+        self.cxxabi_typeinfo_vtables.get(&address).copied()
     }
 
     /// Dumps all lazy symbols (functions) referenced by the binary

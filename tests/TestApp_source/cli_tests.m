@@ -11215,6 +11215,22 @@ int test_mach_vm_partial_deallocation(void) {
 #endif
 
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+extern void *__dynamic_cast(const void *, const void *, const void *, int);
+int test_cxx_dynamic_cast_exact_type(void) {
+  struct TypeInfo {
+    void *vtable;
+    const char *name;
+  } source = {NULL, "Base"}, target = {NULL, "Derived"};
+  uintptr_t vtable[3] = {0, (uintptr_t)&target, 0};
+  void *object_vtable = &vtable[2];
+  void *object = &object_vtable;
+  if (__dynamic_cast(object, &source, &target, 0) != object ||
+      __dynamic_cast(object, &source, &source, -1) != object ||
+      __dynamic_cast(NULL, &source, &target, 0) ||
+      __dynamic_cast(object, &source, &target, -1))
+    return -1;
+  return 0;
+}
 extern int __cxa_guard_acquire(uint64_t *);
 extern void __cxa_guard_release(uint64_t *);
 extern void __cxa_guard_abort(uint64_t *);
@@ -11474,6 +11490,7 @@ struct {
     FUNC_DEF(test_dispatch_data_sources),
     FUNC_DEF(test_dispatch_once_concurrent),
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+    FUNC_DEF(test_cxx_dynamic_cast_exact_type),
     FUNC_DEF(test_cxx_guard_retry_and_threads),
     FUNC_DEF(test_cxx_destructor_order_and_reentry),
     FUNC_DEF(test_mach_vm_partial_deallocation),
