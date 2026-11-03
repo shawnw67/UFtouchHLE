@@ -539,7 +539,10 @@ pub fn is_supported_audio_format(format: &AudioStreamBasicDescription) -> bool {
                 && ((format_flags & kAudioFormatFlagIsPacked) != 0
                     || ((bits_per_channel / 8) * channels_per_frame) == bytes_per_frame)
                 && (format_flags & kAudioFormatFlagIsBigEndian) == 0
-                && (format_flags & kAudioFormatFlagIsFloat) == 0
+                && ((format_flags & kAudioFormatFlagIsFloat) == 0
+                    || (bits_per_channel == 32
+                        && bytes_per_frame == channels_per_frame * 4
+                        && (channels_per_frame == 1 || format_flags & (1 << 5) == 0)))
         }
         _ => false,
     }
@@ -594,6 +597,17 @@ pub fn decode_buffer(
             }
         }
         kAudioFormatLinearPCM => {
+            if format.format_flags & kAudioFormatFlagIsFloat != 0 {
+                let bytes_per_frame = format.bytes_per_frame as usize;
+                let complete_bytes = data_slice.len() / bytes_per_frame * bytes_per_frame;
+                let converted = float_pcm_to_i16(&data_slice[..complete_bytes]);
+                let al_format = if format.channels_per_frame == 1 {
+                    al::AL_FORMAT_MONO16
+                } else {
+                    al::AL_FORMAT_STEREO16
+                };
+                return (al_format, format.sample_rate as ALsizei, converted);
+            }
             // The end of the data might be misaligned (this happens in Crash
             // Bandicoot Nitro Kart 3D somehow).
             let misaligned_by = data_slice.len() % (format.bytes_per_frame as usize);
@@ -685,6 +699,36 @@ pub fn decode_buffer(
         }
         _ => unreachable!(),
     }
+}
+
+fn float_pcm_to_i16(input: &[u8]) -> Vec<u8> {
+    let mut output = Vec::with_capacity(input.len() / 2);
+    for sample in input.chunks_exact(4) {
+        let value = f32::from_le_bytes(sample.try_into().unwrap());
+        let value = if value.is_nan() {
+            0.0
+        } else {
+            value.clamp(-1.0, 1.0)
+        };
+        let pcm = (value * 32767.0).round() as i16;
+        output.extend_from_slice(&pcm.to_le_bytes());
+    }
+    output
+}
+
+#[cfg(test)]
+#[test]
+fn float_pcm_conversion_handles_clipping_and_nan() {
+    let input: Vec<u8> = [-2.0_f32, -0.5, 0.0, 0.5, 2.0, f32::NAN]
+        .into_iter()
+        .flat_map(f32::to_le_bytes)
+        .collect();
+    let converted = float_pcm_to_i16(&input);
+    let samples: Vec<i16> = converted
+        .chunks_exact(2)
+        .map(|bytes| i16::from_le_bytes(bytes.try_into().unwrap()))
+        .collect();
+    assert_eq!(samples, [-32767, -16384, 0, 16384, 32767, 0]);
 }
 
 /// Guesses whether 16-bit samples are big endian, by which byte order makes
