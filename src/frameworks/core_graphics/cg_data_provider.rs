@@ -208,7 +208,7 @@ pub(super) fn borrow_bytes(env: &mut Environment, provider: CGDataProviderRef) -
             env.mem.bytes_at(data.cast(), size)
         }
         CGDataProviderHostObject::CGImage(cg_image) => {
-            cg_image::borrow_image(&env.objc, cg_image).pixels()
+            cg_image::borrow_image_data(&env.objc, cg_image)
         }
         CGDataProviderHostObject::CFData(cf_data) => {
             let data = CFDataGetBytePtr(env, cf_data);
@@ -227,7 +227,7 @@ fn CGDataProviderCopyData(env: &mut Environment, provider: CGDataProviderRef) ->
             size.try_into().unwrap(),
         ),
         CGDataProviderHostObject::CGImage(cg_image) => {
-            let bytes = cg_image::borrow_image(&env.objc, cg_image).pixels();
+            let bytes = cg_image::borrow_image_data(&env.objc, cg_image);
 
             let len: NSUInteger = bytes.len().try_into().unwrap();
             let alloc = env.mem.alloc(len);

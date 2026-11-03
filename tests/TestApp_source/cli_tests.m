@@ -138,6 +138,13 @@ extern unsigned int CGImageGetBitmapInfo(CGImageRef image);
 extern bool CGImageGetShouldInterpolate(CGImageRef image);
 extern int CGImageGetRenderingIntent(CGImageRef image);
 extern bool CGImageIsMask(CGImageRef image);
+extern CGImageRef CGImageMaskCreate(size_t width, size_t height,
+                                    size_t bits_per_component,
+                                    size_t bits_per_pixel, size_t bytes_per_row,
+                                    CGDataProviderRef provider,
+                                    const CGFloat *decode, bool interpolate);
+extern CGImageRef CGImageCreateWithMask(CGImageRef image, CGImageRef mask);
+extern const CGFloat *CGImageGetDecode(CGImageRef image);
 extern CGImageRef CGImageCreateFlippedVertically(CGImageRef image);
 extern CGImageRef CGImageCreateScaled(CGImageRef image, unsigned int width,
                                       unsigned int height);
@@ -6362,6 +6369,41 @@ int test_CGImage_transform_helpers(void) {
   return passed ? 0 : -1;
 }
 
+int test_CGImage_packed_mask(void) {
+  const unsigned char pixels[] = {255, 0, 0, 255, 0, 0, 255, 255};
+  const unsigned char mask_byte = 0x0f;
+  const CGFloat decode[] = {0, 1};
+  CFDataRef image_data = CFDataCreate(NULL, pixels, sizeof(pixels));
+  CFDataRef mask_data = CFDataCreate(NULL, &mask_byte, 1);
+  CGDataProviderRef image_provider = CGDataProviderCreateWithCFData(image_data);
+  CGDataProviderRef mask_provider = CGDataProviderCreateWithCFData(mask_data);
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGImageRef image =
+      CGImageCreate(2, 1, 8, 32, 8, space, 1, image_provider, NULL, false, 0);
+  CGImageRef mask =
+      CGImageMaskCreate(2, 1, 4, 4, 1, mask_provider, decode, false);
+  CGImageRef masked = CGImageCreateWithMask(image, mask);
+  unsigned char result[8] = {0};
+  if (masked)
+    CGImageReadPixels(masked, result);
+  const CGFloat *mask_decode = mask ? CGImageGetDecode(mask) : NULL;
+  int passed = mask && CGImageIsMask(mask) && mask_decode &&
+               mask_decode[0] == 0 && mask_decode[1] == 1 && masked &&
+               result[0] == 255 && result[3] == 255 && result[4] == 0 &&
+               result[7] == 0;
+  if (masked)
+    CGImageRelease(masked);
+  if (mask)
+    CGImageRelease(mask);
+  CGImageRelease(image);
+  CGColorSpaceRelease(space);
+  CFRelease(mask_provider);
+  CFRelease(image_provider);
+  CFRelease(mask_data);
+  CFRelease(image_data);
+  return passed ? 0 : -1;
+}
+
 int test_CGImageSource_data(void) {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "rb");
   if (!file)
@@ -10633,6 +10675,7 @@ struct {
     FUNC_DEF(test_CGImage_invalid_rgb32),
     FUNC_DEF(test_CGImage_copy_metadata),
     FUNC_DEF(test_CGImage_transform_helpers),
+    FUNC_DEF(test_CGImage_packed_mask),
     FUNC_DEF(test_CGImageSource_data),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),

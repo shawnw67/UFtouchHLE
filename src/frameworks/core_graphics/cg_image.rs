@@ -53,6 +53,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 // are just Objective-C types, so we need a class for it, but its name is not
 // visible anywhere.
 @implementation _Podroid_CGImage: NSObject
+- (())dealloc {
+    let decode = env.objc.borrow::<CGImageHostObject>(this).decode_ptr;
+    if let Some(ptr) = decode { env.mem.free(ptr.cast()); }
+    env.objc.dealloc_object(this, &mut env.mem)
+}
 @end
 
 };
@@ -61,6 +66,15 @@ struct CGImageHostObject {
     image: Image,
     should_interpolate: bool,
     rendering_intent: i32,
+    mask: Option<ImageMask>,
+    decode_ptr: Option<MutPtr<CGFloat>>,
+}
+#[derive(Clone)]
+struct ImageMask {
+    samples: Vec<u8>,
+    bits: u32,
+    bytes_per_row: u32,
+    decode: Option<[CGFloat; 2]>,
 }
 impl HostObject for CGImageHostObject {}
 
@@ -94,6 +108,8 @@ fn from_image_with_options(
         image,
         should_interpolate,
         rendering_intent,
+        mask: None,
+        decode_ptr: None,
     });
     let class = env.objc.get_known_class("_Podroid_CGImage", &mut env.mem);
     env.objc.alloc_object(class, host_obj, &mut env.mem)
@@ -103,6 +119,14 @@ fn from_image_with_options(
 /// `CGImage` instance.
 pub fn borrow_image(objc: &ObjC, image: CGImageRef) -> &Image {
     &objc.borrow::<CGImageHostObject>(image).image
+}
+
+pub fn borrow_image_data(objc: &ObjC, image: CGImageRef) -> &[u8] {
+    let host = objc.borrow::<CGImageHostObject>(image);
+    match &host.mask {
+        Some(mask) => &mask.samples,
+        None => host.image.pixels(),
+    }
 }
 
 /// Shortcut used by the app picker, counterpart to [borrow_image].
@@ -226,14 +250,21 @@ fn CGImageCreateWithJPEGDataProvider(
     from_image_with_options(env, image, should_interpolate, intent)
 }
 
-fn CGImageGetAlphaInfo(_env: &mut Environment, _image: CGImageRef) -> CGImageAlphaInfo {
+fn CGImageGetAlphaInfo(env: &mut Environment, image: CGImageRef) -> CGImageAlphaInfo {
     // our Image type always returns premultiplied RGBA
     // (the premultiplied part must match what the real UIImage does, but
     // considering CgBI's design, maybe the order doesn't?)
-    kCGImageAlphaPremultipliedLast
+    if env.objc.borrow::<CGImageHostObject>(image).mask.is_some() {
+        kCGImageAlphaNone
+    } else {
+        kCGImageAlphaPremultipliedLast
+    }
 }
 
-fn CGImageGetColorSpace(env: &mut Environment, _image: CGImageRef) -> CGColorSpaceRef {
+fn CGImageGetColorSpace(env: &mut Environment, image: CGImageRef) -> CGColorSpaceRef {
+    if env.objc.borrow::<CGImageHostObject>(image).mask.is_some() {
+        return nil;
+    }
     // Caller must release
     // FIXME: what if a loaded image is not sRGB?
 
@@ -257,10 +288,17 @@ pub fn CGImageGetHeight(env: &mut Environment, image: CGImageRef) -> GuestUSize 
         .dimensions();
     height
 }
-fn CGImageGetBitsPerPixel(_env: &mut Environment, _image: CGImageRef) -> GuestUSize {
-    32
+fn CGImageGetBitsPerPixel(env: &mut Environment, image: CGImageRef) -> GuestUSize {
+    env.objc
+        .borrow::<CGImageHostObject>(image)
+        .mask
+        .as_ref()
+        .map_or(32, |mask| mask.bits)
 }
 fn CGImageGetBytesPerRow(env: &mut Environment, image: CGImageRef) -> GuestUSize {
+    if let Some(mask) = &env.objc.borrow::<CGImageHostObject>(image).mask {
+        return mask.bytes_per_row;
+    }
     let (width, _height) = env
         .objc
         .borrow::<CGImageHostObject>(image)
@@ -281,8 +319,12 @@ fn CGImageGetDataProvider(env: &mut Environment, image: CGImageRef) -> CGDataPro
     autorelease(env, cg_data_provider)
 }
 
-fn CGImageGetBitsPerComponent(_: &mut Environment, _: CGImageRef) -> GuestUSize {
-    8 // Fix this when we support anything else
+fn CGImageGetBitsPerComponent(env: &mut Environment, image: CGImageRef) -> GuestUSize {
+    env.objc
+        .borrow::<CGImageHostObject>(image)
+        .mask
+        .as_ref()
+        .map_or(8, |mask| mask.bits)
 }
 
 fn CGImageCreateWithImageInRect(
@@ -315,7 +357,6 @@ fn CGImageCreateWithImageInRect(
         intersect.size.width as u32,
         intersect.size.height as u32,
     );
-    assert_eq!(32, CGImageGetBitsPerPixel(env, image));
     let mut new_pixels = Vec::with_capacity((w * h * 4) as usize);
     let old_pixels = borrow_image(&env.objc, image).pixels();
     for i in 0..h {
@@ -328,7 +369,31 @@ fn CGImageCreateWithImageInRect(
     let new_img = Image::from_pixel_vec(new_pixels, (w, h));
     let source = env.objc.borrow::<CGImageHostObject>(image);
     let (interpolate, intent) = (source.should_interpolate, source.rendering_intent);
-    from_image_with_options(env, new_img, interpolate, intent)
+    let cropped_mask = source.mask.as_ref().map(|mask| {
+        let stride = (w * mask.bits).div_ceil(8);
+        let mut samples = vec![0u8; (stride * h) as usize];
+        let max = (1u32 << mask.bits) - 1;
+        for row in 0..h {
+            for col in 0..w {
+                let old_bit = (x + col) * mask.bits;
+                let old_byte =
+                    mask.samples[((y + row) * mask.bytes_per_row + old_bit / 8) as usize];
+                let value = (u32::from(old_byte) >> (8 - mask.bits - old_bit % 8)) & max;
+                let new_bit = col * mask.bits;
+                samples[(row * stride + new_bit / 8) as usize] |=
+                    (value << (8 - mask.bits - new_bit % 8)) as u8;
+            }
+        }
+        ImageMask {
+            samples,
+            bits: mask.bits,
+            bytes_per_row: stride,
+            decode: mask.decode,
+        }
+    });
+    let result = from_image_with_options(env, new_img, interpolate, intent);
+    env.objc.borrow_mut::<CGImageHostObject>(result).mask = cropped_mask;
+    result
 }
 
 fn CGImageCreateCopy(env: &mut Environment, image: CGImageRef) -> CGImageRef {
@@ -336,22 +401,39 @@ fn CGImageCreateCopy(env: &mut Environment, image: CGImageRef) -> CGImageRef {
         return nil;
     }
     let source = env.objc.borrow::<CGImageHostObject>(image);
-    let (copy, interpolate, intent) = (
+    let (copy, interpolate, intent, mask) = (
         source.image.clone(),
         source.should_interpolate,
         source.rendering_intent,
+        source.mask.clone(),
     );
-    from_image_with_options(env, copy, interpolate, intent)
+    let result = from_image_with_options(env, copy, interpolate, intent);
+    env.objc.borrow_mut::<CGImageHostObject>(result).mask = mask;
+    result
 }
-fn CGImageGetBitmapInfo(_env: &mut Environment, image: CGImageRef) -> CGBitmapInfo {
-    if image.is_null() {
+fn CGImageGetBitmapInfo(env: &mut Environment, image: CGImageRef) -> CGBitmapInfo {
+    if image.is_null() || env.objc.borrow::<CGImageHostObject>(image).mask.is_some() {
         0
     } else {
         kCGImageAlphaPremultipliedLast | kCGImageByteOrder32Big
     }
 }
-fn CGImageGetDecode(_env: &mut Environment, _image: CGImageRef) -> ConstPtr<CGFloat> {
-    ConstPtr::null()
+fn CGImageGetDecode(env: &mut Environment, image: CGImageRef) -> ConstPtr<CGFloat> {
+    if image.is_null() {
+        return ConstPtr::null();
+    }
+    let source = env.objc.borrow::<CGImageHostObject>(image);
+    if let Some(ptr) = source.decode_ptr {
+        return ptr.cast_const();
+    }
+    let Some(decode) = source.mask.as_ref().and_then(|mask| mask.decode) else {
+        return ConstPtr::null();
+    };
+    let ptr: MutPtr<CGFloat> = env.mem.alloc(8).cast();
+    env.mem.write(ptr, decode[0]);
+    env.mem.write(ptr + 1, decode[1]);
+    env.objc.borrow_mut::<CGImageHostObject>(image).decode_ptr = Some(ptr);
+    ptr.cast_const()
 }
 fn CGImageGetShouldInterpolate(env: &mut Environment, image: CGImageRef) -> bool {
     !image.is_null()
@@ -367,11 +449,117 @@ fn CGImageGetRenderingIntent(env: &mut Environment, image: CGImageRef) -> i32 {
         env.objc.borrow::<CGImageHostObject>(image).rendering_intent
     }
 }
-fn CGImageIsMask(_env: &mut Environment, _image: CGImageRef) -> bool {
-    false
+fn CGImageIsMask(env: &mut Environment, image: CGImageRef) -> bool {
+    !image.is_null() && env.objc.borrow::<CGImageHostObject>(image).mask.is_some()
 }
 fn CGImageGetPixelFormatInfo(_env: &mut Environment, _image: CGImageRef) -> u32 {
     0
+}
+
+#[allow(clippy::too_many_arguments)]
+fn CGImageMaskCreate(
+    env: &mut Environment,
+    width: u32,
+    height: u32,
+    bits_per_component: u32,
+    bits_per_pixel: u32,
+    bytes_per_row: u32,
+    provider: CGDataProviderRef,
+    decode: ConstPtr<CGFloat>,
+    should_interpolate: bool,
+) -> CGImageRef {
+    if width == 0
+        || height == 0
+        || provider.is_null()
+        || ![1, 2, 4, 8].contains(&bits_per_component)
+        || bits_per_pixel != bits_per_component
+    {
+        return nil;
+    }
+    let Some(row_bits) = width.checked_mul(bits_per_pixel) else {
+        return nil;
+    };
+    let Some(source_len) = bytes_per_row.checked_mul(height) else {
+        return nil;
+    };
+    let Some(output_len) = width.checked_mul(height).and_then(|n| n.checked_mul(4)) else {
+        return nil;
+    };
+    if bytes_per_row < row_bits.div_ceil(8) {
+        return nil;
+    }
+    let decode_values = if decode.is_null() {
+        None
+    } else {
+        Some([env.mem.read(decode), env.mem.read(decode + 1)])
+    };
+    let source = cg_data_provider::borrow_bytes(env, provider);
+    if source.len() < source_len as usize {
+        return nil;
+    }
+    let samples = source[..source_len as usize].to_vec();
+    let mut pixels = Vec::new();
+    if pixels.try_reserve_exact(output_len as usize).is_err() {
+        return nil;
+    }
+    let (low, high) = decode_values.map_or((0.0, 1.0), |d| (d[0], d[1]));
+    let max = (1u32 << bits_per_component) - 1;
+    for y in 0..height {
+        for x in 0..width {
+            let bit = x * bits_per_pixel;
+            let byte = samples[(y * bytes_per_row + bit / 8) as usize];
+            let shift = 8 - bits_per_component - bit % 8;
+            let sample = u32::from(byte >> shift) & max;
+            let coverage =
+                (1.0 - (low + sample as f32 / max as f32 * (high - low)).clamp(0.0, 1.0)) * 255.0;
+            let alpha = coverage.round() as u8;
+            pixels.extend_from_slice(&[alpha, alpha, alpha, alpha]);
+        }
+    }
+    let result = from_image_with_options(
+        env,
+        Image::from_pixel_vec(pixels, (width, height)),
+        should_interpolate,
+        0,
+    );
+    env.objc.borrow_mut::<CGImageHostObject>(result).mask = Some(ImageMask {
+        samples,
+        bits: bits_per_component,
+        bytes_per_row,
+        decode: decode_values,
+    });
+    result
+}
+
+fn CGImageCreateWithMask(env: &mut Environment, image: CGImageRef, mask: CGImageRef) -> CGImageRef {
+    if image.is_null() || mask.is_null() || !CGImageIsMask(env, mask) || CGImageIsMask(env, image) {
+        return nil;
+    }
+    let source = env.objc.borrow::<CGImageHostObject>(image);
+    let (width, height) = source.image.dimensions();
+    let mut pixels = source.image.pixels().to_vec();
+    let (interpolate, intent) = (source.should_interpolate, source.rendering_intent);
+    let mask = env.objc.borrow::<CGImageHostObject>(mask);
+    let (mask_width, mask_height) = mask.image.dimensions();
+    if width == 0 || height == 0 || mask_width == 0 || mask_height == 0 {
+        return nil;
+    }
+    for y in 0..height as usize {
+        for x in 0..width as usize {
+            let mx = x * mask_width as usize / width as usize;
+            let my = y * mask_height as usize / height as usize;
+            let coverage = u32::from(mask.image.pixels()[(my * mask_width as usize + mx) * 4 + 3]);
+            for channel in &mut pixels[(y * width as usize + x) * 4..][..4] {
+                *channel = ((u32::from(*channel) * coverage + 127) / 255) as u8;
+            }
+        }
+    }
+    from_image_with_options(
+        env,
+        Image::from_pixel_vec(pixels, (width, height)),
+        interpolate,
+        intent,
+    )
 }
 
 // HyperHLE helper exports used by some applications for raw image conversion.
@@ -442,6 +630,8 @@ pub(crate) fn CGImageCreateScaled(
     )
 }
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CGImageMaskCreate(_, _, _, _, _, _, _, _)),
+    export_c_func!(CGImageCreateWithMask(_, _)),
     export_c_func!(CGImageReadPixels(_, _)),
     export_c_func!(CGImageCreateFlippedVertically(_)),
     export_c_func!(CGImageCreateScaled(_, _, _)),
