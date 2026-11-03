@@ -133,12 +133,16 @@ extern void UIGraphicsPopContext(void);
 @interface UIBezierPath : NSObject
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
 + (id)bezierPathWithOvalInRect:(CGRect)rect;
++ (id)bezierPathWithRect:(CGRect)rect;
 + (id)bezierPathWithCGPath:(id)path;
 - (id)CGPath;
 - (void)fill;
 - (void)removeAllPoints;
 - (bool)isEmpty;
 - (bool)containsPoint:(CGPoint)point;
+- (void)appendPath:(id)path;
+- (void)setUsesEvenOddFillRule:(bool)value;
+- (void)addClip;
 @end
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
@@ -1207,6 +1211,37 @@ int test_UIBezierPath_copy(void) {
   int passed = [copy containsPoint:center] && ![copy isEmpty];
   [oval removeAllPoints];
   passed = passed && [oval isEmpty] && [copy containsPoint:center];
+  return passed ? 0 : -1;
+}
+
+int test_UIBezierPath_even_odd(void) {
+  unsigned char pixels[8 * 8 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 8, 8, 8, 8 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  UIBezierPath *outer =
+      [UIBezierPath bezierPathWithRect:CGRectMake(0, 0, 8, 8)];
+  UIBezierPath *inner =
+      [UIBezierPath bezierPathWithRect:CGRectMake(2, 2, 4, 4)];
+  [outer appendPath:inner];
+  [outer setUsesEvenOddFillRule:true];
+  CGPoint center = {4, 4};
+  int passed = ![outer containsPoint:center];
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  UIGraphicsPushContext(context);
+  [outer fill];
+  UIGraphicsPopContext();
+  passed = passed && pixels[(1 * 8 + 1) * 4 + 3] == 255 &&
+           pixels[(4 * 8 + 4) * 4 + 3] == 0;
+  memset(pixels, 0, sizeof(pixels));
+  UIGraphicsPushContext(context);
+  [outer addClip];
+  [[UIBezierPath bezierPathWithRect:CGRectMake(0, 0, 8, 8)] fill];
+  UIGraphicsPopContext();
+  passed = passed && pixels[(1 * 8 + 1) * 4 + 3] == 255 &&
+           pixels[(4 * 8 + 4) * 4 + 3] == 0;
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
   return passed ? 0 : -1;
 }
 
@@ -10308,6 +10343,7 @@ struct {
     FUNC_DEF(test_CGPath_transformed_arc),
     FUNC_DEF(test_UIBezierPath_rounded_fill),
     FUNC_DEF(test_UIBezierPath_copy),
+    FUNC_DEF(test_UIBezierPath_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),

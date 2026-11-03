@@ -77,7 +77,7 @@ type ContextState = (
     CGFontRef,                            // font
     CGFloat,                              // font size
     CGBlendMode,                          // blend mode
-    Vec<Path>,                            // clip paths
+    Vec<(Path, bool)>,                    // clip paths and even-odd rule
     (CGFloat, CGFloat, CGFloat, CGFloat), // RGB stroke color
     CGFloat,                              // line width
     CGFloat,                              // global alpha
@@ -101,7 +101,7 @@ pub(super) struct CGContextHostObject {
     pub(super) path: Path,
     /// Paths that clip drawing, in device space: only what's inside all of
     /// them is drawn. So far this only applies to gradients and paths.
-    pub(super) clip: Vec<Path>,
+    pub(super) clip: Vec<(Path, bool)>,
     pub(super) rgb_stroke_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     pub(super) line_width: CGFloat,
     pub(super) alpha: CGFloat,
@@ -129,13 +129,17 @@ pub fn CGContextRetain(env: &mut Environment, c: CGContextRef) -> CGContextRef {
     }
 }
 
-fn CGContextSetBlendMode(env: &mut Environment, context: CGContextRef, blend_mode: CGBlendMode) {
+pub(crate) fn CGContextSetBlendMode(
+    env: &mut Environment,
+    context: CGContextRef,
+    blend_mode: CGBlendMode,
+) {
     env.objc
         .borrow_mut::<CGContextHostObject>(context)
         .blend_mode = blend_mode;
 }
 
-fn CGContextSetAlpha(env: &mut Environment, context: CGContextRef, alpha: CGFloat) {
+pub(crate) fn CGContextSetAlpha(env: &mut Environment, context: CGContextRef, alpha: CGFloat) {
     env.objc.borrow_mut::<CGContextHostObject>(context).alpha = alpha.clamp(0.0, 1.0);
 }
 
@@ -947,11 +951,17 @@ pub(crate) fn CGContextAddPath(env: &mut Environment, context: CGContextRef, pat
         .extend(path.subpaths);
 }
 
-fn CGContextClip(env: &mut Environment, context: CGContextRef) {
+pub(crate) fn CGContextClip(env: &mut Environment, context: CGContextRef) {
     let host_obj = env.objc.borrow_mut::<CGContextHostObject>(context);
     // An empty path clips everything away, which an empty clip path does.
     let path = std::mem::take(&mut host_obj.path);
-    host_obj.clip.push(path);
+    host_obj.clip.push((path, false));
+}
+
+pub(crate) fn CGContextEOClip(env: &mut Environment, context: CGContextRef) {
+    let host_obj = env.objc.borrow_mut::<CGContextHostObject>(context);
+    let path = std::mem::take(&mut host_obj.path);
+    host_obj.clip.push((path, true));
 }
 
 fn CGContextDrawPath(env: &mut Environment, context: CGContextRef, mode: CGPathDrawingMode) {
@@ -976,7 +986,7 @@ pub(crate) fn CGContextFillPath(env: &mut Environment, context: CGContextRef) {
     CGContextDrawPath(env, context, kCGPathFill);
 }
 
-fn CGContextEOFillPath(env: &mut Environment, context: CGContextRef) {
+pub(crate) fn CGContextEOFillPath(env: &mut Environment, context: CGContextRef) {
     CGContextDrawPath(env, context, kCGPathEOFill);
 }
 
@@ -1140,6 +1150,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSynchronize(_)),
     export_c_func!(CGContextAddPath(_, _)),
     export_c_func!(CGContextClip(_)),
+    export_c_func!(CGContextEOClip(_)),
     export_c_func!(CGContextDrawPath(_, _)),
     export_c_func!(CGContextSetLineWidth(_, _)),
     export_c_func!(CGContextSetShouldAntialias(_, _)),

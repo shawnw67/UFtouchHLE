@@ -6,7 +6,8 @@
 //! `UIBezierPath`, backed by Core Graphics path geometry.
 
 use crate::frameworks::core_graphics::cg_context::{
-    CGContextAddPath, CGContextFillPath, CGContextRestoreGState, CGContextSaveGState,
+    CGContextAddPath, CGContextClip, CGContextEOClip, CGContextEOFillPath, CGContextFillPath,
+    CGContextRestoreGState, CGContextSaveGState, CGContextSetAlpha, CGContextSetBlendMode,
     CGContextSetLineWidth, CGContextStrokePath,
 };
 use crate::frameworks::core_graphics::cg_path::{self, Path};
@@ -21,6 +22,7 @@ struct UIBezierPathHostObject {
     path: Path,
     cached_path: Option<id>,
     line_width: CGFloat,
+    even_odd: bool,
 }
 impl Default for UIBezierPathHostObject {
     fn default() -> Self {
@@ -28,6 +30,7 @@ impl Default for UIBezierPathHostObject {
             path: Path::default(),
             cached_path: None,
             line_width: 1.0,
+            even_odd: false,
         }
     }
 }
@@ -122,11 +125,13 @@ pub const CLASSES: ClassExports = objc_classes! {
     let object = env.objc.borrow::<UIBezierPathHostObject>(this);
     let path = object.path.clone();
     let width = object.line_width;
+    let even_odd = object.even_odd;
     let class: id = msg![env; this class];
     let copy: id = msg![env; class new];
     let object = env.objc.borrow_mut::<UIBezierPathHostObject>(copy);
     object.path = path;
     object.line_width = width;
+    object.even_odd = even_odd;
     copy
 }
 - (())moveToPoint:(CGPoint)point { update_path(env, this, |path| path.move_to(point)); }
@@ -159,12 +164,14 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (())setLineWidth:(CGFloat)width { env.objc.borrow_mut::<UIBezierPathHostObject>(this).line_width = width; }
 - (CGFloat)lineWidth { env.objc.borrow::<UIBezierPathHostObject>(this).line_width }
+- (())setUsesEvenOddFillRule:(bool)value { env.objc.borrow_mut::<UIBezierPathHostObject>(this).even_odd = value; }
+- (bool)usesEvenOddFillRule { env.objc.borrow::<UIBezierPathHostObject>(this).even_odd }
 - (bool)isEmpty { env.objc.borrow::<UIBezierPathHostObject>(this).path.subpaths.is_empty() }
 - (CGPoint)currentPoint {
     let object = env.objc.borrow::<UIBezierPathHostObject>(this);
     object.path.subpaths.last().and_then(|s| if s.closed { s.points.first().copied() } else { s.points.last().copied() }).unwrap_or_default()
 }
-- (bool)containsPoint:(CGPoint)point { env.objc.borrow::<UIBezierPathHostObject>(this).path.contains(point, false) }
+- (bool)containsPoint:(CGPoint)point { let object = env.objc.borrow::<UIBezierPathHostObject>(this); object.path.contains(point, object.even_odd) }
 - (CGRect)bounds {
     env.objc.borrow::<UIBezierPathHostObject>(this).path.bounds().unwrap_or_default()
 }
@@ -179,8 +186,9 @@ pub const CLASSES: ClassExports = objc_classes! {
     let context = UIGraphicsGetCurrentContext(env);
     if context.is_null() { return; }
     let path: id = msg![env; this CGPath];
+    let even_odd = env.objc.borrow::<UIBezierPathHostObject>(this).even_odd;
     CGContextAddPath(env, context, path);
-    CGContextFillPath(env, context);
+    if even_odd { CGContextEOFillPath(env, context); } else { CGContextFillPath(env, context); }
 }
 - (())stroke {
     let context = UIGraphicsGetCurrentContext(env);
@@ -192,6 +200,35 @@ pub const CLASSES: ClassExports = objc_classes! {
     CGContextAddPath(env, context, path);
     CGContextStrokePath(env, context);
     CGContextRestoreGState(env, context);
+}
+- (())fillWithBlendMode:(i32)mode alpha:(CGFloat)alpha {
+    let context = UIGraphicsGetCurrentContext(env);
+    if context.is_null() { return; }
+    CGContextSaveGState(env, context);
+    CGContextSetBlendMode(env, context, mode);
+    CGContextSetAlpha(env, context, alpha);
+    let _: () = msg![env; this fill];
+    CGContextRestoreGState(env, context);
+}
+- (())strokeWithBlendMode:(i32)mode alpha:(CGFloat)alpha {
+    let context = UIGraphicsGetCurrentContext(env);
+    if context.is_null() { return; }
+    CGContextSaveGState(env, context);
+    CGContextSetBlendMode(env, context, mode);
+    CGContextSetAlpha(env, context, alpha);
+    let _: () = msg![env; this stroke];
+    CGContextRestoreGState(env, context);
+}
+- (())addClip {
+    let context = UIGraphicsGetCurrentContext(env);
+    if context.is_null() { return; }
+    let path: id = msg![env; this CGPath];
+    CGContextAddPath(env, context, path);
+    if env.objc.borrow::<UIBezierPathHostObject>(this).even_odd {
+        CGContextEOClip(env, context);
+    } else {
+        CGContextClip(env, context);
+    }
 }
 @end
 };

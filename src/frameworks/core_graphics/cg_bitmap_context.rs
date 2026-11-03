@@ -1030,7 +1030,7 @@ fn draw_area(
             height: drawer.height() as f32,
         },
     };
-    for rect in area.into_iter().chain(clip.iter().map(|path| {
+    for rect in area.into_iter().chain(clip.iter().map(|(path, _)| {
         path.bounds().unwrap_or(CGRect {
             origin: CGPoint { x: 0.0, y: 0.0 },
             size: CGSize {
@@ -1051,7 +1051,10 @@ fn draw_area(
                 x: x as f32 + 0.5,
                 y: y as f32 + 0.5,
             };
-            if !clip.iter().all(|path| path.contains(center, false)) {
+            if !clip
+                .iter()
+                .all(|(path, even_odd)| path.contains(center, *even_odd))
+            {
                 continue;
             }
             let Some((coverage, (r, g, b, a))) = coverage(center) else {
