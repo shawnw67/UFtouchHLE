@@ -10993,6 +10993,7 @@ struct TestMachTimespec {
 extern int semaphore_create(uint32_t, void **, int, int);
 extern int semaphore_destroy(uint32_t, void *);
 extern int semaphore_signal(void *);
+extern int semaphore_signal_all(void *);
 extern int semaphore_trywait(void *);
 extern int semaphore_timedwait(void *, struct TestMachTimespec);
 static void *test_mach_semaphore_signal_thread(void *semaphore) {
@@ -11000,12 +11001,18 @@ static void *test_mach_semaphore_signal_thread(void *semaphore) {
   nanosleep(&pause, NULL);
   return (void *)(uintptr_t)semaphore_signal(semaphore);
 }
+static void *test_mach_semaphore_wait_thread(void *semaphore) {
+  struct TestMachTimespec timeout = {0, 200000000};
+  return (void *)(uintptr_t)semaphore_timedwait(semaphore, timeout);
+}
 int test_mach_semaphore_timedwait(void) {
   const uint32_t task = 0x7461736b;
   struct TestMachTimespec now = {0, 0}, short_wait = {0, 2000000},
                           longer_wait = {0, 200000000};
   void *semaphore = NULL;
-  pthread_t thread;
+  pthread_t thread, first_waiter, second_waiter;
+  void *first_result = NULL, *second_result = NULL;
+  struct timespec pause = {0, 10000000};
   if (semaphore_create(task, &semaphore, 0, 1) ||
       semaphore_timedwait(semaphore, now) ||
       semaphore_trywait(semaphore) != 49 ||
@@ -11014,7 +11021,16 @@ int test_mach_semaphore_timedwait(void) {
       pthread_create(&thread, NULL, test_mach_semaphore_signal_thread,
                      semaphore) ||
       semaphore_timedwait(semaphore, longer_wait) ||
-      pthread_join(thread, NULL) || semaphore_destroy(task, semaphore))
+      pthread_join(thread, NULL) ||
+      pthread_create(&first_waiter, NULL, test_mach_semaphore_wait_thread,
+                     semaphore) ||
+      pthread_create(&second_waiter, NULL, test_mach_semaphore_wait_thread,
+                     semaphore) ||
+      nanosleep(&pause, NULL) || semaphore_signal_all(semaphore) ||
+      pthread_join(first_waiter, &first_result) ||
+      pthread_join(second_waiter, &second_result) || first_result ||
+      second_result || semaphore_trywait(semaphore) != 49 ||
+      semaphore_destroy(task, semaphore))
     return -1;
   return 0;
 }

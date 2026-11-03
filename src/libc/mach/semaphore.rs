@@ -67,6 +67,28 @@ fn semaphore_signal(env: &mut Environment, semaphore: semaphore_t) -> kern_retur
     result
 }
 
+fn semaphore_signal_all(env: &mut Environment, semaphore: semaphore_t) -> kern_return_t {
+    let Some(object) = env
+        .libc_state
+        .semaphore
+        .open_semaphores
+        .get(&semaphore)
+        .cloned()
+    else {
+        return KERN_INVALID_ARGUMENT;
+    };
+    let (waiters, available) = {
+        let state = object.borrow();
+        (state.waiting.len(), state.value.max(0) as usize)
+    };
+    for _ in 0..waiters.saturating_sub(available) {
+        if sem_post(env, semaphore) != 0 {
+            return KERN_INVALID_ARGUMENT;
+        }
+    }
+    KERN_SUCCESS
+}
+
 fn semaphore_wait(env: &mut Environment, semaphore: semaphore_t) -> kern_return_t {
     let result = if sem_wait(env, semaphore) == 0 {
         KERN_SUCCESS
@@ -107,16 +129,37 @@ fn semaphore_timedwait(
     let Some(deadline) = Instant::now().checked_add(timeout) else {
         return KERN_INVALID_ARGUMENT;
     };
+    let thread = env.current_thread;
+    let mut registered = false;
     loop {
         let result = semaphore_trywait(env, semaphore);
         if result != KERN_OPERATION_TIMED_OUT {
+            if registered {
+                if let Some(object) = env.libc_state.semaphore.open_semaphores.get(&semaphore) {
+                    object.borrow_mut().waiting.remove(&thread);
+                }
+            }
             return result;
         }
-        let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
-            return KERN_OPERATION_TIMED_OUT;
-        };
+        let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
+            if registered {
+                if let Some(object) = env.libc_state.semaphore.open_semaphores.get(&semaphore) {
+                    object.borrow_mut().waiting.remove(&thread);
+                }
+            }
             return KERN_OPERATION_TIMED_OUT;
+        }
+        if !registered {
+            env.libc_state
+                .semaphore
+                .open_semaphores
+                .get(&semaphore)
+                .unwrap()
+                .borrow_mut()
+                .waiting
+                .insert(thread);
+            registered = true;
         }
         env.sleep(remaining.min(Duration::from_millis(1)));
     }
@@ -135,6 +178,7 @@ fn semaphore_destroy(env: &mut Environment, task: task_t, semaphore: semaphore_t
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(semaphore_create(_, _, _, _)),
     export_c_func!(semaphore_signal(_)),
+    export_c_func!(semaphore_signal_all(_)),
     export_c_func!(semaphore_wait(_)),
     export_c_func!(semaphore_trywait(_)),
     export_c_func!(semaphore_timedwait(_, _, _)),

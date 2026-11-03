@@ -593,7 +593,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/libc/mach/init.rs` | hyper-modified | — | pending |
 | `src/libc/mach/mach_port.rs` | hyper-modified | mach_port_destroy, mach_port_mod_refs | pending |
 | `src/libc/mach/message.rs` | hyper-modified | — | pending |
-| `src/libc/mach/semaphore.rs` | both-modified | semaphore_signal_all, semaphore_signal_thread, semaphore_timedwait, semaphore_timedwait_signal, semaphore_trywait, semaphore_wait_signal | partial (try and timed waits; signal-all and atomic wait-signal remain) |
+| `src/libc/mach/semaphore.rs` | both-modified | semaphore_signal_all, semaphore_signal_thread, semaphore_timedwait, semaphore_timedwait_signal, semaphore_trywait, semaphore_wait_signal | partial (try/timed waits and signal-all; targeted signaling and atomic wait-signal remain) |
 | `src/libc/mach/thread_info.rs` | both-modified | thread_resume, thread_suspend | pending |
 | `src/libc/mach/time.rs` | both-modified | mach_wait_until | pending |
 | `src/libc/mach/vm_map.rs` | both-modified | vm_protect, vm_read_overwrite, vm_region_recurse, vm_remap | pending |
