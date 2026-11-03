@@ -12,6 +12,7 @@ use crate::objc;
 /// The single list of host dylibs that the linker (and Objective-C runtime)
 /// searches through.
 pub const DYLIB_LIST: &[&super::HostDylib] = &[
+    &frameworks::accelerate::DYLIB,
     &libc::DYLIB,
     &objc::DYLIB,
     &crate::environment::app_picker::DYLIB, // Not a real library; special internal classes.

@@ -58,6 +58,19 @@ extern kern_return_t thread_info(mach_port_t target_act, natural_t flavor,
 extern void OSSpinLockLock(volatile int *lock);
 extern void OSSpinLockUnlock(volatile int *lock);
 extern bool OSSpinLockTry(volatile int *lock);
+struct TestSplitComplex {
+  float *realp;
+  float *imagp;
+};
+extern void *vDSP_create_fftsetup(unsigned int log2n, int radix);
+extern void vDSP_destroy_fftsetup(void *setup);
+extern void vDSP_fft_zip(void *setup, const struct TestSplitComplex *data,
+                         int stride, unsigned int log2n, int direction);
+extern void vDSP_fft_zrip(void *setup, const struct TestSplitComplex *data,
+                          int stride, unsigned int log2n, int direction);
+extern void vDSP_ctoz(const float *input, int input_stride,
+                      const struct TestSplitComplex *output, int output_stride,
+                      unsigned int count);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -538,6 +551,34 @@ int test_OSSpinLock_contention(void) {
     return -3;
   OSSpinLockUnlock(&spin_lock_test_lock);
   return sem_destroy(&spin_lock_test_ready);
+}
+
+int test_vDSP_fft_and_packing(void) {
+  void *setup = vDSP_create_fftsetup(3, 0);
+  float real[4] = {1, 0, 0, 0}, imag[4] = {0};
+  struct TestSplitComplex split = {real, imag};
+  vDSP_fft_zip(setup, &split, 1, 2, 1);
+  int passed = 1;
+  for (int i = 0; i < 4; i++)
+    passed = passed && fabsf(real[i] - 1) < 0.0001f && fabsf(imag[i]) < 0.0001f;
+  vDSP_fft_zip(setup, &split, 1, 2, -1);
+  passed = passed && fabsf(real[0] - 4) < 0.0001f && fabsf(real[1]) < 0.0001f;
+  real[0] = 1;
+  for (int i = 1; i < 4; i++)
+    real[i] = 0;
+  for (int i = 0; i < 4; i++)
+    imag[i] = 0;
+  vDSP_fft_zrip(setup, &split, 1, 3, 1);
+  passed =
+      passed && fabsf(real[0] - 2) < 0.0001f && fabsf(imag[0] - 2) < 0.0001f;
+  vDSP_fft_zrip(setup, &split, 1, 3, -1);
+  passed = passed && fabsf(real[0] - 16) < 0.0001f && fabsf(imag[0]) < 0.0001f;
+  float interleaved[] = {1, 2, 3, 4};
+  vDSP_ctoz(interleaved + 2, -2, &split, 1, 2);
+  passed =
+      passed && real[0] == 3 && imag[0] == 4 && real[1] == 1 && imag[1] == 2;
+  vDSP_destroy_fftsetup(setup);
+  return passed ? 0 : -1;
 }
 
 static void custom_mode_timer_callback(CFRunLoopTimerRef timer, void *info) {
@@ -9850,6 +9891,7 @@ struct {
     FUNC_DEF(test_CGContext_global_alpha),
     FUNC_DEF(test_CGContext_color_components),
     FUNC_DEF(test_OSSpinLock_contention),
+    FUNC_DEF(test_vDSP_fft_and_packing),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),

@@ -21,6 +21,7 @@
 #![allow(clippy::enum_variant_names)] // Lots of Apple enums have the same prefix
 #![allow(clippy::too_many_arguments)] // It's not our fault!
 
+pub mod accelerate;
 pub mod audio_toolbox;
 pub mod avfoundation;
 pub mod carbon_core;
