@@ -809,6 +809,17 @@ int test_CFURL_authority(void) {
   int passed = CFEqual(authority, expected_authority) &&
                CFEqual(user, expected_user) &&
                CFEqual(password, expected_password);
+  CFStringRef file_input = CFStringCreateWithCString(
+      NULL, "file://user:p%40ss@example.com:443/path", kCFStringEncodingUTF8);
+  CFURLRef file_url = CFURLCreateWithString(NULL, file_input, NULL);
+  CFStringRef file_authority = CFURLCopyNetLocation(file_url);
+  CFStringRef file_password = CFURLCopyPassword(file_url);
+  passed = passed && CFEqual(file_authority, expected_authority) &&
+           CFEqual(file_password, expected_password);
+  CFRelease(file_password);
+  CFRelease(file_authority);
+  CFRelease(file_url);
+  CFRelease(file_input);
   CFRelease(expected_password);
   CFRelease(expected_user);
   CFRelease(expected_authority);
@@ -816,6 +827,30 @@ int test_CFURL_authority(void) {
   CFRelease(user);
   CFRelease(authority);
   CFRelease(url);
+  CFRelease(input);
+  return passed ? 0 : -1;
+}
+
+int test_CFURL_resource_specifier(void) {
+  CFStringRef input = CFStringCreateWithCString(
+      NULL, "https://host/path;a%20b?x=1#top", kCFStringEncodingUTF8);
+  CFStringRef expected_resource =
+      CFStringCreateWithCString(NULL, ";a%20b?x=1#top", kCFStringEncodingUTF8);
+  CFStringRef expected_parameter =
+      CFStringCreateWithCString(NULL, "a b", kCFStringEncodingUTF8);
+  CFStringRef empty =
+      CFStringCreateWithCString(NULL, "", kCFStringEncodingUTF8);
+  CFURLRef url = CFURLCreateWithString(NULL, input, NULL);
+  CFStringRef resource = CFURLCopyResourceSpecifier(url);
+  CFStringRef parameter = CFURLCopyParameterString(url, empty);
+  int passed = CFEqual(resource, expected_resource) &&
+               CFEqual(parameter, expected_parameter);
+  CFRelease(parameter);
+  CFRelease(resource);
+  CFRelease(url);
+  CFRelease(empty);
+  CFRelease(expected_parameter);
+  CFRelease(expected_resource);
   CFRelease(input);
   return passed ? 0 : -1;
 }
@@ -10140,6 +10175,7 @@ struct {
     FUNC_DEF(test_CCCryptor_padded_cbc),
     FUNC_DEF(test_CFURL_path_extensions),
     FUNC_DEF(test_CFURL_authority),
+    FUNC_DEF(test_CFURL_resource_specifier),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),

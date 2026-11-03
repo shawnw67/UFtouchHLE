@@ -192,6 +192,34 @@ fn CFURLCopyPassword(env: &mut Environment, url: CFURLRef) -> CFStringRef {
     }
 }
 
+fn CFURLCopyResourceSpecifier(env: &mut Environment, url: CFURLRef) -> CFStringRef {
+    match crate::frameworks::foundation::ns_url::cf_resource_components(env, url).1 {
+        Some(resource) => from_rust_string(env, resource),
+        None => nil,
+    }
+}
+
+fn CFURLCopyParameterString(
+    env: &mut Environment,
+    url: CFURLRef,
+    leave_escaped: CFStringRef,
+) -> CFStringRef {
+    let Some(parameter) = crate::frameworks::foundation::ns_url::cf_resource_components(env, url).0
+    else {
+        return nil;
+    };
+    let parameter = from_rust_string(env, parameter);
+    let result = CFURLCreateStringByReplacingPercentEscapesUsingEncoding(
+        env,
+        kCFAllocatorDefault,
+        parameter,
+        leave_escaped,
+        kCFStringEncodingUTF8,
+    );
+    release(env, parameter);
+    result
+}
+
 fn CFURLCopyPath(env: &mut Environment, url: CFURLRef) -> CFStringRef {
     match crate::frameworks::foundation::ns_url::cf_escaped_path(env, url) {
         Some(path) => from_rust_string(env, path),
@@ -546,6 +574,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFURLCopyNetLocation(_)),
     export_c_func!(CFURLCopyUserName(_)),
     export_c_func!(CFURLCopyPassword(_)),
+    export_c_func!(CFURLCopyResourceSpecifier(_)),
+    export_c_func!(CFURLCopyParameterString(_, _)),
     export_c_func!(CFURLCopyPath(_)),
     export_c_func!(CFURLCanBeDecomposed(_)),
     export_c_func!(CFURLCopyStrictPath(_, _)),

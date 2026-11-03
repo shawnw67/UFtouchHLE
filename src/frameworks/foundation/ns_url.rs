@@ -30,6 +30,7 @@ enum NSURLHostObject {
         query: Option<String>,
         fragment: Option<String>,
         raw_path: Option<String>,
+        raw_authority: Option<String>,
         decomposable: bool,
         is_directory: bool,
         // Relative file URL save the working directory at the time of creation
@@ -48,7 +49,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @implementation NSURL: NSObject
 
 + (id)allocWithZone:(NSZonePtr)_zone {
-    let host_object = NSURLHostObject::FileURL { ns_string: nil, port: None, host: None, query: None, fragment: None, raw_path: None, decomposable: true, is_directory: false, working_directory: env.fs.working_directory().into() };
+    let host_object = NSURLHostObject::FileURL { ns_string: nil, port: None, host: None, query: None, fragment: None, raw_path: None, raw_authority: None, decomposable: true, is_directory: false, working_directory: env.fs.working_directory().into() };
     env.objc.alloc_object(this, Box::new(host_object), &mut env.mem)
 }
 
@@ -96,7 +97,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     assert!(!to_rust_string(env, path).starts_with("file:"));
     let path = msg![env; path stringByExpandingTildeInPath];
     let path: id = msg![env; path copy];
-    *env.objc.borrow_mut(this) = NSURLHostObject::FileURL { ns_string: path, port: None, host: None, query: None, fragment: None, raw_path: None, decomposable: true, is_directory: is_dir, working_directory: env.fs.working_directory().into() };
+    *env.objc.borrow_mut(this) = NSURLHostObject::FileURL { ns_string: path, port: None, host: None, query: None, fragment: None, raw_path: None, raw_authority: None, decomposable: true, is_directory: is_dir, working_directory: env.fs.working_directory().into() };
     this
 }
 
@@ -114,16 +115,18 @@ pub const CLASSES: ClassExports = objc_classes! {
         let query = parts.query.map(str::to_string);
         let fragment = parts.fragment.map(str::to_string);
         let raw_path = Some(parts.path.to_string());
+        let raw_authority = parts.authority.map(str::to_owned);
         let decomposable = parts.decomposable;
         let path = from_rust_string(env, path);
         let this: id = msg![env; this initFileURLWithPath:path];
         release(env, path);
-        if let NSURLHostObject::FileURL { port: saved_port, host: saved_host, query: saved_query, fragment: saved_fragment, raw_path: saved_path, decomposable: saved_decomposable, .. } = env.objc.borrow_mut(this) {
+        if let NSURLHostObject::FileURL { port: saved_port, host: saved_host, query: saved_query, fragment: saved_fragment, raw_path: saved_path, raw_authority: saved_authority, decomposable: saved_decomposable, .. } = env.objc.borrow_mut(this) {
             *saved_port = port;
             *saved_host = host;
             *saved_query = query;
             *saved_fragment = fragment;
             *saved_path = raw_path;
+            *saved_authority = raw_authority;
             *saved_decomposable = decomposable;
         }
         return this;
@@ -388,6 +391,10 @@ pub fn cf_authority(env: &mut Environment, url: id) -> Option<String> {
                 .then(|| parts.authority.map(str::to_owned))
                 .flatten()
         }
+        NSURLHostObject::FileURL {
+            raw_authority: Some(authority),
+            ..
+        } => Some(authority.clone()),
         NSURLHostObject::FileURL { host, port, .. } => host.as_ref().map(|host| match port {
             Some(port) => format!("{host}:{port}"),
             None => host.clone(),
@@ -406,6 +413,60 @@ pub fn cf_user_and_password(env: &mut Environment, url: id) -> (Option<String>, 
         .split_once(':')
         .map_or((user_info, None), |(u, p)| (u, Some(p)));
     (Some(percent_decode(user)), password.map(percent_decode))
+}
+
+/// Encoded path parameter and resource specifier, before URL resolution.
+pub fn cf_resource_components(env: &mut Environment, url: id) -> (Option<String>, Option<String>) {
+    let Some(object) = env
+        .objc
+        .get_host_object(url)
+        .and_then(|o| o.as_any().downcast_ref::<NSURLHostObject>())
+    else {
+        return (None, None);
+    };
+    let (path, query, fragment) = match object {
+        NSURLHostObject::OtherURL { ns_string } => {
+            let string = *ns_string;
+            let url = to_rust_string(env, string);
+            let parts = split_url(&url);
+            if !parts.decomposable {
+                return (None, url.split_once(':').map(|(_, rest)| rest.to_string()));
+            }
+            (
+                parts.path.to_string(),
+                parts.query.map(str::to_string),
+                parts.fragment.map(str::to_string),
+            )
+        }
+        NSURLHostObject::FileURL {
+            raw_path,
+            query,
+            fragment,
+            ..
+        } => (
+            raw_path.clone().unwrap_or_default(),
+            query.clone(),
+            fragment.clone(),
+        ),
+    };
+    let last = path.rsplit('/').next().unwrap_or("");
+    let parameter = last
+        .split_once(';')
+        .map(|(_, parameter)| parameter.to_string());
+    let mut resource = String::new();
+    if let Some(parameter) = &parameter {
+        resource.push(';');
+        resource.push_str(parameter);
+    }
+    if let Some(query) = query {
+        resource.push('?');
+        resource.push_str(&query);
+    }
+    if let Some(fragment) = fragment {
+        resource.push('#');
+        resource.push_str(&fragment);
+    }
+    (parameter, (!resource.is_empty()).then_some(resource))
 }
 
 /// The parts of a URL string, as split by RFC 3986's regular expression
