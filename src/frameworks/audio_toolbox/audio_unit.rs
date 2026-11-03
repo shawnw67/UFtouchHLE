@@ -152,6 +152,43 @@ fn AudioUnitRemovePropertyListenerWithUserData(
     remove_property_listener(env, unit, property, callback, Some(context))
 }
 
+fn AudioUnitAddRenderNotify(
+    env: &mut Environment,
+    unit: AudioUnit,
+    callback: GuestFunction,
+    context: ConstVoidPtr,
+) -> OSStatus {
+    if callback.to_ptr().is_null() {
+        return paramErr;
+    }
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&unit)
+    else {
+        return paramErr;
+    };
+    object.render_notifies.push((callback, context));
+    0
+}
+
+fn AudioUnitRemoveRenderNotify(
+    env: &mut Environment,
+    unit: AudioUnit,
+    callback: GuestFunction,
+    context: ConstVoidPtr,
+) -> OSStatus {
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&unit)
+    else {
+        return paramErr;
+    };
+    object.render_notifies.retain(|(registered, refcon)| {
+        registered.to_ptr() != callback.to_ptr() || *refcon != context
+    });
+    0
+}
+
 fn remove_property_listener(
     env: &mut Environment,
     unit: AudioUnit,
@@ -605,7 +642,9 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     }
 
     // A started output with no callback produces silence until one is set.
-    if audio_unit_host_object.render_callback.is_none() {
+    if audio_unit_host_object.render_callback.is_none()
+        && audio_unit_host_object.render_notifies.is_empty()
+    {
         return;
     }
 
@@ -758,10 +797,7 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     };
 
     // Run render callback
-    let AURenderCallbackStruct {
-        input_proc: inputProc,
-        input_proc_ref_con: inputProcRefCon,
-    } = audio_unit_host_object.render_callback.unwrap();
+    let input_callback = audio_unit_host_object.render_callback;
     let sample_time = audio_unit_host_object.sample_time;
     let host_time = crate::libc::mach::time::mach_absolute_time(env);
     let timestamp = env.mem.alloc_and_write(AudioTimeStamp {
@@ -783,17 +819,39 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         flags: 1 | 2 | 4,
         _reserved: 0,
     });
-    let () = inputProc.call_from_host(
-        env,
-        (
-            inputProcRefCon,
-            action_flags,
-            timestamp.cast_const(),
-            0u32,
-            number_frames,
-            audio_buffer_list,
-        ),
-    );
+    let call = RenderNotification {
+        unit: audio_unit,
+        source: al_source,
+        started_at: render_started_at,
+        flags: action_flags,
+        timestamp: timestamp.cast_const().cast(),
+        frames: number_frames,
+        data: audio_buffer_list,
+    };
+    call_render_notifies(env, &call, 1 << 2);
+    if render_is_active(env, &call) {
+        env.mem.write(action_flags, 0);
+        if let Some(AURenderCallbackStruct {
+            input_proc,
+            input_proc_ref_con,
+        }) = input_callback
+        {
+            let _: OSStatus = input_proc.call_from_host(
+                env,
+                (
+                    input_proc_ref_con,
+                    action_flags,
+                    timestamp.cast_const(),
+                    0u32,
+                    number_frames,
+                    audio_buffer_list,
+                ),
+            );
+        }
+    }
+    if render_is_active(env, &call) {
+        call_render_notifies(env, &call, 1 << 3);
+    }
     env.mem.free(timestamp.cast());
 
     // Guest callbacks may stop or dispose the unit while a render is pending.
@@ -899,6 +957,52 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     audio_unit_host_object.is_running_handler = false;
 }
 
+struct RenderNotification {
+    unit: AudioUnit,
+    source: ALuint,
+    started_at: Option<Instant>,
+    flags: MutPtr<u32>,
+    timestamp: ConstVoidPtr,
+    frames: u32,
+    data: MutVoidPtr,
+}
+
+fn render_is_active(env: &mut Environment, call: &RenderNotification) -> bool {
+    audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&call.unit)
+        .is_some_and(|unit| {
+            unit.started
+                && unit.al_source == Some(call.source)
+                && unit.last_render_time == call.started_at
+        })
+}
+
+fn call_render_notifies(env: &mut Environment, call: &RenderNotification, phase: u32) {
+    let callbacks = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&call.unit)
+        .map(|unit| unit.render_notifies.clone())
+        .unwrap_or_default();
+    for (callback, context) in callbacks {
+        if !render_is_active(env, call) {
+            break;
+        }
+        env.mem.write(call.flags, phase);
+        let _: OSStatus = callback.call_from_host(
+            env,
+            (
+                context,
+                call.flags,
+                call.timestamp,
+                0u32,
+                call.frames,
+                call.data,
+            ),
+        );
+    }
+}
+
 fn interleave_float_stereo(left: &[u8], right: &[u8]) -> Vec<u8> {
     let left = float_pcm_to_i16(left);
     let right = float_pcm_to_i16(right);
@@ -937,6 +1041,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitAddPropertyListener(_, _, _, _)),
     export_c_func!(AudioUnitRemovePropertyListener(_, _, _)),
     export_c_func!(AudioUnitRemovePropertyListenerWithUserData(_, _, _, _)),
+    export_c_func!(AudioUnitAddRenderNotify(_, _, _)),
+    export_c_func!(AudioUnitRemoveRenderNotify(_, _, _)),
     export_c_func!(AudioUnitSetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetPropertyInfo(_, _, _, _, _, _)),

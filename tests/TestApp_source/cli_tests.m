@@ -10913,6 +10913,15 @@ extern int AudioComponentInstanceNew(void *, void **);
 extern int AudioComponentInstanceDispose(void *);
 extern int AudioUnitInitialize(void *);
 extern int AudioUnitReset(void *, uint32_t, uint32_t);
+typedef int (*TestRenderNotify)(void *, uint32_t *, const void *, uint32_t,
+                                uint32_t, void *);
+extern int AudioUnitAddRenderNotify(void *, TestRenderNotify, void *);
+extern int AudioUnitRemoveRenderNotify(void *, TestRenderNotify, void *);
+static int test_render_notify(void *context, uint32_t *flags,
+                              const void *timestamp, uint32_t bus,
+                              uint32_t frames, void *data) {
+  return 0;
+}
 extern int AudioUnitGetPropertyInfo(void *, uint32_t, uint32_t, uint32_t,
                                     uint32_t *, unsigned char *);
 extern int AudioUnitSetProperty(void *, uint32_t, uint32_t, uint32_t,
@@ -10957,7 +10966,10 @@ int test_audio_component_enumeration(void) {
       running != 0 || !AudioUnitSetProperty(unit, 99999, 0, 0, &rate, 8) ||
       !AudioUnitGetProperty(unit, 99999, 0, 0, &actual, &size) ||
       AudioUnitInitialize(unit) || AudioUnitInitialize(unit) ||
-      AudioUnitReset(unit, 0, 0) || AudioComponentInstanceDispose(unit) ||
+      AudioUnitReset(unit, 0, 0) ||
+      AudioUnitAddRenderNotify(unit, test_render_notify, NULL) ||
+      AudioUnitRemoveRenderNotify(unit, test_render_notify, NULL) ||
+      AudioComponentInstanceDispose(unit) ||
       !AudioComponentInstanceNew(NULL, &unit))
     return -1;
   description.type = 0x61756d78; // Mixer, not supported yet.

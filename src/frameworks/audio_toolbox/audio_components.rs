@@ -51,6 +51,7 @@ pub struct AudioComponentInstanceHostObject {
     pub al_source: Option<ALuint>,
     pub is_running_handler: bool,
     pub property_listeners: Vec<(u32, GuestFunction, MutVoidPtr)>,
+    pub render_notifies: Vec<(GuestFunction, ConstVoidPtr)>,
 }
 impl Default for AudioComponentInstanceHostObject {
     fn default() -> Self {
@@ -84,6 +85,7 @@ impl Default for AudioComponentInstanceHostObject {
             al_source: None,
             is_running_handler: false,
             property_listeners: Vec::new(),
+            render_notifies: Vec::new(),
         }
     }
 }
