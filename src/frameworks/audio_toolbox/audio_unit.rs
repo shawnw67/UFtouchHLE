@@ -591,6 +591,7 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     assert!(is_supported_audio_format(&stream_format));
 
     let al_source = audio_unit_host_object.al_source.unwrap();
+    let render_started_at = audio_unit_host_object.last_render_time;
     let mut al_buffers = Vec::new();
     unsafe {
         let mut buffers_processed = 0;
@@ -710,6 +711,38 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         ),
     );
     env.mem.free(timestamp.cast());
+
+    // Guest callbacks may stop or dispose the unit while a render is pending.
+    let object = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&audio_unit);
+    let still_rendering = object.as_ref().is_some_and(|unit| {
+        unit.started
+            && unit.al_source == Some(al_source)
+            && unit.last_render_time == render_started_at
+    });
+    if !still_rendering {
+        if let Some(unit) = object {
+            unit.is_running_handler = false;
+        }
+        if !al_buffers.is_empty() {
+            let context = env
+                .framework_state
+                .audio_toolbox
+                .al_context
+                .make_al_context_current(env.openal_manager.as_mut());
+            unsafe {
+                context.DeleteBuffers(al_buffers.len() as i32, al_buffers.as_ptr());
+            }
+        }
+        env.mem.free(action_flags.cast());
+        env.mem.free(buffer1Data.cast());
+        if let Some(buffer) = buffer2Data {
+            env.mem.free(buffer.cast());
+        }
+        env.mem.free(audio_buffer_list.cast());
+        return;
+    }
 
     let at_state = &mut env.framework_state.audio_toolbox;
     let context = at_state
