@@ -328,7 +328,7 @@ fn CGPathAddLineToPoint(
     path.line_to(point);
 }
 
-fn resume_closed_subpath(path: &mut Path) {
+pub(crate) fn resume_closed_subpath(path: &mut Path) {
     if let Some(start) = path
         .subpaths
         .last()

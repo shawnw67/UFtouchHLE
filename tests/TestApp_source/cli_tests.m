@@ -132,8 +132,13 @@ extern void UIGraphicsPopContext(void);
 
 @interface UIBezierPath : NSObject
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
++ (id)bezierPathWithOvalInRect:(CGRect)rect;
++ (id)bezierPathWithCGPath:(id)path;
 - (id)CGPath;
 - (void)fill;
+- (void)removeAllPoints;
+- (bool)isEmpty;
+- (bool)containsPoint:(CGPoint)point;
 @end
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
@@ -1191,6 +1196,17 @@ int test_UIBezierPath_rounded_fill(void) {
            pixels[(0 * 8 + 0) * 4 + 3] == 0;
   CGContextRelease(context);
   CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
+}
+
+int test_UIBezierPath_copy(void) {
+  UIBezierPath *oval =
+      [UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, 8, 4)];
+  UIBezierPath *copy = [UIBezierPath bezierPathWithCGPath:[oval CGPath]];
+  CGPoint center = {4, 2};
+  int passed = [copy containsPoint:center] && ![copy isEmpty];
+  [oval removeAllPoints];
+  passed = passed && [oval isEmpty] && [copy containsPoint:center];
   return passed ? 0 : -1;
 }
 
@@ -10291,6 +10307,7 @@ struct {
     FUNC_DEF(test_CGPath_curves_and_copy),
     FUNC_DEF(test_CGPath_transformed_arc),
     FUNC_DEF(test_UIBezierPath_rounded_fill),
+    FUNC_DEF(test_UIBezierPath_copy),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),

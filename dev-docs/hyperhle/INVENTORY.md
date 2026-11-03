@@ -470,7 +470,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/frameworks/uikit/ui_alert_controller.rs` | hyper-added | class:UIAlertAction, class:UIAlertController | pending |
 | `src/frameworks/uikit/ui_application.rs` | both-modified | class:UIUserNotificationSettings | pending |
 | `src/frameworks/uikit/ui_bar_button_item.rs` | uf-added | — | pending |
-| `src/frameworks/uikit/ui_bezier_path.rs` | both-added | — | partial (CGPath bridge, rounded rectangles, fill and stroke; additional path methods remain) |
+| `src/frameworks/uikit/ui_bezier_path.rs` | both-added | — | partial (CGPath bridge, curves, ovals, copying, fill and stroke; blend and clipping methods remain) |
 | `src/frameworks/uikit/ui_color.rs` | hyper-modified | class:UICachedDeviceWhiteColor | pending |
 | `src/frameworks/uikit/ui_custom_object.rs` | hyper-added | class:UICustomObject | pending |
 | `src/frameworks/uikit/ui_device.rs` | both-modified | — | pending |

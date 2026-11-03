@@ -72,6 +72,27 @@ pub const CLASSES: ClassExports = objc_classes! {
     update_path(env, path, |value| add_rect(value, rect));
     autorelease(env, path)
 }
++ (id)bezierPathWithOvalInRect:(CGRect)rect {
+    let path: id = msg![env; this new];
+    update_path(env, path, |value| {
+        let (cx, cy) = (rect.origin.x + rect.size.width/2.0, rect.origin.y + rect.size.height/2.0);
+        for i in 0..64 {
+            let angle = std::f32::consts::TAU * i as CGFloat / 64.0;
+            let point = CGPoint { x: cx + angle.cos()*rect.size.width/2.0, y: cy + angle.sin()*rect.size.height/2.0 };
+            if i == 0 { value.move_to(point); } else { value.line_to(point); }
+        }
+        value.close();
+    });
+    autorelease(env, path)
+}
++ (id)bezierPathWithCGPath:(id)cg_path {
+    let path: id = msg![env; this new];
+    if !cg_path.is_null() {
+        let geometry = cg_path::copy_path(env, cg_path);
+        update_path(env, path, |value| *value = geometry);
+    }
+    autorelease(env, path)
+}
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius {
     let path: id = msg![env; this new];
     update_path(env, path, |value| {
@@ -97,10 +118,53 @@ pub const CLASSES: ClassExports = objc_classes! {
     if let Some(cached) = cached { release(env, cached); }
     env.objc.dealloc_object(this, &mut env.mem)
 }
+- (id)copyWithZone:(NSZonePtr)_zone {
+    let object = env.objc.borrow::<UIBezierPathHostObject>(this);
+    let path = object.path.clone();
+    let width = object.line_width;
+    let class: id = msg![env; this class];
+    let copy: id = msg![env; class new];
+    let object = env.objc.borrow_mut::<UIBezierPathHostObject>(copy);
+    object.path = path;
+    object.line_width = width;
+    copy
+}
 - (())moveToPoint:(CGPoint)point { update_path(env, this, |path| path.move_to(point)); }
-- (())addLineToPoint:(CGPoint)point { update_path(env, this, |path| path.line_to(point)); }
+- (())addLineToPoint:(CGPoint)point { update_path(env, this, |path| { cg_path::resume_closed_subpath(path); path.line_to(point); }); }
+- (())addQuadCurveToPoint:(CGPoint)end controlPoint:(CGPoint)control {
+    update_path(env, this, |path| {
+        cg_path::resume_closed_subpath(path);
+        let Some(start) = path.current_point() else { path.move_to(end); return; };
+        for i in 1..=32 {
+            let t = i as CGFloat / 32.0; let s = 1.0 - t;
+            path.line_to(CGPoint { x:s*s*start.x + 2.0*s*t*control.x + t*t*end.x, y:s*s*start.y + 2.0*s*t*control.y + t*t*end.y });
+        }
+    });
+}
+- (())addCurveToPoint:(CGPoint)end controlPoint1:(CGPoint)a controlPoint2:(CGPoint)b {
+    update_path(env, this, |path| {
+        cg_path::resume_closed_subpath(path);
+        let Some(start) = path.current_point() else { path.move_to(end); return; };
+        for i in 1..=32 {
+            let t = i as CGFloat / 32.0; let s = 1.0 - t;
+            path.line_to(CGPoint { x:s*s*s*start.x + 3.0*s*s*t*a.x + 3.0*s*t*t*b.x + t*t*t*end.x, y:s*s*s*start.y + 3.0*s*s*t*a.y + 3.0*s*t*t*b.y + t*t*t*end.y });
+        }
+    });
+}
 - (())closePath { update_path(env, this, Path::close); }
+- (())removeAllPoints { update_path(env, this, |path| *path = Path::default()); }
+- (())appendPath:(id)other {
+    let copy = env.objc.borrow::<UIBezierPathHostObject>(other).path.clone();
+    update_path(env, this, |path| path.subpaths.extend(copy.subpaths));
+}
 - (())setLineWidth:(CGFloat)width { env.objc.borrow_mut::<UIBezierPathHostObject>(this).line_width = width; }
+- (CGFloat)lineWidth { env.objc.borrow::<UIBezierPathHostObject>(this).line_width }
+- (bool)isEmpty { env.objc.borrow::<UIBezierPathHostObject>(this).path.subpaths.is_empty() }
+- (CGPoint)currentPoint {
+    let object = env.objc.borrow::<UIBezierPathHostObject>(this);
+    object.path.subpaths.last().and_then(|s| if s.closed { s.points.first().copied() } else { s.points.last().copied() }).unwrap_or_default()
+}
+- (bool)containsPoint:(CGPoint)point { env.objc.borrow::<UIBezierPathHostObject>(this).path.contains(point, false) }
 - (CGRect)bounds {
     env.objc.borrow::<UIBezierPathHostObject>(this).path.bounds().unwrap_or_default()
 }
