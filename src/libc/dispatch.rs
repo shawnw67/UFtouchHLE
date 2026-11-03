@@ -20,7 +20,7 @@ use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, MutVoidPtr};
 use crate::objc::{id, msg_class, objc_classes, ClassExports};
 use crate::Environment;
 use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[allow(non_camel_case_types)]
 type dispatch_time_t = u64;
@@ -147,6 +147,30 @@ fn dispatch_time(env: &mut Environment, when: dispatch_time_t, delta: i64) -> di
     };
     // Avoid returning DISPATCH_TIME_NOW for a time that isn't "now".
     base.saturating_add(delta).max(1) as dispatch_time_t
+}
+
+fn dispatch_walltime(
+    env: &mut Environment,
+    spec: ConstPtr<crate::libc::time::timespec>,
+    delta: i64,
+) -> dispatch_time_t {
+    let epoch = *env
+        .libc_state
+        .dispatch
+        .epoch
+        .get_or_insert_with(Instant::now);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as i128;
+    let base = if spec.is_null() {
+        now
+    } else {
+        let spec = env.mem.read(spec);
+        i128::from(spec.tv_sec) * 1_000_000_000 + i128::from(spec.tv_nsec)
+    };
+    let monotonic = epoch.elapsed().as_nanos() as i128 + base - now + i128::from(delta);
+    monotonic.clamp(1, i128::from(u64::MAX - 1)) as u64
 }
 
 fn new_object(env: &mut Environment, object: DispatchObject) -> MutVoidPtr {
@@ -1226,6 +1250,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(dispatch_after(_, _, _)),
     export_c_func!(dispatch_once(_, _)),
     export_c_func!(dispatch_time(_, _)),
+    export_c_func!(dispatch_walltime(_, _)),
     export_c_func!(dispatch_retain(_)),
     export_c_func!(dispatch_release(_)),
     export_c_func!(dispatch_group_create()),

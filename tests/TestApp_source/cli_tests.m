@@ -66,6 +66,8 @@ extern void dispatch_sync_f(const void *queue, void *context,
                             void (*fn)(void *));
 extern void dispatch_after_f(unsigned long long time, const void *queue,
                              void *context, void (*fn)(void *));
+extern unsigned long long dispatch_walltime(const struct timespec *time,
+                                            long long delta);
 extern void dispatch_once_f(int *predicate, void *context, void (*fn)(void *));
 extern void dispatch_apply_f(unsigned int count, const void *queue,
                              void *context, void (*fn)(void *, unsigned int));
@@ -6503,7 +6505,8 @@ int test_dispatch_function_calls(void) {
   dispatch_once_f(&once, &value, test_dispatch_add_one);
   dispatch_apply_f(4, queue, &value, test_dispatch_add_index);
   dispatch_async_f(queue, &value, test_dispatch_add_one);
-  dispatch_after_f(0, queue, &value, test_dispatch_add_one);
+  dispatch_after_f(dispatch_walltime(NULL, -1), queue, &value,
+                   test_dispatch_add_one);
   if (value != 8)
     return -1;
   void *semaphore = dispatch_semaphore_create(0);
