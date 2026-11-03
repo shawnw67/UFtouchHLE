@@ -93,6 +93,19 @@ extern void CGContextSetFillColor(CGContextRef context,
 extern void CGContextSetStrokeColor(CGContextRef context,
                                     const CGFloat *components);
 typedef const void *TestCTFontRef;
+typedef const void *TestCFReadStreamRef;
+extern TestCFReadStreamRef
+CFReadStreamCreateWithBytesNoCopy(CFAllocatorRef allocator, const UInt8 *bytes,
+                                  CFIndex length,
+                                  CFAllocatorRef bytesDeallocator);
+extern bool CFReadStreamOpen(TestCFReadStreamRef stream);
+extern void CFReadStreamClose(TestCFReadStreamRef stream);
+extern int CFReadStreamGetStatus(TestCFReadStreamRef stream);
+extern bool CFReadStreamHasBytesAvailable(TestCFReadStreamRef stream);
+extern const UInt8 *CFReadStreamGetBuffer(TestCFReadStreamRef stream,
+                                          CFIndex maximum, CFIndex *count);
+extern CFIndex CFReadStreamRead(TestCFReadStreamRef stream, UInt8 *buffer,
+                                CFIndex length);
 typedef const void *TestCTLineRef;
 typedef const void *TestCTTypesetterRef;
 extern const CFStringRef kCTFontAttributeName;
@@ -151,6 +164,35 @@ int test_CFAttributedString_basic(void) {
   CFRelease(copy);
   CFRelease(text);
   return passed ? 0 : -1;
+}
+
+int test_CFReadStream_memory(void) {
+  const UInt8 bytes[] = {1, 2, 3, 4, 5};
+  TestCFReadStreamRef stream =
+      CFReadStreamCreateWithBytesNoCopy(NULL, bytes, 5, kCFAllocatorNull);
+  CFIndex unopened_count = 0;
+  const UInt8 *unopened = CFReadStreamGetBuffer(stream, 2, &unopened_count);
+  if (!stream || unopened || unopened_count != -1 ||
+      CFReadStreamGetStatus(stream) != 0 || !CFReadStreamOpen(stream) ||
+      !CFReadStreamHasBytesAvailable(stream))
+    return -1;
+  CFIndex count = 0;
+  const UInt8 *first = CFReadStreamGetBuffer(stream, 2, &count);
+  UInt8 rest[4] = {0};
+  int passed = first && count == 2 && first[0] == 1 && first[1] == 2 &&
+               CFReadStreamRead(stream, rest, 4) == 3 && rest[0] == 3 &&
+               rest[1] == 4 && rest[2] == 5 &&
+               CFReadStreamGetStatus(stream) == 5 &&
+               CFReadStreamRead(stream, rest, 4) == 0;
+  CFReadStreamClose(stream);
+  passed = passed && CFReadStreamGetStatus(stream) == 6;
+  CFRelease(stream);
+  stream = CFReadStreamCreateWithBytesNoCopy(NULL, bytes, 5, kCFAllocatorNull);
+  CFReadStreamOpen(stream);
+  const UInt8 *all = CFReadStreamGetBuffer(stream, 0, &count);
+  passed = passed && all && count == 5 && all[4] == 5;
+  CFRelease(stream);
+  return passed ? 0 : -2;
 }
 
 int test_CTLine_typographic_bounds(void) {
@@ -9572,6 +9614,7 @@ struct {
     FUNC_DEF(test_CFString_encoding_queries),
     FUNC_DEF(test_CTFont_graphics_font_round_trip),
     FUNC_DEF(test_CFAttributedString_basic),
+    FUNC_DEF(test_CFReadStream_memory),
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),
