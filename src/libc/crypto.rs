@@ -23,6 +23,7 @@ struct CC_MD5_CTX {}
 #[derive(Default)]
 pub struct State {
     md5_contexts: HashMap<MutPtr<CC_MD5_CTX>, Md5>,
+    sha_contexts: HashMap<MutVoidPtr, ShaState>,
 }
 impl State {
     fn get_mut(env: &mut Environment) -> &mut Self {
@@ -66,12 +67,119 @@ fn CC_MD5(env: &mut Environment, data: ConstVoidPtr, len: u32, md: MutPtr<u8>) -
 }
 
 fn CC_SHA1(env: &mut Environment, data: ConstVoidPtr, len: u32, md: MutPtr<u8>) -> MutPtr<u8> {
-    let mut hasher = Sha1::new();
-    hasher.update(env.mem.bytes_at(data.cast(), len));
-    let digest = hasher.finalize();
-    env.mem.bytes_at_mut(md, 20).copy_from_slice(&digest[..]);
-    md
+    CC_SHA1_once(env, data, len, md)
 }
+
+// Like the existing MD5 implementation, incremental contexts are stored per
+// emulated environment. Copying an opaque guest context is not yet supported.
+enum ShaState {
+    Sha1(Sha1),
+    Sha224(sha2::Sha224),
+    Sha256(sha2::Sha256),
+    Sha384(sha2::Sha384),
+    Sha512(sha2::Sha512),
+}
+
+macro_rules! sha_functions {
+    ($once:ident, $init:ident, $update:ident, $final:ident, $variant:ident, $algorithm:ty) => {
+        fn $once(
+            env: &mut Environment,
+            data: ConstVoidPtr,
+            len: u32,
+            output: MutPtr<u8>,
+        ) -> MutPtr<u8> {
+            if output.is_null() || (len != 0 && data.is_null()) {
+                return MutPtr::null();
+            }
+            let mut hash = <$algorithm>::new();
+            if len != 0 {
+                hash.update(env.mem.bytes_at(data.cast(), len));
+            }
+            let digest = hash.finalize();
+            env.mem
+                .bytes_at_mut(output, digest.len() as u32)
+                .copy_from_slice(&digest);
+            output
+        }
+        fn $init(env: &mut Environment, ctx: MutVoidPtr) -> i32 {
+            if ctx.is_null() {
+                return 0;
+            }
+            env.libc_state
+                .crypto
+                .sha_contexts
+                .insert(ctx, ShaState::$variant(<$algorithm>::new()));
+            1
+        }
+        fn $update(env: &mut Environment, ctx: MutVoidPtr, data: ConstVoidPtr, len: u32) -> i32 {
+            if len != 0 && data.is_null() {
+                return 0;
+            }
+            let Some(ShaState::$variant(hash)) = env.libc_state.crypto.sha_contexts.get_mut(&ctx)
+            else {
+                return 0;
+            };
+            if len != 0 {
+                hash.update(env.mem.bytes_at(data.cast(), len));
+            }
+            1
+        }
+        fn $final(env: &mut Environment, output: MutPtr<u8>, ctx: MutVoidPtr) -> i32 {
+            if output.is_null() {
+                return 0;
+            }
+            let Some(ShaState::$variant(hash)) = env.libc_state.crypto.sha_contexts.remove(&ctx)
+            else {
+                return 0;
+            };
+            let digest = hash.finalize();
+            env.mem
+                .bytes_at_mut(output, digest.len() as u32)
+                .copy_from_slice(&digest);
+            1
+        }
+    };
+}
+sha_functions!(
+    CC_SHA1_once,
+    CC_SHA1_Init,
+    CC_SHA1_Update,
+    CC_SHA1_Final,
+    Sha1,
+    Sha1
+);
+sha_functions!(
+    CC_SHA224,
+    CC_SHA224_Init,
+    CC_SHA224_Update,
+    CC_SHA224_Final,
+    Sha224,
+    sha2::Sha224
+);
+sha_functions!(
+    CC_SHA256,
+    CC_SHA256_Init,
+    CC_SHA256_Update,
+    CC_SHA256_Final,
+    Sha256,
+    sha2::Sha256
+);
+sha_functions!(
+    CC_SHA384,
+    CC_SHA384_Init,
+    CC_SHA384_Update,
+    CC_SHA384_Final,
+    Sha384,
+    sha2::Sha384
+);
+sha_functions!(
+    CC_SHA512,
+    CC_SHA512_Init,
+    CC_SHA512_Update,
+    CC_SHA512_Final,
+    Sha512,
+    sha2::Sha512
+);
 
 type CCCryptorStatus = i32;
 const kCCSuccess: CCCryptorStatus = 0;
@@ -339,6 +447,25 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CC_MD5_Final(_, _)),
     export_c_func!(CC_MD5(_, _, _)),
     export_c_func!(CC_SHA1(_, _, _)),
+    export_c_func!(CC_SHA1_Init(_)),
+    export_c_func!(CC_SHA1_Update(_, _, _)),
+    export_c_func!(CC_SHA1_Final(_, _)),
+    export_c_func!(CC_SHA224(_, _, _)),
+    export_c_func!(CC_SHA224_Init(_)),
+    export_c_func!(CC_SHA224_Update(_, _, _)),
+    export_c_func!(CC_SHA224_Final(_, _)),
+    export_c_func!(CC_SHA256(_, _, _)),
+    export_c_func!(CC_SHA256_Init(_)),
+    export_c_func!(CC_SHA256_Update(_, _, _)),
+    export_c_func!(CC_SHA256_Final(_, _)),
+    export_c_func!(CC_SHA384(_, _, _)),
+    export_c_func!(CC_SHA384_Init(_)),
+    export_c_func!(CC_SHA384_Update(_, _, _)),
+    export_c_func!(CC_SHA384_Final(_, _)),
+    export_c_func!(CC_SHA512(_, _, _)),
+    export_c_func!(CC_SHA512_Init(_)),
+    export_c_func!(CC_SHA512_Update(_, _, _)),
+    export_c_func!(CC_SHA512_Final(_, _)),
 ];
 
 #[cfg(test)]

@@ -90,6 +90,11 @@ struct TestImageBuffer {
 extern int vImageCopyBuffer(const struct TestImageBuffer *source,
                             const struct TestImageBuffer *destination,
                             unsigned int pixel_size, unsigned int flags);
+extern unsigned char *CC_SHA256(const void *data, unsigned int len,
+                                unsigned char *output);
+extern int CC_SHA256_Init(void *ctx);
+extern int CC_SHA256_Update(void *ctx, const void *data, unsigned int len);
+extern int CC_SHA256_Final(unsigned char *output, void *ctx);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -658,6 +663,23 @@ int test_vImageCopyBuffer(void) {
   target.width = 2;
   target.row_bytes = 1;
   passed = passed && vImageCopyBuffer(&source, &target, 1, 0) == -21777;
+  return passed ? 0 : -1;
+}
+
+int test_CC_SHA256(void) {
+  const unsigned char expected[] = {
+      0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40,
+      0xde, 0x5d, 0xae, 0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17,
+      0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad};
+  unsigned char once[32], incremental[32];
+  unsigned int context[32] = {0};
+  int passed = CC_SHA256("abc", 3, once) == once &&
+               memcmp(once, expected, sizeof(expected)) == 0;
+  passed = passed && CC_SHA256_Init(context) &&
+           CC_SHA256_Update(context, "a", 1) &&
+           CC_SHA256_Update(context, "bc", 2) &&
+           CC_SHA256_Final(incremental, context) &&
+           memcmp(incremental, expected, sizeof(expected)) == 0;
   return passed ? 0 : -1;
 }
 
@@ -9975,6 +9997,7 @@ struct {
     FUNC_DEF(test_vDSP_vector_operations),
     FUNC_DEF(test_cblas_operations),
     FUNC_DEF(test_vImageCopyBuffer),
+    FUNC_DEF(test_CC_SHA256),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),
