@@ -649,6 +649,51 @@ fn CGContextAddRect(env: &mut Environment, context: CGContextRef, rect: CGRect) 
     CGContextClosePath(env, context);
 }
 
+fn CGContextAddRects(
+    env: &mut Environment,
+    context: CGContextRef,
+    rects: ConstPtr<CGRect>,
+    count: GuestUSize,
+) {
+    for i in 0..count {
+        let rect = env.mem.read(rects + i);
+        CGContextAddRect(env, context, rect);
+    }
+}
+
+fn CGContextAddLines(
+    env: &mut Environment,
+    context: CGContextRef,
+    points: ConstPtr<CGPoint>,
+    count: GuestUSize,
+) {
+    if count == 0 {
+        return;
+    }
+    let first = env.mem.read(points);
+    CGContextMoveToPoint(env, context, first.x, first.y);
+    for i in 1..count {
+        let point = env.mem.read(points + i);
+        CGContextAddLineToPoint(env, context, point.x, point.y);
+    }
+}
+
+fn CGContextAddEllipseInRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
+    let center_x = rect.origin.x + rect.size.width / 2.0;
+    let center_y = rect.origin.y + rect.size.height / 2.0;
+    for i in 0..64 {
+        let angle = std::f32::consts::TAU * i as f32 / 64.0;
+        let x = center_x + angle.cos() * rect.size.width / 2.0;
+        let y = center_y + angle.sin() * rect.size.height / 2.0;
+        if i == 0 {
+            CGContextMoveToPoint(env, context, x, y);
+        } else {
+            CGContextAddLineToPoint(env, context, x, y);
+        }
+    }
+    CGContextClosePath(env, context);
+}
+
 fn CGContextAddPath(_env: &mut Environment, context: CGContextRef, path: CFTypeRef) {
     // UIBezierPath's CGPath is nil for now, so there's nothing to add.
     if !path.is_null() {
@@ -683,6 +728,36 @@ fn CGContextDrawPath(env: &mut Environment, context: CGContextRef, mode: CGPathD
 
 fn CGContextFillPath(env: &mut Environment, context: CGContextRef) {
     CGContextDrawPath(env, context, kCGPathFill);
+}
+
+fn CGContextEOFillPath(env: &mut Environment, context: CGContextRef) {
+    CGContextDrawPath(env, context, kCGPathEOFill);
+}
+
+fn CGContextStrokeRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
+    let path = std::mem::take(&mut env.objc.borrow_mut::<CGContextHostObject>(context).path);
+    CGContextAddRect(env, context, rect);
+    CGContextStrokePath(env, context);
+    env.objc.borrow_mut::<CGContextHostObject>(context).path = path;
+}
+
+fn CGContextStrokeRectWithWidth(
+    env: &mut Environment,
+    context: CGContextRef,
+    rect: CGRect,
+    width: CGFloat,
+) {
+    let original = env.objc.borrow::<CGContextHostObject>(context).line_width;
+    CGContextSetLineWidth(env, context, width);
+    CGContextStrokeRect(env, context, rect);
+    CGContextSetLineWidth(env, context, original);
+}
+
+fn CGContextStrokeEllipseInRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
+    let path = std::mem::take(&mut env.objc.borrow_mut::<CGContextHostObject>(context).path);
+    CGContextAddEllipseInRect(env, context, rect);
+    CGContextStrokePath(env, context);
+    env.objc.borrow_mut::<CGContextHostObject>(context).path = path;
 }
 
 fn CGContextStrokePath(env: &mut Environment, context: CGContextRef) {
@@ -797,8 +872,15 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextAddLineToPoint(_, _, _)),
     export_c_func!(CGContextClosePath(_)),
     export_c_func!(CGContextAddRect(_, _)),
+    export_c_func!(CGContextAddRects(_, _, _)),
+    export_c_func!(CGContextAddLines(_, _, _)),
+    export_c_func!(CGContextAddEllipseInRect(_, _)),
     export_c_func!(CGContextFillPath(_)),
+    export_c_func!(CGContextEOFillPath(_)),
     export_c_func!(CGContextStrokePath(_)),
+    export_c_func!(CGContextStrokeRect(_, _)),
+    export_c_func!(CGContextStrokeRectWithWidth(_, _, _)),
+    export_c_func!(CGContextStrokeEllipseInRect(_, _)),
     export_c_func!(CGContextAddArcToPoint(_, _, _, _, _, _)),
     export_c_func!(CGContextAddPath(_, _)),
     export_c_func!(CGContextClip(_)),

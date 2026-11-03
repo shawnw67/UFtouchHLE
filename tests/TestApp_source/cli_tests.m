@@ -57,6 +57,9 @@ extern kern_return_t thread_info(mach_port_t target_act, natural_t flavor,
 extern void OSSpinLockLock(volatile int *lock);
 extern void OSSpinLockUnlock(volatile int *lock);
 extern bool OSSpinLockTry(volatile int *lock);
+extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
+                              size_t count);
+extern void CGContextEOFillPath(CGContextRef context);
 
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
@@ -291,6 +294,22 @@ int test_CFString_split_join_and_replace(void) {
   CFRelease(parts);
   CFRelease(separator);
   CFRelease(original);
+  return passed ? 0 : -1;
+}
+
+int test_CGContext_add_rects_even_odd(void) {
+  unsigned char pixels[8 * 8 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 8, 8, 8, 8 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  CGRect rects[] = {CGRectMake(0, 0, 8, 8), CGRectMake(2, 2, 4, 4)};
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  CGContextAddRects(context, rects, 2);
+  CGContextEOFillPath(context);
+  int passed =
+      pixels[(1 * 8 + 1) * 4 + 3] == 255 && pixels[(3 * 8 + 3) * 4 + 3] == 0;
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
   return passed ? 0 : -1;
 }
 
@@ -9239,6 +9258,7 @@ struct {
     FUNC_DEF(test_CFBundle_create_from_url),
     FUNC_DEF(test_CFBundle_resource_urls),
     FUNC_DEF(test_CFString_split_join_and_replace),
+    FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
