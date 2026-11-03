@@ -144,6 +144,15 @@ fn CGContextSetFillColorWithColor(env: &mut Environment, context: CGContextRef, 
     CGContextSetRGBFillColor(env, context, r, g, b, a)
 }
 
+fn CGContextSetStrokeColorWithColor(
+    env: &mut Environment,
+    context: CGContextRef,
+    color: CGColorRef,
+) {
+    let (r, g, b, a) = cg_color::to_rgba(&env.objc, color);
+    CGContextSetRGBStrokeColor(env, context, r, g, b, a);
+}
+
 pub fn CGContextSetRGBFillColor(
     env: &mut Environment,
     context: CGContextRef,
@@ -463,6 +472,13 @@ fn CGContextSetTextMatrix(
     env.objc
         .borrow_mut::<CGContextHostObject>(context)
         .text_transform = Some(transform);
+}
+
+fn CGContextGetTextMatrix(env: &mut Environment, context: CGContextRef) -> CGAffineTransform {
+    env.objc
+        .borrow::<CGContextHostObject>(context)
+        .text_transform
+        .unwrap_or(CGAffineTransformIdentity)
 }
 
 fn CGContextShowGlyphsAtPoint(
@@ -970,6 +986,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextSetBlendMode(_, _)),
     export_c_func!(CGContextSetFillColorSpace(_, _)),
     export_c_func!(CGContextSetFillColorWithColor(_, _)),
+    export_c_func!(CGContextSetStrokeColorWithColor(_, _)),
     export_c_func!(CGContextSetRGBFillColor(_, _, _, _, _)),
     export_c_func!(CGContextSetGrayFillColor(_, _, _)),
     export_c_func!(CGContextSetGrayStrokeColor(_, _, _)),
@@ -1024,6 +1041,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextShowTextAtPoint(_, _, _, _, _)),
     export_c_func!(CGContextFillEllipseInRect(_, _)),
     export_c_func!(CGContextSetTextMatrix(_, _)),
+    export_c_func!(CGContextGetTextMatrix(_)),
     export_c_func!(CGContextShowGlyphsAtPoint(_, _, _, _, _)),
     export_c_func!(CGContextShowGlyphsAtPositions(_, _, _, _)),
 ];

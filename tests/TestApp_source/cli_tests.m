@@ -72,6 +72,12 @@ extern void CGContextAddArc(CGContextRef context, CGFloat x, CGFloat y,
                             CGFloat radius, CGFloat start, CGFloat end,
                             int clockwise);
 extern void CGContextFlush(CGContextRef context);
+extern void CGContextSetTextMatrix(CGContextRef context,
+                                   CGAffineTransform matrix);
+extern CGAffineTransform CGContextGetTextMatrix(CGContextRef context);
+extern void CGContextSetStrokeColorWithColor(CGContextRef context,
+                                             CGColorRef color);
+extern void CGContextStrokeRect(CGContextRef context, CGRect rect);
 
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
@@ -355,6 +361,28 @@ int test_CGContext_arc(void) {
   CGContextFillPath(context);
   CGContextFlush(context);
   int passed = pixels[(8 * 16 + 8) * 4 + 3] == 255 && pixels[3] == 0;
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
+}
+
+int test_CGContext_text_matrix_and_stroke_color(void) {
+  unsigned char pixels[8 * 8 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 8, 8, 8, 8 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  CGAffineTransform matrix = {2, 3, 4, 5, 6, 7};
+  CGContextSetTextMatrix(context, matrix);
+  CGAffineTransform result = CGContextGetTextMatrix(context);
+  CGColorRef color = CGColorCreateGenericRGB(1, 0, 0, 1);
+  CGContextSetStrokeColorWithColor(context, color);
+  CGContextStrokeRect(context, CGRectMake(1, 1, 6, 6));
+  int painted = 0;
+  for (int i = 0; i < 8 * 8; i++)
+    painted += pixels[i * 4 + 3] != 0;
+  int passed = result.a == 2 && result.b == 3 && result.c == 4 &&
+               result.d == 5 && result.tx == 6 && result.ty == 7 && painted > 0;
+  CFRelease(color);
   CGContextRelease(context);
   CGColorSpaceRelease(space);
   return passed ? 0 : -1;
@@ -9308,6 +9336,7 @@ struct {
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
+    FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
