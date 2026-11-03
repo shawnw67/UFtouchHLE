@@ -325,6 +325,22 @@ int test_CFString_split_join_and_replace(void) {
   return passed ? 0 : -1;
 }
 
+int test_CFString_encoding_queries(void) {
+  CFStringRef name =
+      CFStringConvertEncodingToIANACharSetName(kCFStringEncodingUTF8);
+  CFStringRef expected =
+      CFStringCreateWithCString(NULL, "utf-8", kCFStringEncodingUTF8);
+  int passed =
+      CFStringIsEncodingAvailable(kCFStringEncodingUTF8) &&
+      !CFStringIsEncodingAvailable(0xffffffff) && name &&
+      CFEqual(name, expected) &&
+      CFStringGetMaximumSizeForEncoding(7, kCFStringEncodingUTF8) == 21 &&
+      CFStringGetMaximumSizeForEncoding(0x7fffffff, kCFStringEncodingUTF8) ==
+          kCFNotFound;
+  CFRelease(expected);
+  return passed ? 0 : -1;
+}
+
 int test_CGContext_add_rects_even_odd(void) {
   unsigned char pixels[8 * 8 * 4] = {0};
   CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
@@ -9391,6 +9407,7 @@ struct {
     FUNC_DEF(test_CFBundle_create_from_url),
     FUNC_DEF(test_CFBundle_resource_urls),
     FUNC_DEF(test_CFString_split_join_and_replace),
+    FUNC_DEF(test_CFString_encoding_queries),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),

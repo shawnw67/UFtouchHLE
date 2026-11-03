@@ -131,6 +131,56 @@ pub const kCFStringEncodingUTF16BE: CFStringEncoding = 0x10000100;
 pub const kCFStringEncodingUTF16LE: CFStringEncoding = 0x14000100;
 pub const kCFStringEncodingISOLatin1: CFStringEncoding = 0x0201;
 
+fn CFStringIsEncodingAvailable(_env: &mut Environment, encoding: CFStringEncoding) -> bool {
+    matches!(
+        encoding,
+        kCFStringEncodingMacRoman
+            | kCFStringEncodingASCII
+            | kCFStringEncodingUTF8
+            | kCFStringEncodingUTF16
+            | kCFStringEncodingUTF16BE
+            | kCFStringEncodingUTF16LE
+            | kCFStringEncodingISOLatin1
+    )
+}
+
+fn CFStringGetSystemEncoding(_env: &mut Environment) -> CFStringEncoding {
+    kCFStringEncodingUTF8
+}
+
+fn CFStringConvertEncodingToIANACharSetName(
+    env: &mut Environment,
+    encoding: CFStringEncoding,
+) -> CFStringRef {
+    let name = match encoding {
+        kCFStringEncodingMacRoman => "macintosh",
+        kCFStringEncodingASCII => "us-ascii",
+        kCFStringEncodingUTF8 => "utf-8",
+        kCFStringEncodingUTF16 => "utf-16",
+        kCFStringEncodingUTF16BE => "utf-16be",
+        kCFStringEncodingUTF16LE => "utf-16le",
+        kCFStringEncodingISOLatin1 => "iso-8859-1",
+        _ => return id::null(),
+    };
+    ns_string::get_static_str(env, name)
+}
+
+fn CFStringGetMaximumSizeForEncoding(
+    _env: &mut Environment,
+    length: CFIndex,
+    encoding: CFStringEncoding,
+) -> CFIndex {
+    if length < 0 || !CFStringIsEncodingAvailable(_env, encoding) {
+        return kCFNotFound;
+    }
+    let bytes_per_unit = match encoding {
+        kCFStringEncodingUTF8 => 3,
+        kCFStringEncodingUTF16 | kCFStringEncodingUTF16BE | kCFStringEncodingUTF16LE => 2,
+        _ => 1,
+    };
+    length.checked_mul(bytes_per_unit).unwrap_or(kCFNotFound)
+}
+
 fn CFStringAppend(
     env: &mut Environment,
     the_string: CFMutableStringRef,
@@ -557,6 +607,10 @@ fn CFStringNormalize(
 
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringRetain(_)),
+    export_c_func!(CFStringIsEncodingAvailable(_)),
+    export_c_func!(CFStringGetSystemEncoding()),
+    export_c_func!(CFStringConvertEncodingToIANACharSetName(_)),
+    export_c_func!(CFStringGetMaximumSizeForEncoding(_, _)),
     export_c_func!(CFStringRelease(_)),
     export_c_func!(CFStringCreateArrayBySeparatingStrings(_, _, _)),
     export_c_func!(CFStringCreateByCombiningStrings(_, _, _)),
