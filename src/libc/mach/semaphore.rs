@@ -34,12 +34,15 @@ fn semaphore_create(
     policy: i32,
     value: i32,
 ) -> kern_return_t {
-    assert_eq!(task, MACH_TASK_SELF);
-    assert_eq!(policy, 0);
+    if task != MACH_TASK_SELF || policy != 0 || value < 0 || semaphore.is_null() {
+        return KERN_INVALID_ARGUMENT;
+    }
 
     let open_semaphore: semaphore_t = env.mem.alloc_and_write(0);
-    let res = sem_init(env, open_semaphore, 0, value.try_into().unwrap());
-    assert_eq!(res, 0);
+    if sem_init(env, open_semaphore, 0, value as u32) != 0 {
+        env.mem.free(open_semaphore.cast());
+        return KERN_INVALID_ARGUMENT;
+    }
 
     env.mem.write(semaphore, open_semaphore);
     let result = KERN_SUCCESS;
@@ -120,9 +123,9 @@ fn semaphore_timedwait(
 }
 
 fn semaphore_destroy(env: &mut Environment, task: task_t, semaphore: semaphore_t) -> kern_return_t {
-    assert_eq!(task, MACH_TASK_SELF);
-
-    sem_destroy(env, semaphore);
+    if task != MACH_TASK_SELF || sem_destroy(env, semaphore) != 0 {
+        return KERN_INVALID_ARGUMENT;
+    }
     env.mem.free(semaphore.cast());
     let result = KERN_SUCCESS;
     log_dbg!("semaphore_destroy({:?}) -> {:?}", semaphore, result);
