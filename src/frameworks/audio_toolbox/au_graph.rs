@@ -13,7 +13,7 @@ use crate::dyld::FunctionExports;
 use crate::environment::Environment;
 use crate::export_c_func;
 use crate::frameworks::carbon_core::{paramErr, OSStatus};
-use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, SafeRead};
+use crate::mem::{guest_size_of, ConstPtr, ConstVoidPtr, MutPtr, SafeRead};
 use audio_unit::AudioUnit;
 
 #[repr(C, packed)]
@@ -49,6 +49,7 @@ struct Graph {
     connections: Vec<Connection>,
     next_node: AUNode,
     unit: Option<AudioUnit>,
+    mixer: Option<(AUNode, AudioUnit)>,
     initialized: bool,
     render_notifies: Vec<(GuestFunction, ConstVoidPtr)>,
 }
@@ -274,7 +275,12 @@ fn AUGraphNodeInfo(
     let Some(&description) = state.nodes.get(&node) else {
         return paramErr;
     };
-    let unit = state.unit.unwrap_or_else(MutPtr::null);
+    let unit = state
+        .mixer
+        .filter(|(mixer_node, _)| *mixer_node == node)
+        .map(|(_, unit)| unit)
+        .or(state.unit)
+        .unwrap_or_else(MutPtr::null);
     if !out_desc.is_null() {
         env.mem.write(out_desc, description);
     }
@@ -297,29 +303,63 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
     if state.unit.is_some() {
         return 0;
     }
-    // The renderer supports one RemoteIO unit, not a connected mixer graph.
-    if state.nodes.len() != 1 || !state.connections.is_empty() {
-        return paramErr;
+    let mut output_node = None;
+    let mut mixer_node = None;
+    for (&node, desc) in &state.nodes {
+        if desc.component_manufacturer != u32::from_be_bytes(*b"appl") {
+            return paramErr;
+        }
+        if desc.component_type == u32::from_be_bytes(*b"auou")
+            && desc.component_sub_type == u32::from_be_bytes(*b"rioc")
+            && output_node.is_none()
+        {
+            output_node = Some(node);
+        } else if desc.component_type == u32::from_be_bytes(*b"aumx")
+            && (desc.component_sub_type == u32::from_be_bytes(*b"mcmx")
+                || desc.component_sub_type == u32::from_be_bytes(*b"3dem"))
+            && mixer_node.is_none()
+        {
+            mixer_node = Some(node);
+        } else {
+            return paramErr;
+        }
     }
-    let desc = *state.nodes.values().next().unwrap();
-    if desc.component_type != u32::from_be_bytes(*b"auou")
-        || desc.component_sub_type != u32::from_be_bytes(*b"rioc")
-        || desc.component_manufacturer != u32::from_be_bytes(*b"appl")
-    {
+    let Some(output_node) = output_node else {
         return paramErr;
+    };
+    match mixer_node {
+        None if state.connections.is_empty() => {}
+        Some(mixer_node)
+            if state.connections.len() == 1
+                && state.connections[0].source == mixer_node
+                && state.connections[0]._source_bus == 0
+                && state.connections[0].destination == output_node
+                && state.connections[0].destination_bus == 0 => {}
+        _ => return paramErr,
     }
     let callbacks = state.render_notifies.clone();
     let unit = audio_components::create_audio_unit_instance(env);
+    let mixer = mixer_node.map(|node| {
+        let mixer = audio_components::create_audio_unit_instance(env);
+        audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get_mut(&mixer)
+            .unwrap()
+            .mixer_buses = Some(HashMap::new());
+        (node, mixer)
+    });
     for (callback, context) in callbacks {
         audio_unit::add_render_notify(env, unit, callback, context, graph.to_bits());
     }
-    env.framework_state
+    let state = env
+        .framework_state
         .audio_toolbox
         .au_graph
         .graphs
         .get_mut(&graph)
-        .unwrap()
-        .unit = Some(unit);
+        .unwrap();
+    state.unit = Some(unit);
+    state.mixer = mixer;
     0
 }
 
@@ -339,7 +379,20 @@ fn AUGraphInitialize(env: &mut Environment, graph: AUGraph) -> OSStatus {
     if state.initialized {
         return 0;
     }
+    let mixer = state.mixer.map(|(_, unit)| unit);
+    if let Some(mixer) = mixer {
+        let result = audio_unit::AudioUnitInitialize(env, mixer);
+        if result != 0 {
+            return result;
+        }
+    }
     let result = audio_unit::AudioUnitInitialize(env, unit);
+    if result != 0 {
+        if let Some(mixer) = mixer {
+            audio_unit::AudioUnitUninitialize(env, mixer);
+        }
+        return result;
+    }
     if result == 0 {
         env.framework_state
             .audio_toolbox
@@ -368,7 +421,19 @@ fn AUGraphStart(env: &mut Environment, graph: AUGraph) -> OSStatus {
     if !state.initialized {
         return paramErr;
     }
-    audio_unit::AudioOutputUnitStart(env, unit)
+    let mixer = state.mixer.map(|(_, unit)| unit);
+    let result = audio_unit::AudioOutputUnitStart(env, unit);
+    if result != 0 {
+        return result;
+    }
+    if let Some(mixer) = mixer {
+        let result = audio_unit::AudioOutputUnitStart(env, mixer);
+        if result != 0 {
+            audio_unit::AudioOutputUnitStop(env, unit);
+            return result;
+        }
+    }
+    0
 }
 
 fn AUGraphStop(env: &mut Environment, graph: AUGraph) -> OSStatus {
@@ -384,10 +449,20 @@ fn AUGraphStop(env: &mut Environment, graph: AUGraph) -> OSStatus {
     let Some(unit) = state.unit else {
         return 0;
     };
-    if !unit_is_running(env, unit) {
-        return 0;
+    let mixer = state.mixer.map(|(_, unit)| unit);
+    if let Some(mixer) = mixer {
+        if unit_is_running(env, mixer) {
+            let result = audio_unit::AudioOutputUnitStop(env, mixer);
+            if result != 0 {
+                return result;
+            }
+        }
     }
-    audio_unit::AudioOutputUnitStop(env, unit)
+    if unit_is_running(env, unit) {
+        audio_unit::AudioOutputUnitStop(env, unit)
+    } else {
+        0
+    }
 }
 
 fn AUGraphUninitialize(env: &mut Environment, graph: AUGraph) -> OSStatus {
@@ -400,14 +475,28 @@ fn AUGraphUninitialize(env: &mut Environment, graph: AUGraph) -> OSStatus {
     else {
         return paramErr;
     };
-    if state.unit.is_some_and(|unit| unit_is_running(env, unit)) {
+    if state.unit.is_some_and(|unit| unit_is_running(env, unit))
+        || state
+            .mixer
+            .is_some_and(|(_, unit)| unit_is_running(env, unit))
+    {
         return paramErr;
     }
     if !state.initialized {
         return 0;
     }
     let unit = state.unit.unwrap();
+    let mixer = state.mixer.map(|(_, unit)| unit);
     let result = audio_unit::AudioUnitUninitialize(env, unit);
+    if result != 0 {
+        return result;
+    }
+    if let Some(mixer) = mixer {
+        let result = audio_unit::AudioUnitUninitialize(env, mixer);
+        if result != 0 {
+            return result;
+        }
+    }
     if result == 0 {
         env.framework_state
             .audio_toolbox
@@ -438,15 +527,18 @@ fn AUGraphClose(env: &mut Environment, graph: AUGraph) -> OSStatus {
     if result != 0 {
         return result;
     }
-    let unit = env
+    let state = env
         .framework_state
         .audio_toolbox
         .au_graph
         .graphs
         .get_mut(&graph)
-        .unwrap()
-        .unit
-        .take();
+        .unwrap();
+    let unit = state.unit.take();
+    let mixer = state.mixer.take().map(|(_, unit)| unit);
+    if let Some(mixer) = mixer {
+        audio_components::AudioComponentInstanceDispose(env, mixer);
+    }
     if let Some(unit) = unit {
         return audio_components::AudioComponentInstanceDispose(env, unit);
     }
@@ -526,19 +618,34 @@ fn AUGraphSetNodeInputCallback(
     else {
         return paramErr;
     };
-    if bus != 0 || !state.nodes.contains_key(&node) {
+    if !state.nodes.contains_key(&node) {
         return paramErr;
     }
-    let Some(unit) = state.unit else {
+    let unit = if let Some((mixer_node, mixer)) = state.mixer {
+        if mixer_node == node {
+            Some(mixer)
+        } else if bus == 0 {
+            state.unit
+        } else {
+            None
+        }
+    } else if bus == 0 {
+        state.unit
+    } else {
+        None
+    };
+    let Some(unit) = unit else {
         return paramErr;
     };
-    let callback = env.mem.read(callback);
-    audio_components::State::get(&mut env.framework_state)
-        .audio_component_instances
-        .get_mut(&unit)
-        .unwrap()
-        .render_callback = Some(callback);
-    0
+    audio_unit::AudioUnitSetProperty(
+        env,
+        unit,
+        23,
+        1,
+        bus,
+        callback.cast(),
+        guest_size_of::<audio_components::AURenderCallbackStruct>(),
+    )
 }
 
 fn AUGraphUpdate(env: &mut Environment, graph: AUGraph, out_updated: MutPtr<u8>) -> OSStatus {

@@ -52,6 +52,9 @@ pub struct AudioComponentInstanceHostObject {
     pub is_running_handler: bool,
     pub property_listeners: Vec<(u32, GuestFunction, MutVoidPtr)>,
     pub render_notifies: Vec<(GuestFunction, ConstVoidPtr, u32)>,
+    pub mixer_buses: Option<HashMap<u32, AudioComponentInstance>>,
+    pub mixer_bus_count: u32,
+    pub callback_bus: u32,
 }
 impl Default for AudioComponentInstanceHostObject {
     fn default() -> Self {
@@ -86,6 +89,9 @@ impl Default for AudioComponentInstanceHostObject {
             is_running_handler: false,
             property_listeners: Vec::new(),
             render_notifies: Vec::new(),
+            mixer_buses: None,
+            mixer_bus_count: 1,
+            callback_bus: 0,
         }
     }
 }
@@ -219,6 +225,15 @@ pub(super) fn AudioComponentInstanceDispose(
     }
     if initialized {
         super::audio_unit::AudioUnitUninitialize(env, in_instance);
+    }
+    let children = State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&in_instance)
+        .and_then(|object| object.mixer_buses.take());
+    if let Some(children) = children {
+        for child in children.into_values() {
+            AudioComponentInstanceDispose(env, child);
+        }
     }
     State::get(&mut env.framework_state)
         .audio_component_instances

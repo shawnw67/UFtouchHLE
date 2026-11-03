@@ -64,9 +64,44 @@ const kAudioUnitProperty_SampleRate: AudioUnitPropertyID = 2;
 const kAudioUnitProperty_SetRenderCallback: AudioUnitPropertyID = 23;
 const kAudioUnitProperty_MaximumFramesPerSlice: AudioUnitPropertyID = 14;
 const kAudioUnitProperty_StreamFormat: AudioUnitPropertyID = 8;
+const kAudioUnitProperty_ElementCount: AudioUnitPropertyID = 11;
 
 const kAudioOutputUnitProperty_EnableIO: AudioUnitPropertyID = 2003;
 const kAudioOutputUnitProperty_IsRunning: AudioUnitPropertyID = 2001;
+
+pub(super) fn mixer_bus(env: &mut Environment, unit: AudioUnit, bus: u32) -> Option<AudioUnit> {
+    if bus >= 256 {
+        return None;
+    }
+    let object = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&unit)?;
+    if object.disposing {
+        return None;
+    }
+    let buses = object.mixer_buses.as_ref()?;
+    if let Some(&child) = buses.get(&bus) {
+        return Some(child);
+    }
+    let (initialized, started) = (object.initialized, object.started);
+    let child = audio_components::create_audio_unit_instance(env);
+    let state = audio_components::State::get(&mut env.framework_state);
+    state
+        .audio_component_instances
+        .get_mut(&child)
+        .unwrap()
+        .callback_bus = bus;
+    let object = state.audio_component_instances.get_mut(&unit).unwrap();
+    object.mixer_buses.as_mut().unwrap().insert(bus, child);
+    object.mixer_bus_count = object.mixer_bus_count.max(bus + 1);
+    if initialized && AudioUnitInitialize(env, child) != 0 {
+        return None;
+    }
+    if started && AudioOutputUnitStart(env, child) != 0 {
+        return None;
+    }
+    Some(child)
+}
 
 pub(super) fn AudioUnitInitialize(env: &mut Environment, in_unit: AudioUnit) -> OSStatus {
     let Some(object) = audio_components::State::get(&mut env.framework_state)
@@ -82,6 +117,19 @@ pub(super) fn AudioUnitInitialize(env: &mut Environment, in_unit: AudioUnit) -> 
         return 0;
     }
     object.initialized = true;
+    let children = object
+        .mixer_buses
+        .as_ref()
+        .map(|buses| buses.values().copied().collect::<Vec<_>>());
+    if let Some(children) = children {
+        for child in children {
+            let result = AudioUnitInitialize(env, child);
+            if result != 0 {
+                return result;
+            }
+        }
+        return 0;
+    }
     let run_loop = CFRunLoopGetMain(env);
     ns_run_loop::add_audio_unit(env, run_loop, in_unit);
     0 // success
@@ -96,6 +144,24 @@ pub(super) fn AudioUnitUninitialize(env: &mut Environment, in_unit: AudioUnit) -
     };
     if !object.initialized || object.started {
         return paramErr;
+    }
+    let children = object
+        .mixer_buses
+        .as_ref()
+        .map(|buses| buses.values().copied().collect::<Vec<_>>());
+    if let Some(children) = children {
+        for child in children {
+            let result = AudioUnitUninitialize(env, child);
+            if result != 0 {
+                return result;
+            }
+        }
+        audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get_mut(&in_unit)
+            .unwrap()
+            .initialized = false;
+        return 0;
     }
     let run_loop = CFRunLoopGetMain(env);
     match ns_run_loop::remove_audio_unit(env, run_loop, in_unit) {
@@ -260,7 +326,7 @@ fn notify_property_listeners(
     }
 }
 
-fn AudioUnitSetProperty(
+pub(super) fn AudioUnitSetProperty(
     env: &mut Environment,
     in_unit: AudioUnit,
     in_id: AudioUnitPropertyID,
@@ -269,7 +335,55 @@ fn AudioUnitSetProperty(
     in_data: ConstVoidPtr,
     in_data_size: u32,
 ) -> OSStatus {
-    if in_element != 0 || in_data.is_null() {
+    if in_data.is_null() {
+        return paramErr;
+    }
+    let is_mixer = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&in_unit)
+        .is_some_and(|unit| unit.mixer_buses.is_some());
+    if is_mixer && in_id == kAudioUnitProperty_ElementCount {
+        if in_scope != kAudioUnitScope_Input
+            || in_element != 0
+            || in_data_size != guest_size_of::<u32>()
+        {
+            return paramErr;
+        }
+        let count = env.mem.read(in_data.cast::<u32>());
+        if count > 256 {
+            return paramErr;
+        }
+        let object = audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get_mut(&in_unit)
+            .unwrap();
+        if object
+            .mixer_buses
+            .as_ref()
+            .unwrap()
+            .keys()
+            .any(|&bus| bus >= count)
+        {
+            return paramErr;
+        }
+        object.mixer_bus_count = count;
+        return 0;
+    }
+    if is_mixer
+        && in_scope == kAudioUnitScope_Input
+        && matches!(
+            in_id,
+            kAudioUnitProperty_SetRenderCallback
+                | kAudioUnitProperty_StreamFormat
+                | kAudioUnitProperty_SampleRate
+        )
+    {
+        let Some(child) = mixer_bus(env, in_unit, in_element) else {
+            return paramErr;
+        };
+        return AudioUnitSetProperty(env, child, in_id, in_scope, 0, in_data, in_data_size);
+    }
+    if in_element != 0 {
         return paramErr;
     }
 
@@ -384,7 +498,43 @@ fn AudioUnitGetProperty(
     out_data: MutVoidPtr,
     io_data_size: MutPtr<u32>,
 ) -> OSStatus {
-    if in_element != 0 || out_data.is_null() || io_data_size.is_null() {
+    if out_data.is_null() || io_data_size.is_null() {
+        return paramErr;
+    }
+
+    let is_mixer = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&in_unit)
+        .is_some_and(|unit| unit.mixer_buses.is_some());
+    if is_mixer && in_id == kAudioUnitProperty_ElementCount {
+        if in_scope != kAudioUnitScope_Input
+            || in_element != 0
+            || env.mem.read(io_data_size) < guest_size_of::<u32>()
+        {
+            return paramErr;
+        }
+        let count = audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get(&in_unit)
+            .unwrap()
+            .mixer_bus_count;
+        env.mem.write(out_data.cast(), count);
+        env.mem.write(io_data_size, guest_size_of::<u32>());
+        return 0;
+    }
+    if is_mixer
+        && in_scope == kAudioUnitScope_Input
+        && matches!(
+            in_id,
+            kAudioUnitProperty_StreamFormat | kAudioUnitProperty_SampleRate
+        )
+    {
+        let Some(child) = mixer_bus(env, in_unit, in_element) else {
+            return paramErr;
+        };
+        return AudioUnitGetProperty(env, child, in_id, in_scope, 0, out_data, io_data_size);
+    }
+    if in_element != 0 {
         return paramErr;
     }
 
@@ -473,17 +623,26 @@ fn AudioUnitGetPropertyInfo(
     out_size: MutPtr<u32>,
     out_writable: MutPtr<u8>,
 ) -> OSStatus {
-    if element != 0
-        || scope > kAudioUnitScope_Output
-        || !audio_components::State::get(&mut env.framework_state)
-            .audio_component_instances
-            .contains_key(&unit)
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&unit)
+    else {
+        return paramErr;
+    };
+    let is_mixer = object.mixer_buses.is_some();
+    if scope > kAudioUnitScope_Output
+        || (element != 0 && (!is_mixer || scope != kAudioUnitScope_Input || element >= 256))
     {
         return paramErr;
     }
     let (size, writable) = match property {
         kAudioUnitProperty_StreamFormat => (guest_size_of::<AudioStreamBasicDescription>(), true),
         kAudioUnitProperty_SampleRate => (guest_size_of::<f64>(), true),
+        kAudioUnitProperty_ElementCount
+            if is_mixer && scope == kAudioUnitScope_Input && element == 0 =>
+        {
+            (guest_size_of::<u32>(), true)
+        }
         kAudioOutputUnitProperty_IsRunning if scope == kAudioUnitScope_Global => {
             (guest_size_of::<u32>(), false)
         }
@@ -553,6 +712,34 @@ pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSSt
         None => return paramErr,
         _ => {}
     }
+    let children = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&ci)
+        .unwrap()
+        .mixer_buses
+        .as_ref()
+        .map(|buses| buses.values().copied().collect::<Vec<_>>());
+    if let Some(children) = children {
+        for child in children {
+            let result = AudioOutputUnitStart(env, child);
+            if result != 0 {
+                return result;
+            }
+        }
+        audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get_mut(&ci)
+            .unwrap()
+            .started = true;
+        notify_property_listeners(
+            env,
+            ci,
+            kAudioOutputUnitProperty_IsRunning,
+            kAudioUnitScope_Global,
+            0,
+        );
+        return 0;
+    }
     let context = env
         .framework_state
         .audio_toolbox
@@ -592,6 +779,31 @@ pub(super) fn AudioOutputUnitStop(env: &mut Environment, ci: AudioUnit) -> OSSta
         .audio_component_instances
         .get(&ci)
         .is_some_and(|unit| unit.started);
+    let children = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&ci)
+        .and_then(|unit| unit.mixer_buses.as_ref())
+        .map(|buses| buses.values().copied().collect::<Vec<_>>());
+    if let Some(children) = children {
+        audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get_mut(&ci)
+            .unwrap()
+            .started = false;
+        for child in children {
+            AudioOutputUnitStop(env, child);
+        }
+        if was_running {
+            notify_property_listeners(
+                env,
+                ci,
+                kAudioOutputUnitProperty_IsRunning,
+                kAudioUnitScope_Global,
+                0,
+            );
+        }
+        return 0;
+    }
     let at_state = &mut env.framework_state.audio_toolbox;
     let context = at_state
         .al_context
@@ -827,6 +1039,7 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
 
     // Run render callback
     let input_callback = audio_unit_host_object.render_callback;
+    let callback_bus = audio_unit_host_object.callback_bus;
     let sample_time = audio_unit_host_object.sample_time;
     let host_time = crate::libc::mach::time::mach_absolute_time(env);
     let timestamp = env.mem.alloc_and_write(AudioTimeStamp {
@@ -856,6 +1069,7 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         timestamp: timestamp.cast_const().cast(),
         frames: number_frames,
         data: audio_buffer_list,
+        bus: callback_bus,
     };
     call_render_notifies(env, &call, 1 << 2);
     if render_is_active(env, &call) {
@@ -871,7 +1085,7 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
                     input_proc_ref_con,
                     action_flags,
                     timestamp.cast_const(),
-                    0u32,
+                    callback_bus,
                     number_frames,
                     audio_buffer_list,
                 ),
@@ -994,6 +1208,7 @@ struct RenderNotification {
     timestamp: ConstVoidPtr,
     frames: u32,
     data: MutVoidPtr,
+    bus: u32,
 }
 
 fn render_is_active(env: &mut Environment, call: &RenderNotification) -> bool {
@@ -1024,7 +1239,7 @@ fn call_render_notifies(env: &mut Environment, call: &RenderNotification, phase:
                 context,
                 call.flags,
                 call.timestamp,
-                0u32,
+                call.bus,
                 call.frames,
                 call.data,
             ),

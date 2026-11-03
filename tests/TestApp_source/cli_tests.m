@@ -11081,6 +11081,56 @@ int test_audio_planar_render_callbacks(void) {
              : -7;
 }
 
+extern int AUGraphSetNodeInputCallback(void *, int, uint32_t,
+                                       const struct TestRenderCallback *);
+struct TestMixerState {
+  int counts[2];
+  int bad;
+};
+static int test_mixer_render(void *ctx, uint32_t *flags, const void *timestamp,
+                             uint32_t bus, uint32_t frames, void *data) {
+  struct TestMixerState *state = ctx;
+  struct TestAudioBufferList *list = data;
+  if (!timestamp || bus >= 2 || list->count != 1 ||
+      list->buffers[0].channels != 1 || list->buffers[0].size != frames * 2) {
+    state->bad = 1;
+    return 0;
+  }
+  ++state->counts[bus];
+  memset(list->buffers[0].data, 0, list->buffers[0].size);
+  return 0;
+}
+int test_augraph_two_input_mixer(void) {
+  const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
+                                                       0x6170706c, 0, 0};
+  const struct TestAudioComponentDescription mixer = {0x61756d78, 0x6d636d78,
+                                                      0x6170706c, 0, 0};
+  const struct TestStreamFormat format = {44100.0, 0x6c70636d, 12, 2, 1,
+                                          2,       1,          16, 0};
+  struct TestMixerState state = {0};
+  struct TestRenderCallback callback = {test_mixer_render, &state};
+  struct timespec pause = {0, 10000000};
+  uint32_t count = 2;
+  void *graph = NULL, *unit = NULL;
+  int output_node = 0, mixer_node = 0;
+  if (NewAUGraph(&graph) || AUGraphAddNode(graph, &output, &output_node) ||
+      AUGraphAddNode(graph, &mixer, &mixer_node) ||
+      AUGraphConnectNodeInput(graph, mixer_node, 0, output_node, 0) ||
+      AUGraphOpen(graph) || AUGraphNodeInfo(graph, mixer_node, NULL, &unit) ||
+      !unit || AudioUnitSetProperty(unit, 11, 1, 0, &count, sizeof(count)) ||
+      AudioUnitSetProperty(unit, 8, 1, 0, &format, sizeof(format)) ||
+      AudioUnitSetProperty(unit, 8, 1, 1, &format, sizeof(format)) ||
+      AUGraphSetNodeInputCallback(graph, mixer_node, 0, &callback) ||
+      AUGraphSetNodeInputCallback(graph, mixer_node, 1, &callback) ||
+      AUGraphInitialize(graph) || AUGraphStart(graph) ||
+      nanosleep(&pause, NULL))
+    return -1;
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  if (AUGraphStop(graph) || DisposeAUGraph(graph))
+    return -2;
+  return !state.bad && state.counts[0] == 1 && state.counts[1] == 1 ? 0 : -3;
+}
+
 int test_augraph_single_output_lifecycle(void) {
   const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
                                                        0x6170706c, 0, 0};
@@ -11491,6 +11541,7 @@ struct {
     FUNC_DEF(test_mach_semaphore_timedwait),
     FUNC_DEF(test_mach_semaphore_wait_signal),
     FUNC_DEF(test_audio_planar_render_callbacks),
+    FUNC_DEF(test_augraph_two_input_mixer),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
 #endif
