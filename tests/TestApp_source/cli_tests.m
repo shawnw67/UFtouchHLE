@@ -118,6 +118,12 @@ extern bool CGPathContainsPoint(const void *path, const void *transform,
 extern CGRect CGPathGetBoundingBox(const void *path);
 extern void CGPathRelease(const void *path);
 extern void CGContextAddPath(CGContextRef context, const void *path);
+extern void *CGPathCreateWithEllipseInRect(CGRect rect, const void *transform);
+extern void CGPathMoveToPoint(void *path, const void *transform, float x,
+                              float y);
+extern void CGPathAddQuadCurveToPoint(void *path, const void *transform,
+                                      float cx, float cy, float x, float y);
+extern void CGPathAddPath(void *path, const void *transform, const void *other);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -1124,6 +1130,25 @@ int test_CGPath_rect_and_draw(void) {
   CGPathRelease(path);
   CGContextRelease(context);
   CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
+}
+
+int test_CGPath_curves_and_copy(void) {
+  void *ellipse = CGPathCreateWithEllipseInRect(CGRectMake(0, 0, 8, 4), NULL);
+  CGPoint inside = {4, 2}, outside = {0, 0};
+  int passed = CGPathContainsPoint(ellipse, NULL, inside, false) &&
+               !CGPathContainsPoint(ellipse, NULL, outside, false);
+  void *path = CGPathCreateMutable();
+  CGPathMoveToPoint(path, NULL, 0, 0);
+  CGPathAddQuadCurveToPoint(path, NULL, 4, 8, 8, 0);
+  CGRect bounds = CGPathGetBoundingBox(path);
+  passed = passed && bounds.size.width == 8 && bounds.size.height == 4;
+  float translation[6] = {1, 0, 0, 1, 10, 0};
+  CGPathAddPath(path, translation, ellipse);
+  CGPoint translated = {14, 2};
+  passed = passed && CGPathContainsPoint(path, NULL, translated, false);
+  CGPathRelease(path);
+  CGPathRelease(ellipse);
   return passed ? 0 : -1;
 }
 
@@ -10221,6 +10246,7 @@ struct {
     FUNC_DEF(test_CTTypesetter_line_range),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGPath_rect_and_draw),
+    FUNC_DEF(test_CGPath_curves_and_copy),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),

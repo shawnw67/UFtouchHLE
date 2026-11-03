@@ -12,12 +12,12 @@ use super::{CGFloat, CGPoint, CGRect, CGSize};
 
 /// A path as a list of subpaths, each a polyline. Subpaths are implicitly
 /// closed when filling or clipping.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct Path {
     pub subpaths: Vec<Subpath>,
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct Subpath {
     pub points: Vec<CGPoint>,
     pub closed: bool,
@@ -323,10 +323,21 @@ fn CGPathAddLineToPoint(
     y: CGFloat,
 ) {
     let point = transform_point(env, transform, CGPoint { x, y });
-    env.objc
-        .borrow_mut::<CGPathHostObject>(path)
-        .path
-        .line_to(point);
+    let path = &mut env.objc.borrow_mut::<CGPathHostObject>(path).path;
+    resume_closed_subpath(path);
+    path.line_to(point);
+}
+
+fn resume_closed_subpath(path: &mut Path) {
+    if let Some(start) = path
+        .subpaths
+        .last()
+        .filter(|s| s.closed)
+        .and_then(|s| s.points.first())
+        .copied()
+    {
+        path.move_to(start);
+    }
 }
 fn CGPathCloseSubpath(env: &mut Environment, path: CFTypeRef) {
     env.objc.borrow_mut::<CGPathHostObject>(path).path.close();
@@ -400,7 +411,127 @@ fn CGPathContainsPoint(
     }
     path.contains(point, even_odd)
 }
+fn CGPathAddQuadCurveToPoint(
+    env: &mut Environment,
+    path: CFTypeRef,
+    transform: ConstPtr<CGAffineTransform>,
+    cx: CGFloat,
+    cy: CGFloat,
+    x: CGFloat,
+    y: CGFloat,
+) {
+    let control = transform_point(env, transform, CGPoint { x: cx, y: cy });
+    let end = transform_point(env, transform, CGPoint { x, y });
+    let value = &mut env.objc.borrow_mut::<CGPathHostObject>(path).path;
+    resume_closed_subpath(value);
+    let Some(start) = value.current_point() else {
+        value.move_to(end);
+        return;
+    };
+    for i in 1..=32 {
+        let t = i as CGFloat / 32.0;
+        let s = 1.0 - t;
+        value.line_to(CGPoint {
+            x: s * s * start.x + 2.0 * s * t * control.x + t * t * end.x,
+            y: s * s * start.y + 2.0 * s * t * control.y + t * t * end.y,
+        });
+    }
+}
+#[allow(clippy::too_many_arguments)]
+fn CGPathAddCurveToPoint(
+    env: &mut Environment,
+    path: CFTypeRef,
+    transform: ConstPtr<CGAffineTransform>,
+    x1: CGFloat,
+    y1: CGFloat,
+    x2: CGFloat,
+    y2: CGFloat,
+    x: CGFloat,
+    y: CGFloat,
+) {
+    let a = transform_point(env, transform, CGPoint { x: x1, y: y1 });
+    let b = transform_point(env, transform, CGPoint { x: x2, y: y2 });
+    let end = transform_point(env, transform, CGPoint { x, y });
+    let value = &mut env.objc.borrow_mut::<CGPathHostObject>(path).path;
+    resume_closed_subpath(value);
+    let Some(start) = value.current_point() else {
+        value.move_to(end);
+        return;
+    };
+    for i in 1..=32 {
+        let t = i as CGFloat / 32.0;
+        let s = 1.0 - t;
+        value.line_to(CGPoint {
+            x: s * s * s * start.x
+                + 3.0 * s * s * t * a.x
+                + 3.0 * s * t * t * b.x
+                + t * t * t * end.x,
+            y: s * s * s * start.y
+                + 3.0 * s * s * t * a.y
+                + 3.0 * s * t * t * b.y
+                + t * t * t * end.y,
+        });
+    }
+}
+fn CGPathCreateWithEllipseInRect(
+    env: &mut Environment,
+    rect: CGRect,
+    transform: ConstPtr<CGAffineTransform>,
+) -> CFTypeRef {
+    let path = CGPathCreateMutable(env);
+    let (cx, cy) = (
+        rect.origin.x + rect.size.width / 2.0,
+        rect.origin.y + rect.size.height / 2.0,
+    );
+    for i in 0..64 {
+        let angle = std::f32::consts::TAU * i as CGFloat / 64.0;
+        let (x, y) = (
+            cx + angle.cos() * rect.size.width / 2.0,
+            cy + angle.sin() * rect.size.height / 2.0,
+        );
+        if i == 0 {
+            CGPathMoveToPoint(env, path, transform, x, y);
+        } else {
+            CGPathAddLineToPoint(env, path, transform, x, y);
+        }
+    }
+    CGPathCloseSubpath(env, path);
+    path
+}
+fn CGPathAddPath(
+    env: &mut Environment,
+    destination: CFTypeRef,
+    transform: ConstPtr<CGAffineTransform>,
+    source: CFTypeRef,
+) {
+    let mut path = copy_path(env, source);
+    for subpath in &mut path.subpaths {
+        for point in &mut subpath.points {
+            *point = transform_point(env, transform, *point);
+        }
+    }
+    env.objc
+        .borrow_mut::<CGPathHostObject>(destination)
+        .path
+        .subpaths
+        .extend(path.subpaths);
+}
+fn CGPathEqualToPath(env: &mut Environment, first: CFTypeRef, second: CFTypeRef) -> bool {
+    if first == second {
+        return true;
+    }
+    if first.is_null() || second.is_null() {
+        return false;
+    }
+    copy_path(env, first) == copy_path(env, second)
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CGPathAddQuadCurveToPoint(_, _, _, _, _, _)),
+    export_c_func!(CGPathAddCurveToPoint(_, _, _, _, _, _, _, _)),
+    export_c_func!(CGPathCreateWithEllipseInRect(_, _)),
+    export_c_func!(CGPathAddPath(_, _, _)),
+    export_c_func!(CGPathEqualToPath(_, _)),
     export_c_func!(CGPathCreateMutable()),
     export_c_func!(CGPathCreateCopy(_)),
     export_c_func!(CGPathCreateMutableCopy(_)),
