@@ -122,12 +122,21 @@ fn AudioComponentFindNext(
     in_component: AudioComponent,
     in_desc: ConstPtr<AudioComponentDescription>,
 ) -> AudioComponent {
-    assert!(in_component.is_null());
+    if !in_component.is_null() || in_desc.is_null() {
+        return MutPtr::null();
+    }
 
     let audio_comp_descr = env.mem.read(in_desc);
-    assert!(audio_comp_descr.component_type == kAudioUnitType_Output);
-    assert!(audio_comp_descr.component_sub_type == kAudioUnitSubType_RemoteIO);
-    assert!(audio_comp_descr.component_manufacturer == kAudioUnitManufacturer_Apple);
+    if (audio_comp_descr.component_type != 0
+        && audio_comp_descr.component_type != kAudioUnitType_Output)
+        || (audio_comp_descr.component_sub_type != 0
+            && audio_comp_descr.component_sub_type != kAudioUnitSubType_RemoteIO)
+        || (audio_comp_descr.component_manufacturer != 0
+            && audio_comp_descr.component_manufacturer != kAudioUnitManufacturer_Apple)
+        || audio_comp_descr.component_flags & audio_comp_descr.component_flags_mask != 0
+    {
+        return MutPtr::null();
+    }
 
     let state = State::get(&mut env.framework_state);
     if state.audio_component.is_null() {
@@ -136,8 +145,8 @@ fn AudioComponentFindNext(
 
     let out_component: AudioComponent = state.audio_component;
 
-    log!(
-        "TODO: AudioComponentFindNext({:?}, {:?}) -> {:?}",
+    log_dbg!(
+        "AudioComponentFindNext({:?}, {:?}) -> {:?}",
         in_component,
         in_desc,
         out_component
@@ -150,6 +159,12 @@ fn AudioComponentInstanceNew(
     in_component: AudioComponent,
     out_instance: MutPtr<AudioComponentInstance>,
 ) -> OSStatus {
+    if in_component.is_null()
+        || in_component != State::get(&mut env.framework_state).audio_component
+        || out_instance.is_null()
+    {
+        return paramErr;
+    }
     let guest_instance = create_audio_unit_instance(env);
 
     env.mem.write(out_instance, guest_instance);

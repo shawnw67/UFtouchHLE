@@ -10906,6 +10906,23 @@ extern int AUGraphIsOpen(void *, unsigned char *);
 extern int AUGraphIsInitialized(void *, unsigned char *);
 extern int AUGraphConnectNodeInput(void *, int, uint32_t, int, uint32_t);
 extern int AUGraphDisconnectNodeInput(void *, int, uint32_t);
+extern void *
+AudioComponentFindNext(void *, const struct TestAudioComponentDescription *);
+extern int AudioComponentInstanceNew(void *, void **);
+extern int AudioComponentInstanceDispose(void *);
+
+int test_audio_component_enumeration(void) {
+  struct TestAudioComponentDescription description = {0};
+  void *component = AudioComponentFindNext(NULL, &description);
+  void *unit = NULL;
+  if (!component || AudioComponentFindNext(component, &description) ||
+      AudioComponentInstanceNew(component, &unit) || !unit ||
+      AudioComponentInstanceDispose(unit) ||
+      !AudioComponentInstanceNew(NULL, &unit))
+    return -1;
+  description.type = 0x61756d78; // Mixer, not supported yet.
+  return AudioComponentFindNext(NULL, &description) == NULL ? 0 : -2;
+}
 
 int test_augraph_single_output_lifecycle(void) {
   const struct TestAudioComponentDescription output = {0x61756f75, 0x72696f63,
@@ -11139,6 +11156,7 @@ struct {
     FUNC_DEF(test_dispatch_once_concurrent),
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
     FUNC_DEF(test_augraph_single_output_lifecycle),
+    FUNC_DEF(test_audio_component_enumeration),
 #endif
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),
