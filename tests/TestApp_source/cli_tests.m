@@ -71,6 +71,12 @@ extern void vDSP_fft_zrip(void *setup, const struct TestSplitComplex *data,
 extern void vDSP_ctoz(const float *input, int input_stride,
                       const struct TestSplitComplex *output, int output_stride,
                       unsigned int count);
+extern void vDSP_vsub(const float *a, int sa, const float *b, int sb,
+                      float *out, int so, unsigned int count);
+extern void vDSP_vsmul(const float *a, int sa, const float *scalar, float *out,
+                       int so, unsigned int count);
+extern void vDSP_dotpr(const float *a, int sa, const float *b, int sb,
+                       float *out, unsigned int count);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -573,11 +579,34 @@ int test_vDSP_fft_and_packing(void) {
       passed && fabsf(real[0] - 2) < 0.0001f && fabsf(imag[0] - 2) < 0.0001f;
   vDSP_fft_zrip(setup, &split, 1, 3, -1);
   passed = passed && fabsf(real[0] - 16) < 0.0001f && fabsf(imag[0]) < 0.0001f;
+  for (int i = 0; i < 4; i++) {
+    real[i] = 2 * i;
+    imag[i] = 2 * i + 1;
+  }
+  vDSP_fft_zrip(setup, &split, 1, 3, 1);
+  vDSP_fft_zrip(setup, &split, 1, 3, -1);
+  for (int i = 0; i < 4; i++)
+    passed = passed && fabsf(real[i] - 32 * i) < 0.001f &&
+             fabsf(imag[i] - 16 * (2 * i + 1)) < 0.001f;
   float interleaved[] = {1, 2, 3, 4};
   vDSP_ctoz(interleaved + 2, -2, &split, 1, 2);
   passed =
       passed && real[0] == 3 && imag[0] == 4 && real[1] == 1 && imag[1] == 2;
   vDSP_destroy_fftsetup(setup);
+  return passed ? 0 : -1;
+}
+
+int test_vDSP_vector_operations(void) {
+  float a[] = {1, 2, 3};
+  float b[] = {10, 20, 30};
+  float result[3] = {0};
+  vDSP_vsub(a + 2, -1, b, 1, result, 1, 3);
+  int passed = result[0] == 7 && result[1] == 18 && result[2] == 29;
+  float scalar = 0.5f;
+  vDSP_vsmul(result, 1, &scalar, result, 1, 3);
+  float dot = 0;
+  vDSP_dotpr(a, 1, result, 1, &dot, 3);
+  passed = passed && result[0] == 3.5f && result[2] == 14.5f && dot == 65;
   return passed ? 0 : -1;
 }
 
@@ -9892,6 +9921,7 @@ struct {
     FUNC_DEF(test_CGContext_color_components),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_vDSP_fft_and_packing),
+    FUNC_DEF(test_vDSP_vector_operations),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),

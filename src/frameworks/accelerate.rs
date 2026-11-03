@@ -251,7 +251,254 @@ fn vDSP_ztoc(
     }
 }
 
+// vDSP strides count 32-bit elements and may be negative.
+macro_rules! binary_vector {
+    ($name:ident, $operation:expr) => {
+        fn $name(
+            env: &mut Environment,
+            a: ConstPtr<f32>,
+            sa: i32,
+            b: ConstPtr<f32>,
+            sb: i32,
+            output: MutPtr<f32>,
+            so: i32,
+            count: u32,
+        ) {
+            for i in 0..count {
+                let x = env.mem.read(at(a, sa, i));
+                let y = env.mem.read(at(b, sb, i));
+                env.mem.write(at(output, so, i), ($operation)(x, y));
+            }
+        }
+    };
+}
+binary_vector!(vDSP_vadd, |a: f32, b: f32| a + b);
+binary_vector!(vDSP_vsub, |a: f32, b: f32| b - a);
+binary_vector!(vDSP_vmul, |a: f32, b: f32| a * b);
+binary_vector!(vDSP_vdiv, |a: f32, b: f32| b / a);
+binary_vector!(vDSP_vmax, |a: f32, b: f32| a.max(b));
+binary_vector!(vDSP_vmin, |a: f32, b: f32| a.min(b));
+binary_vector!(vDSP_vdist, |a: f32, b: f32| a.hypot(b));
+
+macro_rules! scalar_vector {
+    ($name:ident, $operation:expr) => {
+        fn $name(
+            env: &mut Environment,
+            a: ConstPtr<f32>,
+            sa: i32,
+            scalar: ConstPtr<f32>,
+            output: MutPtr<f32>,
+            so: i32,
+            count: u32,
+        ) {
+            let value = env.mem.read(scalar);
+            for i in 0..count {
+                let x = env.mem.read(at(a, sa, i));
+                env.mem.write(at(output, so, i), ($operation)(x, value));
+            }
+        }
+    };
+}
+scalar_vector!(vDSP_vsmul, |a: f32, b: f32| a * b);
+scalar_vector!(vDSP_vsdiv, |a: f32, b: f32| a / b);
+scalar_vector!(vDSP_vsadd, |a: f32, b: f32| a + b);
+
+macro_rules! unary_vector {
+    ($name:ident, $operation:expr) => {
+        fn $name(
+            env: &mut Environment,
+            input: ConstPtr<f32>,
+            si: i32,
+            output: MutPtr<f32>,
+            so: i32,
+            count: u32,
+        ) {
+            for i in 0..count {
+                let value = env.mem.read(at(input, si, i));
+                env.mem.write(at(output, so, i), ($operation)(value));
+            }
+        }
+    };
+}
+unary_vector!(vDSP_vabs, |a: f32| a.abs());
+unary_vector!(vDSP_vneg, |a: f32| -a);
+
+fn vDSP_vfill(
+    env: &mut Environment,
+    scalar: ConstPtr<f32>,
+    output: MutPtr<f32>,
+    stride: i32,
+    count: u32,
+) {
+    let value = env.mem.read(scalar);
+    for i in 0..count {
+        env.mem.write(at(output, stride, i), value);
+    }
+}
+fn vDSP_vclr(env: &mut Environment, output: MutPtr<f32>, stride: i32, count: u32) {
+    for i in 0..count {
+        env.mem.write(at(output, stride, i), 0.0f32);
+    }
+}
+fn vDSP_zvmags(
+    env: &mut Environment,
+    input: ConstPtr<SplitComplex>,
+    si: i32,
+    output: MutPtr<f32>,
+    so: i32,
+    count: u32,
+) {
+    let split = env.mem.read(input);
+    for i in 0..count {
+        let real = env.mem.read(at(split.real, si, i));
+        let imag = env.mem.read(at(split.imag, si, i));
+        env.mem.write(at(output, so, i), real * real + imag * imag);
+    }
+}
+fn vDSP_dotpr(
+    env: &mut Environment,
+    a: ConstPtr<f32>,
+    sa: i32,
+    b: ConstPtr<f32>,
+    sb: i32,
+    output: MutPtr<f32>,
+    count: u32,
+) {
+    let mut total = 0.0;
+    for i in 0..count {
+        total += env.mem.read(at(a, sa, i)) * env.mem.read(at(b, sb, i));
+    }
+    env.mem.write(output, total);
+}
+fn vDSP_sve(
+    env: &mut Environment,
+    input: ConstPtr<f32>,
+    stride: i32,
+    output: MutPtr<f32>,
+    count: u32,
+) {
+    let mut total = 0.0;
+    for i in 0..count {
+        total += env.mem.read(at(input, stride, i));
+    }
+    env.mem.write(output, total);
+}
+fn vDSP_svesq(
+    env: &mut Environment,
+    input: ConstPtr<f32>,
+    stride: i32,
+    output: MutPtr<f32>,
+    count: u32,
+) {
+    let mut total = 0.0;
+    for i in 0..count {
+        let x: f32 = env.mem.read(at(input, stride, i));
+        total += x * x;
+    }
+    env.mem.write(output, total);
+}
+fn vDSP_meanv(
+    env: &mut Environment,
+    input: ConstPtr<f32>,
+    stride: i32,
+    output: MutPtr<f32>,
+    count: u32,
+) {
+    vDSP_sve(env, input, stride, output, count);
+    if count != 0 {
+        let sum = env.mem.read(output);
+        env.mem.write(output, sum / count as f32);
+    }
+}
+fn vDSP_rmsqv(
+    env: &mut Environment,
+    input: ConstPtr<f32>,
+    stride: i32,
+    output: MutPtr<f32>,
+    count: u32,
+) {
+    vDSP_svesq(env, input, stride, output, count);
+    if count != 0 {
+        let sum: f32 = env.mem.read(output);
+        env.mem.write(output, (sum / count as f32).sqrt());
+    }
+}
+fn vDSP_maxv(
+    env: &mut Environment,
+    input: ConstPtr<f32>,
+    stride: i32,
+    output: MutPtr<f32>,
+    count: u32,
+) {
+    if count == 0 {
+        return;
+    }
+    let mut value: f32 = env.mem.read(input);
+    for i in 1..count {
+        value = value.max(env.mem.read(at(input, stride, i)));
+    }
+    env.mem.write(output, value);
+}
+fn vDSP_minv(
+    env: &mut Environment,
+    input: ConstPtr<f32>,
+    stride: i32,
+    output: MutPtr<f32>,
+    count: u32,
+) {
+    if count == 0 {
+        return;
+    }
+    let mut value: f32 = env.mem.read(input);
+    for i in 1..count {
+        value = value.min(env.mem.read(at(input, stride, i)));
+    }
+    env.mem.write(output, value);
+}
+fn vDSP_vma(
+    env: &mut Environment,
+    a: ConstPtr<f32>,
+    sa: i32,
+    b: ConstPtr<f32>,
+    sb: i32,
+    c: ConstPtr<f32>,
+    sc: i32,
+    output: MutPtr<f32>,
+    so: i32,
+    count: u32,
+) {
+    for i in 0..count {
+        let x: f32 = env.mem.read(at(a, sa, i));
+        let y: f32 = env.mem.read(at(b, sb, i));
+        let z: f32 = env.mem.read(at(c, sc, i));
+        env.mem.write(at(output, so, i), x * y + z);
+    }
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(vDSP_vadd(_, _, _, _, _, _, _)),
+    export_c_func!(vDSP_vsub(_, _, _, _, _, _, _)),
+    export_c_func!(vDSP_vmul(_, _, _, _, _, _, _)),
+    export_c_func!(vDSP_vdiv(_, _, _, _, _, _, _)),
+    export_c_func!(vDSP_vmax(_, _, _, _, _, _, _)),
+    export_c_func!(vDSP_vmin(_, _, _, _, _, _, _)),
+    export_c_func!(vDSP_vdist(_, _, _, _, _, _, _)),
+    export_c_func!(vDSP_vsmul(_, _, _, _, _, _)),
+    export_c_func!(vDSP_vsdiv(_, _, _, _, _, _)),
+    export_c_func!(vDSP_vsadd(_, _, _, _, _, _)),
+    export_c_func!(vDSP_vabs(_, _, _, _, _)),
+    export_c_func!(vDSP_vneg(_, _, _, _, _)),
+    export_c_func!(vDSP_zvmags(_, _, _, _, _)),
+    export_c_func!(vDSP_vfill(_, _, _, _)),
+    export_c_func!(vDSP_sve(_, _, _, _)),
+    export_c_func!(vDSP_svesq(_, _, _, _)),
+    export_c_func!(vDSP_meanv(_, _, _, _)),
+    export_c_func!(vDSP_rmsqv(_, _, _, _)),
+    export_c_func!(vDSP_maxv(_, _, _, _)),
+    export_c_func!(vDSP_minv(_, _, _, _)),
+    export_c_func!(vDSP_vclr(_, _, _)),
+    export_c_func!(vDSP_dotpr(_, _, _, _, _, _)),
+    export_c_func!(vDSP_vma(_, _, _, _, _, _, _, _, _)),
     export_c_func!(vDSP_create_fftsetup(_, _)),
     export_c_func!(vDSP_destroy_fftsetup(_)),
     export_c_func!(vDSP_fft_zip(_, _, _, _, _)),
