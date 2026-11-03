@@ -438,6 +438,43 @@ fn AudioUnitGetPropertyInfo(
     0
 }
 
+fn AudioUnitReset(env: &mut Environment, unit: AudioUnit, scope: u32, element: u32) -> OSStatus {
+    if scope > kAudioUnitScope_Output || element != 0 {
+        return paramErr;
+    }
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get_mut(&unit)
+    else {
+        return paramErr;
+    };
+    object.sample_time = 0.0;
+    let source = object.al_source;
+    if object.started {
+        object.last_render_time = Some(Instant::now());
+    }
+    if let Some(source) = source {
+        let context = env
+            .framework_state
+            .audio_toolbox
+            .al_context
+            .make_al_context_current(env.openal_manager.as_mut());
+        unsafe {
+            context.SourceStop(source);
+            let mut queued = 0;
+            context.GetSourcei(source, AL_BUFFERS_QUEUED, &mut queued);
+            if queued > 0 {
+                let mut buffers = vec![0; queued as usize];
+                context.SourceUnqueueBuffers(source, queued, buffers.as_mut_ptr());
+                context.DeleteBuffers(queued, buffers.as_ptr());
+            }
+            context.SourcePlay(source);
+            assert_eq!(context.GetError(), 0);
+        }
+    }
+    0
+}
+
 pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSStatus {
     match audio_components::State::get(&mut env.framework_state)
         .audio_component_instances
@@ -831,6 +868,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitSetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetProperty(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetPropertyInfo(_, _, _, _, _, _)),
+    export_c_func!(AudioUnitReset(_, _, _)),
     export_c_func!(AudioOutputUnitStart(_)),
     export_c_func!(AudioOutputUnitStop(_)),
 ];
