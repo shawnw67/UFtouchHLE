@@ -412,6 +412,70 @@ where
     mac.finalize().into_bytes().to_vec()
 }
 
+#[allow(clippy::too_many_arguments)] // Matches the guest's CommonCrypto ABI.
+fn CCKeyDerivationPBKDF(
+    env: &mut Environment,
+    algorithm: u32,
+    password: ConstVoidPtr,
+    password_len: u32,
+    salt: ConstVoidPtr,
+    salt_len: u32,
+    prf: u32,
+    rounds: u32,
+    output: MutVoidPtr,
+    output_len: u32,
+) -> i32 {
+    if algorithm != 2
+        || rounds == 0
+        || output.is_null()
+        || output_len == 0
+        || (password_len != 0 && password.is_null())
+        || (salt_len != 0 && salt.is_null())
+    {
+        return kCCParamError;
+    }
+    let mac: fn(&[u8], &[u8]) -> Vec<u8> = match prf {
+        1 => hmac::<Sha1>,
+        2 => hmac::<sha2::Sha224>,
+        3 => hmac::<sha2::Sha256>,
+        4 => hmac::<sha2::Sha384>,
+        5 => hmac::<sha2::Sha512>,
+        _ => return kCCParamError,
+    };
+    let password = if password_len == 0 {
+        Vec::new()
+    } else {
+        env.mem.bytes_at(password.cast(), password_len).to_vec()
+    };
+    let mut salt = if salt_len == 0 {
+        Vec::new()
+    } else {
+        env.mem.bytes_at(salt.cast(), salt_len).to_vec()
+    };
+    let mut derived = Vec::with_capacity(output_len as usize);
+    let mut block: u32 = 1;
+    let salt_size = salt.len();
+    while derived.len() < output_len as usize {
+        salt.truncate(salt_size);
+        salt.extend_from_slice(&block.to_be_bytes());
+        let mut u = mac(&password, &salt);
+        let mut result = u.clone();
+        for _ in 1..rounds {
+            u = mac(&password, &u);
+            for (out, value) in result.iter_mut().zip(&u) {
+                *out ^= *value;
+            }
+        }
+        let remaining = output_len as usize - derived.len();
+        derived.extend_from_slice(&result[..remaining.min(result.len())]);
+        block += 1;
+    }
+    env.mem
+        .bytes_at_mut(output.cast(), output_len)
+        .copy_from_slice(&derived);
+    kCCSuccess
+}
+
 /// One-shot HMAC from CommonCrypto.
 fn CCHmac(
     env: &mut Environment,
@@ -440,6 +504,7 @@ fn CCHmac(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CCKeyDerivationPBKDF(_, _, _, _, _, _, _, _, _)),
     export_c_func!(CCCrypt(_, _, _, _, _, _, _, _, _, _, _)),
     export_c_func!(CCHmac(_, _, _, _, _, _)),
     export_c_func!(CC_MD5_Init(_)),

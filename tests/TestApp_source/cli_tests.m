@@ -95,6 +95,11 @@ extern unsigned char *CC_SHA256(const void *data, unsigned int len,
 extern int CC_SHA256_Init(void *ctx);
 extern int CC_SHA256_Update(void *ctx, const void *data, unsigned int len);
 extern int CC_SHA256_Final(unsigned char *output, void *ctx);
+extern int CCKeyDerivationPBKDF(unsigned int algorithm, const void *password,
+                                unsigned int password_len, const void *salt,
+                                unsigned int salt_len, unsigned int prf,
+                                unsigned int rounds, void *output,
+                                unsigned int output_len);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -681,6 +686,17 @@ int test_CC_SHA256(void) {
            CC_SHA256_Final(incremental, context) &&
            memcmp(incremental, expected, sizeof(expected)) == 0;
   return passed ? 0 : -1;
+}
+
+int test_CCKeyDerivationPBKDF(void) {
+  const unsigned char expected[] = {0x0c, 0x60, 0xc8, 0x0f, 0x96, 0x1f, 0x0e,
+                                    0x71, 0xf3, 0xa9, 0xb5, 0x24, 0xaf, 0x60,
+                                    0x12, 0x06, 0x2f, 0xe0, 0x37, 0xa6};
+  unsigned char output[20];
+  int result = CCKeyDerivationPBKDF(2, "password", 8, "salt", 4, 1, 1, output,
+                                    sizeof(output));
+  return result == 0 && memcmp(output, expected, sizeof(expected)) == 0 ? 0
+                                                                        : -1;
 }
 
 static void custom_mode_timer_callback(CFRunLoopTimerRef timer, void *info) {
@@ -9998,6 +10014,7 @@ struct {
     FUNC_DEF(test_cblas_operations),
     FUNC_DEF(test_vImageCopyBuffer),
     FUNC_DEF(test_CC_SHA256),
+    FUNC_DEF(test_CCKeyDerivationPBKDF),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),
