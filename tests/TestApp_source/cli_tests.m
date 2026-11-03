@@ -11001,6 +11001,7 @@ extern int semaphore_create(uint32_t, void **, int, int);
 extern int semaphore_destroy(uint32_t, void *);
 extern int semaphore_signal(void *);
 extern int semaphore_signal_all(void *);
+extern int semaphore_wait_signal(void *, void *);
 extern int semaphore_trywait(void *);
 extern int semaphore_timedwait(void *, struct TestMachTimespec);
 static void *test_mach_semaphore_signal_thread(void *semaphore) {
@@ -11038,6 +11039,19 @@ int test_mach_semaphore_timedwait(void) {
       pthread_join(second_waiter, &second_result) || first_result ||
       second_result || semaphore_trywait(semaphore) != 49 ||
       semaphore_destroy(task, semaphore))
+    return -1;
+  return 0;
+}
+
+int test_mach_semaphore_wait_signal(void) {
+  const uint32_t task = 0x7461736b;
+  void *wait = NULL, *signal = NULL;
+  if (semaphore_create(task, &wait, 0, 1) ||
+      semaphore_create(task, &signal, 0, 0) ||
+      semaphore_wait_signal(wait, signal) || semaphore_trywait(wait) != 49 ||
+      semaphore_trywait(signal) || semaphore_wait_signal(wait, wait) ||
+      semaphore_trywait(wait) != 49 || semaphore_destroy(task, wait) ||
+      semaphore_destroy(task, signal))
     return -1;
   return 0;
 }
@@ -11286,6 +11300,7 @@ struct {
     FUNC_DEF(test_mach_vm_partial_deallocation),
     FUNC_DEF(test_mach_vm_read_overwrite),
     FUNC_DEF(test_mach_semaphore_timedwait),
+    FUNC_DEF(test_mach_semaphore_wait_signal),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
 #endif

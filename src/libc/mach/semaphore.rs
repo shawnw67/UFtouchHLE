@@ -12,7 +12,7 @@
 use std::time::{Duration, Instant};
 
 use crate::dyld::FunctionExports;
-use crate::environment::Environment;
+use crate::environment::{Environment, ThreadBlock};
 use crate::export_c_func;
 use crate::libc::mach::arm::task::task_t;
 use crate::libc::mach::init::MACH_TASK_SELF;
@@ -115,6 +115,53 @@ fn semaphore_trywait(env: &mut Environment, semaphore: semaphore_t) -> kern_retu
     }
 }
 
+fn semaphore_wait_signal(
+    env: &mut Environment,
+    wait: semaphore_t,
+    signal: semaphore_t,
+) -> kern_return_t {
+    if !env.libc_state.semaphore.open_semaphores.contains_key(&wait)
+        || !env
+            .libc_state
+            .semaphore
+            .open_semaphores
+            .contains_key(&signal)
+    {
+        return KERN_INVALID_ARGUMENT;
+    }
+    // Register the wait before signaling, with no guest thread switch between.
+    let acquired = env.sem_decrement(wait, false);
+    if !acquired {
+        env.libc_state
+            .semaphore
+            .open_semaphores
+            .get(&wait)
+            .unwrap()
+            .borrow_mut()
+            .waiting
+            .insert(env.current_thread);
+    }
+    if sem_post(env, signal) != 0 {
+        if acquired {
+            let _ = sem_post(env, wait);
+        } else {
+            env.libc_state
+                .semaphore
+                .open_semaphores
+                .get(&wait)
+                .unwrap()
+                .borrow_mut()
+                .waiting
+                .remove(&env.current_thread);
+        }
+        return KERN_INVALID_ARGUMENT;
+    }
+    if !acquired {
+        env.yield_thread(ThreadBlock::Semaphore(wait));
+    }
+    KERN_SUCCESS
+}
+
 // The 32-bit guest ABI passes mach_timespec_t as consecutive u32 words.
 fn semaphore_timedwait(
     env: &mut Environment,
@@ -181,6 +228,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(semaphore_signal_all(_)),
     export_c_func!(semaphore_wait(_)),
     export_c_func!(semaphore_trywait(_)),
+    export_c_func!(semaphore_wait_signal(_, _)),
     export_c_func!(semaphore_timedwait(_, _, _)),
     export_c_func!(semaphore_destroy(_, _)),
 ];
