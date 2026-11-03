@@ -21,11 +21,10 @@ use crate::frameworks::audio_toolbox::audio_queue::{
     is_supported_audio_format, log_if_broken_audio_format,
 };
 use crate::frameworks::carbon_core::{paramErr, OSStatus};
-use crate::frameworks::core_audio_types::AudioStreamBasicDescription;
+use crate::frameworks::core_audio_types::{AudioStreamBasicDescription, AudioTimeStamp, SMPTETime};
 use crate::frameworks::core_foundation::cf_run_loop::CFRunLoopGetMain;
 use crate::frameworks::foundation::ns_run_loop;
 use crate::mem::{guest_size_of, ConstVoidPtr, MutPtr, MutVoidPtr, SafeRead};
-use crate::objc::nil;
 
 use super::audio_components::{AURenderCallbackStruct, AudioComponentInstance};
 use super::audio_queue::decode_buffer;
@@ -424,6 +423,7 @@ pub(super) fn AudioOutputUnitStart(env: &mut Environment, ci: AudioUnit) -> OSSt
         .unwrap();
     audio_unit_state.al_source = Some(source);
     audio_unit_state.last_render_time = Some(Instant::now());
+    audio_unit_state.sample_time = 0.0;
     audio_unit_state.started = true;
 
     let result = 0; // Success
@@ -613,17 +613,39 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         input_proc: inputProc,
         input_proc_ref_con: inputProcRefCon,
     } = audio_unit_host_object.render_callback.unwrap();
+    let sample_time = audio_unit_host_object.sample_time;
+    let host_time = crate::libc::mach::time::mach_absolute_time(env);
+    let timestamp = env.mem.alloc_and_write(AudioTimeStamp {
+        sample_time,
+        host_time,
+        rate_scalar: 1.0,
+        world_clock_type: 0,
+        SMPTE_time: SMPTETime {
+            subframes: 0,
+            subframe_divisor: 0,
+            counter: 0,
+            type_: 0,
+            flags: 0,
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+            frames: 0,
+        },
+        flags: 1 | 2 | 4,
+        _reserved: 0,
+    });
     let () = inputProc.call_from_host(
         env,
         (
             inputProcRefCon,
             action_flags,
-            nil.cast_void().cast_const(),
+            timestamp.cast_const(),
             0u32,
             number_frames,
             audio_buffer_list,
         ),
     );
+    env.mem.free(timestamp.cast());
 
     let at_state = &mut env.framework_state.audio_toolbox;
     let context = at_state
@@ -683,6 +705,7 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     // Reborrow as mutable to update the last render time
 
     audio_unit_host_object.last_render_time = Some(now);
+    audio_unit_host_object.sample_time = sample_time + f64::from(number_frames);
     audio_unit_host_object.is_running_handler = false;
 }
 
