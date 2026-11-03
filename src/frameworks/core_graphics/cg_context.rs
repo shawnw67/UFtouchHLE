@@ -366,6 +366,47 @@ pub fn CGContextDrawImage(
     cg_bitmap_context::draw_image(env, context, rect, image);
 }
 
+// HyperHLE tiles the image from rect.origin across the current clip.
+fn CGContextDrawTiledImage(
+    env: &mut Environment,
+    context: CGContextRef,
+    rect: CGRect,
+    image: CGImageRef,
+) {
+    let (width, height) = (rect.size.width, rect.size.height);
+    if context.is_null()
+        || image.is_null()
+        || !width.is_finite()
+        || !height.is_finite()
+        || width <= 0.0
+        || height <= 0.0
+        || !rect.origin.x.is_finite()
+        || !rect.origin.y.is_finite()
+    {
+        return;
+    }
+    let clip = CGContextGetClipBoundingBox(env, context);
+    let start_x = rect.origin.x + ((clip.origin.x - rect.origin.x) / width).floor() * width;
+    let start_y = rect.origin.y + ((clip.origin.y - rect.origin.y) / height).floor() * height;
+    let columns = ((clip.origin.x + clip.size.width - start_x) / width).ceil();
+    let rows = ((clip.origin.y + clip.size.height - start_y) / height).ceil();
+    if !columns.is_finite() || !rows.is_finite() || columns <= 0.0 || rows <= 0.0 {
+        return;
+    }
+    let (columns, rows) = (columns as u64, rows as u64);
+    const MAX_TILES: u64 = 1_000_000;
+    for index in 0..columns.saturating_mul(rows).min(MAX_TILES) {
+        let tile = CGRect {
+            origin: CGPoint {
+                x: start_x + (index % columns) as f32 * width,
+                y: start_y + (index / columns) as f32 * height,
+            },
+            size: CGSize { width, height },
+        };
+        cg_bitmap_context::draw_image(env, context, tile, image);
+    }
+}
+
 pub(crate) fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) {
     let host_obj = env.objc.borrow_mut::<CGContextHostObject>(context);
     host_obj.state_stack.push((
@@ -1162,6 +1203,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextScaleCTM(_, _, _)),
     export_c_func!(CGContextTranslateCTM(_, _, _)),
     export_c_func!(CGContextDrawImage(_, _, _)),
+    export_c_func!(CGContextDrawTiledImage(_, _, _)),
     export_c_func!(CGContextSaveGState(_)),
     export_c_func!(CGContextBeginPath(_)),
     export_c_func!(CGContextMoveToPoint(_, _, _)),

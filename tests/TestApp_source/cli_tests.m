@@ -131,6 +131,8 @@ extern void UIGraphicsPushContext(CGContextRef context);
 extern void UIGraphicsPopContext(void);
 extern void CGContextResetClip(CGContextRef context);
 extern CGRect CGContextGetClipBoundingBox(CGContextRef context);
+extern void CGContextDrawTiledImage(CGContextRef context, CGRect rect,
+                                    CGImageRef image);
 
 @interface UIBezierPath : NSObject
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
@@ -1253,6 +1255,26 @@ int test_UIBezierPath_even_odd(void) {
   passed = passed && pixels[(1 * 8 + 1) * 4 + 3] == 255 &&
            pixels[(4 * 8 + 4) * 4 + 3] == 0;
   CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
+}
+
+int test_CGContext_tiled_image(void) {
+  unsigned char source_pixels[] = {255, 0, 0, 255, 0, 0, 255, 255};
+  unsigned char output[4 * 2 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef source = CGBitmapContextCreate(source_pixels, 2, 1, 8, 8, space,
+                                              kCGImageAlphaPremultipliedLast);
+  CGImageRef image = CGBitmapContextCreateImage(source);
+  CGContextRef target = CGBitmapContextCreate(output, 4, 2, 8, 16, space,
+                                              kCGImageAlphaPremultipliedLast);
+  CGContextDrawTiledImage(target, CGRectMake(0, 0, 2, 1), image);
+  int passed = memcmp(output, output + 8, 8) == 0 &&
+               memcmp(output, output + 4, 4) != 0 &&
+               memcmp(output, output + 16, 16) == 0;
+  CGContextRelease(target);
+  CGImageRelease(image);
+  CGContextRelease(source);
   CGColorSpaceRelease(space);
   return passed ? 0 : -1;
 }
@@ -10356,6 +10378,7 @@ struct {
     FUNC_DEF(test_UIBezierPath_rounded_fill),
     FUNC_DEF(test_UIBezierPath_copy),
     FUNC_DEF(test_UIBezierPath_even_odd),
+    FUNC_DEF(test_CGContext_tiled_image),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),
