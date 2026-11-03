@@ -234,3 +234,185 @@ mod tests {
         );
     }
 }
+
+// Guest-visible CGPath objects use the same flattened geometry as CGContext.
+use super::cg_affine_transform::CGAffineTransform;
+use super::cg_geometry::{CGPointZero, CGRectNull};
+use crate::dyld::{export_c_func, FunctionExports};
+use crate::frameworks::core_foundation::{CFRelease, CFRetain, CFTypeRef};
+use crate::mem::ConstPtr;
+use crate::objc::{objc_classes, ClassExports, HostObject};
+use crate::Environment;
+
+struct CGPathHostObject {
+    path: Path,
+}
+impl HostObject for CGPathHostObject {}
+pub const CLASSES: ClassExports = objc_classes! {
+    (env, this, _cmd);
+    @implementation _Podroid_CGPath: NSObject
+    - (())dealloc { env.objc.dealloc_object(this, &mut env.mem) }
+    @end
+};
+
+fn alloc_path(env: &mut Environment, path: Path) -> CFTypeRef {
+    let class = env.objc.get_known_class("_Podroid_CGPath", &mut env.mem);
+    env.objc
+        .alloc_object(class, Box::new(CGPathHostObject { path }), &mut env.mem)
+}
+pub(crate) fn copy_path(env: &mut Environment, path: CFTypeRef) -> Path {
+    env.objc.borrow::<CGPathHostObject>(path).path.clone()
+}
+fn transform_point(
+    env: &Environment,
+    transform: ConstPtr<CGAffineTransform>,
+    p: CGPoint,
+) -> CGPoint {
+    if transform.is_null() {
+        return p;
+    }
+    let t = env.mem.read(transform);
+    CGPoint {
+        x: t.a * p.x + t.c * p.y + t.tx,
+        y: t.b * p.x + t.d * p.y + t.ty,
+    }
+}
+fn CGPathCreateMutable(env: &mut Environment) -> CFTypeRef {
+    alloc_path(env, Path::default())
+}
+fn CGPathCreateCopy(env: &mut Environment, path: CFTypeRef) -> CFTypeRef {
+    if path.is_null() {
+        return path;
+    }
+    let value = copy_path(env, path);
+    alloc_path(env, value)
+}
+fn CGPathCreateMutableCopy(env: &mut Environment, path: CFTypeRef) -> CFTypeRef {
+    CGPathCreateCopy(env, path)
+}
+fn CGPathRetain(env: &mut Environment, path: CFTypeRef) -> CFTypeRef {
+    if path.is_null() {
+        path
+    } else {
+        CFRetain(env, path)
+    }
+}
+fn CGPathRelease(env: &mut Environment, path: CFTypeRef) {
+    if !path.is_null() {
+        CFRelease(env, path);
+    }
+}
+fn CGPathMoveToPoint(
+    env: &mut Environment,
+    path: CFTypeRef,
+    transform: ConstPtr<CGAffineTransform>,
+    x: CGFloat,
+    y: CGFloat,
+) {
+    let point = transform_point(env, transform, CGPoint { x, y });
+    env.objc
+        .borrow_mut::<CGPathHostObject>(path)
+        .path
+        .move_to(point);
+}
+fn CGPathAddLineToPoint(
+    env: &mut Environment,
+    path: CFTypeRef,
+    transform: ConstPtr<CGAffineTransform>,
+    x: CGFloat,
+    y: CGFloat,
+) {
+    let point = transform_point(env, transform, CGPoint { x, y });
+    env.objc
+        .borrow_mut::<CGPathHostObject>(path)
+        .path
+        .line_to(point);
+}
+fn CGPathCloseSubpath(env: &mut Environment, path: CFTypeRef) {
+    env.objc.borrow_mut::<CGPathHostObject>(path).path.close();
+}
+fn CGPathAddRect(
+    env: &mut Environment,
+    path: CFTypeRef,
+    transform: ConstPtr<CGAffineTransform>,
+    rect: CGRect,
+) {
+    let (x, y, w, h) = (
+        rect.origin.x,
+        rect.origin.y,
+        rect.size.width,
+        rect.size.height,
+    );
+    CGPathMoveToPoint(env, path, transform, x, y);
+    for (px, py) in [(x + w, y), (x + w, y + h), (x, y + h)] {
+        CGPathAddLineToPoint(env, path, transform, px, py);
+    }
+    CGPathCloseSubpath(env, path);
+}
+fn CGPathCreateWithRect(
+    env: &mut Environment,
+    rect: CGRect,
+    transform: ConstPtr<CGAffineTransform>,
+) -> CFTypeRef {
+    let path = CGPathCreateMutable(env);
+    CGPathAddRect(env, path, transform, rect);
+    path
+}
+fn CGPathIsEmpty(env: &mut Environment, path: CFTypeRef) -> bool {
+    env.objc
+        .borrow::<CGPathHostObject>(path)
+        .path
+        .subpaths
+        .is_empty()
+}
+fn CGPathGetCurrentPoint(env: &mut Environment, path: CFTypeRef) -> CGPoint {
+    let path = &env.objc.borrow::<CGPathHostObject>(path).path;
+    path.subpaths
+        .last()
+        .and_then(|s| {
+            if s.closed {
+                s.points.first().copied()
+            } else {
+                s.points.last().copied()
+            }
+        })
+        .unwrap_or(CGPointZero)
+}
+fn CGPathGetBoundingBox(env: &mut Environment, path: CFTypeRef) -> CGRect {
+    env.objc
+        .borrow::<CGPathHostObject>(path)
+        .path
+        .bounds()
+        .unwrap_or(CGRectNull)
+}
+fn CGPathContainsPoint(
+    env: &mut Environment,
+    path: CFTypeRef,
+    transform: ConstPtr<CGAffineTransform>,
+    point: CGPoint,
+    even_odd: bool,
+) -> bool {
+    let mut path = copy_path(env, path);
+    for subpath in &mut path.subpaths {
+        for p in &mut subpath.points {
+            *p = transform_point(env, transform, *p);
+        }
+    }
+    path.contains(point, even_odd)
+}
+pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CGPathCreateMutable()),
+    export_c_func!(CGPathCreateCopy(_)),
+    export_c_func!(CGPathCreateMutableCopy(_)),
+    export_c_func!(CGPathRetain(_)),
+    export_c_func!(CGPathRelease(_)),
+    export_c_func!(CGPathMoveToPoint(_, _, _, _)),
+    export_c_func!(CGPathAddLineToPoint(_, _, _, _)),
+    export_c_func!(CGPathCloseSubpath(_)),
+    export_c_func!(CGPathAddRect(_, _, _)),
+    export_c_func!(CGPathCreateWithRect(_, _)),
+    export_c_func!(CGPathIsEmpty(_)),
+    export_c_func!(CGPathGetCurrentPoint(_)),
+    export_c_func!(CGPathGetBoundingBox(_)),
+    export_c_func!(CGPathContainsPoint(_, _, _, _)),
+];

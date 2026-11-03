@@ -111,6 +111,13 @@ extern int CCCryptorUpdate(void *cryptor, const void *input,
 extern int CCCryptorFinal(void *cryptor, void *output,
                           unsigned int output_length, unsigned int *moved);
 extern int CCCryptorRelease(void *cryptor);
+extern void *CGPathCreateMutable(void);
+extern void CGPathAddRect(void *path, const void *transform, CGRect rect);
+extern bool CGPathContainsPoint(const void *path, const void *transform,
+                                CGPoint point, bool even_odd);
+extern CGRect CGPathGetBoundingBox(const void *path);
+extern void CGPathRelease(const void *path);
+extern void CGContextAddPath(CGContextRef context, const void *path);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -1091,6 +1098,30 @@ int test_CGContext_add_rects_even_odd(void) {
   CGContextEOFillPath(context);
   int passed =
       pixels[(1 * 8 + 1) * 4 + 3] == 255 && pixels[(3 * 8 + 3) * 4 + 3] == 0;
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
+}
+
+int test_CGPath_rect_and_draw(void) {
+  unsigned char pixels[8 * 8 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 8, 8, 8, 8 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  void *path = CGPathCreateMutable();
+  CGPathAddRect(path, NULL, CGRectMake(2, 2, 4, 4));
+  CGRect bounds = CGPathGetBoundingBox(path);
+  CGPoint inside = {3, 3}, outside = {0, 0};
+  int passed = bounds.origin.x == 2 && bounds.origin.y == 2 &&
+               bounds.size.width == 4 && bounds.size.height == 4 &&
+               CGPathContainsPoint(path, NULL, inside, false) &&
+               !CGPathContainsPoint(path, NULL, outside, false);
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  CGContextAddPath(context, path);
+  CGContextFillPath(context);
+  passed = passed && pixels[(3 * 8 + 3) * 4 + 3] == 255 &&
+           pixels[(0 * 8 + 0) * 4 + 3] == 0;
+  CGPathRelease(path);
   CGContextRelease(context);
   CGColorSpaceRelease(space);
   return passed ? 0 : -1;
@@ -10189,6 +10220,7 @@ struct {
     FUNC_DEF(test_CTLine_glyph_runs),
     FUNC_DEF(test_CTTypesetter_line_range),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
+    FUNC_DEF(test_CGPath_rect_and_draw),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),

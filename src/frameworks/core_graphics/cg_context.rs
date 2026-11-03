@@ -930,11 +930,21 @@ fn CGContextAddEllipseInRect(env: &mut Environment, context: CGContextRef, rect:
     CGContextClosePath(env, context);
 }
 
-fn CGContextAddPath(_env: &mut Environment, context: CGContextRef, path: CFTypeRef) {
-    // UIBezierPath's CGPath is nil for now, so there's nothing to add.
-    if !path.is_null() {
-        log!("TODO: CGContextAddPath({:?}, {:?})", context, path);
+fn CGContextAddPath(env: &mut Environment, context: CGContextRef, path: CFTypeRef) {
+    if path.is_null() {
+        return;
     }
+    let mut path = cg_path::copy_path(env, path);
+    for subpath in &mut path.subpaths {
+        for point in &mut subpath.points {
+            *point = device_point(env, context, *point);
+        }
+    }
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .path
+        .subpaths
+        .extend(path.subpaths);
 }
 
 fn CGContextClip(env: &mut Environment, context: CGContextRef) {

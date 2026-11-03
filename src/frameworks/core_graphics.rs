@@ -31,6 +31,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cg_font::CLASSES,
         cg_gradient::CLASSES,
         cg_image::CLASSES,
+        cg_path::CLASSES,
     ],
     constant_exports: &[
         cg_affine_transform::CONSTANTS,
@@ -48,6 +49,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cg_geometry::FUNCTIONS,
         cg_gradient::FUNCTIONS,
         cg_image::FUNCTIONS,
+        cg_path::FUNCTIONS,
     ],
 };
 
