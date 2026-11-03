@@ -362,7 +362,7 @@ pub fn CGContextDrawImage(
     cg_bitmap_context::draw_image(env, context, rect, image);
 }
 
-fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) {
+pub(crate) fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) {
     let host_obj = env.objc.borrow_mut::<CGContextHostObject>(context);
     host_obj.state_stack.push((
         host_obj.rgb_fill_color,
@@ -380,7 +380,7 @@ fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) {
     CGFontRetain(env, env.objc.borrow::<CGContextHostObject>(context).font);
 }
 
-fn CGContextRestoreGState(env: &mut Environment, context: CGContextRef) {
+pub(crate) fn CGContextRestoreGState(env: &mut Environment, context: CGContextRef) {
     // We need to release _old_ font, there are 2 cases:
     // - font hasn't been set between save/restore -> this release corresponds
     // the font retain from save
@@ -930,7 +930,7 @@ fn CGContextAddEllipseInRect(env: &mut Environment, context: CGContextRef, rect:
     CGContextClosePath(env, context);
 }
 
-fn CGContextAddPath(env: &mut Environment, context: CGContextRef, path: CFTypeRef) {
+pub(crate) fn CGContextAddPath(env: &mut Environment, context: CGContextRef, path: CFTypeRef) {
     if path.is_null() {
         return;
     }
@@ -972,7 +972,7 @@ fn CGContextDrawPath(env: &mut Environment, context: CGContextRef, mode: CGPathD
     }
 }
 
-fn CGContextFillPath(env: &mut Environment, context: CGContextRef) {
+pub(crate) fn CGContextFillPath(env: &mut Environment, context: CGContextRef) {
     CGContextDrawPath(env, context, kCGPathFill);
 }
 
@@ -1006,11 +1006,11 @@ fn CGContextStrokeEllipseInRect(env: &mut Environment, context: CGContextRef, re
     env.objc.borrow_mut::<CGContextHostObject>(context).path = path;
 }
 
-fn CGContextStrokePath(env: &mut Environment, context: CGContextRef) {
+pub(crate) fn CGContextStrokePath(env: &mut Environment, context: CGContextRef) {
     CGContextDrawPath(env, context, kCGPathStroke);
 }
 
-fn CGContextSetLineWidth(env: &mut Environment, context: CGContextRef, width: CGFloat) {
+pub(crate) fn CGContextSetLineWidth(env: &mut Environment, context: CGContextRef, width: CGFloat) {
     env.objc
         .borrow_mut::<CGContextHostObject>(context)
         .line_width = width;

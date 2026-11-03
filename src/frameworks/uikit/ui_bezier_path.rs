@@ -3,106 +3,131 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-//! `UIBezierPath`.
-//!
-//! Paths aren't really supported: only their bounding box is kept, and filling
-//! a path fills that box (so rounded rectangles get square corners). Strokes
-//! aren't drawn.
+//! `UIBezierPath`, backed by Core Graphics path geometry.
 
-use crate::frameworks::core_graphics::cg_context::CGContextFillRect;
-use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
+use crate::frameworks::core_graphics::cg_context::{
+    CGContextAddPath, CGContextFillPath, CGContextRestoreGState, CGContextSaveGState,
+    CGContextSetLineWidth, CGContextStrokePath,
+};
+use crate::frameworks::core_graphics::cg_path::{self, Path};
+use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect};
 use crate::frameworks::uikit::ui_graphics::UIGraphicsGetCurrentContext;
-use crate::objc::{autorelease, id, msg, nil, objc_classes, ClassExports, HostObject, NSZonePtr};
+use crate::objc::{
+    autorelease, id, msg, objc_classes, release, ClassExports, HostObject, NSZonePtr,
+};
+use crate::Environment;
 
-#[derive(Default)]
 struct UIBezierPathHostObject {
-    /// Bounding box as (min x, min y, max x, max y).
-    bounds: Option<(CGFloat, CGFloat, CGFloat, CGFloat)>,
+    path: Path,
+    cached_path: Option<id>,
+    line_width: CGFloat,
+}
+impl Default for UIBezierPathHostObject {
+    fn default() -> Self {
+        Self {
+            path: Path::default(),
+            cached_path: None,
+            line_width: 1.0,
+        }
+    }
 }
 impl HostObject for UIBezierPathHostObject {}
 
-fn add_point(env: &mut crate::Environment, this: id, point: CGPoint) {
-    let host_object = env.objc.borrow_mut::<UIBezierPathHostObject>(this);
-    host_object.bounds = Some(match host_object.bounds {
-        None => (point.x, point.y, point.x, point.y),
-        Some((x0, y0, x1, y1)) => (
-            x0.min(point.x),
-            y0.min(point.y),
-            x1.max(point.x),
-            y1.max(point.y),
-        ),
-    });
+fn update_path(env: &mut Environment, this: id, change: impl FnOnce(&mut Path)) {
+    let cached = {
+        let object = env.objc.borrow_mut::<UIBezierPathHostObject>(this);
+        change(&mut object.path);
+        object.cached_path.take()
+    };
+    if let Some(cached) = cached {
+        release(env, cached);
+    }
+}
+fn add_rect(path: &mut Path, rect: CGRect) {
+    let (x, y, w, h) = (
+        rect.origin.x,
+        rect.origin.y,
+        rect.size.width,
+        rect.size.height,
+    );
+    path.move_to(CGPoint { x, y });
+    path.line_to(CGPoint { x: x + w, y });
+    path.line_to(CGPoint { x: x + w, y: y + h });
+    path.line_to(CGPoint { x, y: y + h });
+    path.close();
 }
 
 pub const CLASSES: ClassExports = objc_classes! {
-
 (env, this, _cmd);
-
 @implementation UIBezierPath: NSObject
-
 + (id)allocWithZone:(NSZonePtr)_zone {
-    let host_object = Box::<UIBezierPathHostObject>::default();
-    env.objc.alloc_object(this, host_object, &mut env.mem)
+    env.objc.alloc_object(this, Box::<UIBezierPathHostObject>::default(), &mut env.mem)
 }
-
 + (id)bezierPath {
     let path: id = msg![env; this new];
     autorelease(env, path)
 }
 + (id)bezierPathWithRect:(CGRect)rect {
     let path: id = msg![env; this new];
-    add_point(env, path, rect.origin);
-    add_point(env, path, CGPoint {
-        x: rect.origin.x + rect.size.width,
-        y: rect.origin.y + rect.size.height,
+    update_path(env, path, |value| add_rect(value, rect));
+    autorelease(env, path)
+}
++ (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius {
+    let path: id = msg![env; this new];
+    update_path(env, path, |value| {
+        let (x,y,w,h) = (rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
+        let radius = radius.max(0.0).min(w.abs()/2.0).min(h.abs()/2.0);
+        if radius == 0.0 { add_rect(value, rect); return; }
+        value.move_to(CGPoint { x: x + radius, y });
+        for (corner, next) in [
+            (CGPoint {x:x+w,y}, CGPoint {x:x+w,y:y+h}),
+            (CGPoint {x:x+w,y:y+h}, CGPoint {x,y:y+h}),
+            (CGPoint {x,y:y+h}, CGPoint {x,y}),
+            (CGPoint {x,y}, CGPoint {x:x+w,y}),
+        ] {
+            let start = value.current_point().unwrap();
+            for point in cg_path::arc_to_point(start, corner, next, radius) { value.line_to(point); }
+        }
+        value.close();
     });
     autorelease(env, path)
 }
-+ (id)bezierPathWithRoundedRect:(CGRect)rect
-                   cornerRadius:(CGFloat)_radius {
-    msg![env; this bezierPathWithRect:rect]
+- (())dealloc {
+    let cached = env.objc.borrow::<UIBezierPathHostObject>(this).cached_path;
+    if let Some(cached) = cached { release(env, cached); }
+    env.objc.dealloc_object(this, &mut env.mem)
 }
-
-- (())moveToPoint:(CGPoint)point {
-    add_point(env, this, point);
-}
-- (())addLineToPoint:(CGPoint)point {
-    add_point(env, this, point);
-}
-- (())closePath {
-}
-- (())setLineWidth:(CGFloat)_width {
-}
-
+- (())moveToPoint:(CGPoint)point { update_path(env, this, |path| path.move_to(point)); }
+- (())addLineToPoint:(CGPoint)point { update_path(env, this, |path| path.line_to(point)); }
+- (())closePath { update_path(env, this, Path::close); }
+- (())setLineWidth:(CGFloat)width { env.objc.borrow_mut::<UIBezierPathHostObject>(this).line_width = width; }
 - (CGRect)bounds {
-    let (x0, y0, x1, y1) = env
-        .objc
-        .borrow::<UIBezierPathHostObject>(this)
-        .bounds
-        .unwrap_or((0.0, 0.0, 0.0, 0.0));
-    CGRect {
-        origin: CGPoint { x: x0, y: y0 },
-        size: CGSize { width: x1 - x0, height: y1 - y0 },
-    }
+    env.objc.borrow::<UIBezierPathHostObject>(this).path.bounds().unwrap_or_default()
 }
-
 - (id)CGPath {
-    // TODO: CGPath isn't implemented
-    nil
+    if let Some(cached) = env.objc.borrow::<UIBezierPathHostObject>(this).cached_path { return cached; }
+    let path = env.objc.borrow::<UIBezierPathHostObject>(this).path.clone();
+    let path = cg_path::alloc_path(env, path);
+    env.objc.borrow_mut::<UIBezierPathHostObject>(this).cached_path = Some(path);
+    path
 }
-
 - (())fill {
     let context = UIGraphicsGetCurrentContext(env);
-    if context.is_null() {
-        return;
-    }
-    let bounds: CGRect = msg![env; this bounds];
-    CGContextFillRect(env, context, bounds);
+    if context.is_null() { return; }
+    let path: id = msg![env; this CGPath];
+    CGContextAddPath(env, context, path);
+    CGContextFillPath(env, context);
 }
 - (())stroke {
-    // TODO
+    let context = UIGraphicsGetCurrentContext(env);
+    if context.is_null() { return; }
+    let width = env.objc.borrow::<UIBezierPathHostObject>(this).line_width;
+    let path: id = msg![env; this CGPath];
+    CGContextSaveGState(env, context);
+    CGContextSetLineWidth(env, context, width);
+    CGContextAddPath(env, context, path);
+    CGContextStrokePath(env, context);
+    CGContextRestoreGState(env, context);
 }
-
 @end
-
 };

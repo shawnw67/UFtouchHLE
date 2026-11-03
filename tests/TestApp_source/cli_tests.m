@@ -127,6 +127,14 @@ extern void CGPathAddPath(void *path, const void *transform, const void *other);
 extern void CGPathAddArcToPoint(void *path, const void *transform, float x1,
                                 float y1, float x2, float y2, float radius);
 extern CGPoint CGPathGetCurrentPoint(const void *path);
+extern void UIGraphicsPushContext(CGContextRef context);
+extern void UIGraphicsPopContext(void);
+
+@interface UIBezierPath : NSObject
++ (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
+- (id)CGPath;
+- (void)fill;
+@end
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -1163,6 +1171,26 @@ int test_CGPath_transformed_arc(void) {
   CGPoint end = CGPathGetCurrentPoint(path);
   int passed = fabsf(end.x - 20) < 0.01f && fabsf(end.y - 2) < 0.01f;
   CGPathRelease(path);
+  return passed ? 0 : -1;
+}
+
+int test_UIBezierPath_rounded_fill(void) {
+  unsigned char pixels[8 * 8 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 8, 8, 8, 8 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  UIBezierPath *path =
+      [UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, 8, 8)
+                                 cornerRadius:3];
+  int passed = [path CGPath] != nil;
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  UIGraphicsPushContext(context);
+  [path fill];
+  UIGraphicsPopContext();
+  passed = passed && pixels[(4 * 8 + 4) * 4 + 3] == 255 &&
+           pixels[(0 * 8 + 0) * 4 + 3] == 0;
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
   return passed ? 0 : -1;
 }
 
@@ -10262,6 +10290,7 @@ struct {
     FUNC_DEF(test_CGPath_rect_and_draw),
     FUNC_DEF(test_CGPath_curves_and_copy),
     FUNC_DEF(test_CGPath_transformed_arc),
+    FUNC_DEF(test_UIBezierPath_rounded_fill),
     FUNC_DEF(test_CGContext_curves),
     FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_CGContext_text_matrix_and_stroke_color),

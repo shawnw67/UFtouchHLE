@@ -255,7 +255,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     @end
 };
 
-fn alloc_path(env: &mut Environment, path: Path) -> CFTypeRef {
+pub(crate) fn alloc_path(env: &mut Environment, path: Path) -> CFTypeRef {
     let class = env.objc.get_known_class("_Podroid_CGPath", &mut env.mem);
     env.objc
         .alloc_object(class, Box::new(CGPathHostObject { path }), &mut env.mem)
