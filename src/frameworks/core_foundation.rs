@@ -60,6 +60,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cf_number::CONSTANTS,
         cf_preferences::CONSTANTS,
         cf_run_loop::CONSTANTS,
+        cf_stream::CONSTANTS,
     ],
     function_exports: &[
         FUNCTIONS,

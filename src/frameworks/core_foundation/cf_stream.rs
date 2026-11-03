@@ -7,7 +7,7 @@
 
 use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::{CFIndex, CFTypeRef};
-use crate::dyld::{export_c_func, FunctionExports};
+use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::foundation::ns_string;
 use crate::fs::GuestPath;
 use crate::mem::{ConstPtr, MutPtr};
@@ -15,6 +15,7 @@ use crate::objc::{id, msg, nil, objc_classes, ClassExports, HostObject};
 use crate::Environment;
 
 type CFReadStreamRef = CFTypeRef;
+type CFWriteStreamRef = CFTypeRef;
 const NOT_OPEN: i32 = 0;
 const OPEN: i32 = 2;
 const AT_END: i32 = 5;
@@ -31,6 +32,26 @@ struct MemoryReadStream {
 }
 impl HostObject for MemoryReadStream {}
 
+enum WriteBuffer {
+    Fixed {
+        bytes: MutPtr<u8>,
+        capacity: u32,
+        offset: u32,
+    },
+    Allocated(Vec<u8>),
+}
+struct MemoryWriteStream {
+    buffer: WriteBuffer,
+    status: i32,
+}
+impl HostObject for MemoryWriteStream {}
+
+const DATA_WRITTEN: &str = "kCFStreamPropertyDataWritten";
+pub const CONSTANTS: ConstantExports = &[(
+    "_kCFStreamPropertyDataWritten",
+    HostConstant::NSString(DATA_WRITTEN),
+)];
+
 pub const CLASSES: ClassExports = objc_classes! {
 (env, this, _cmd);
 @implementation _Podroid_CFMemoryReadStream: NSObject
@@ -41,7 +62,162 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.dealloc_object(this, &mut env.mem)
 }
 @end
+@implementation _Podroid_CFMemoryWriteStream: NSObject
+@end
 };
+
+fn allocate_write_stream(env: &mut Environment, buffer: WriteBuffer) -> CFWriteStreamRef {
+    let class = env
+        .objc
+        .get_known_class("_Podroid_CFMemoryWriteStream", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(MemoryWriteStream {
+            buffer,
+            status: NOT_OPEN,
+        }),
+        &mut env.mem,
+    )
+}
+
+fn CFWriteStreamCreateWithBuffer(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    bytes: MutPtr<u8>,
+    capacity: CFIndex,
+) -> CFWriteStreamRef {
+    if capacity < 0
+        || (capacity > 0 && bytes.is_null())
+        || !(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default())
+    {
+        return nil;
+    }
+    allocate_write_stream(
+        env,
+        WriteBuffer::Fixed {
+            bytes,
+            capacity: capacity as u32,
+            offset: 0,
+        },
+    )
+}
+
+fn CFWriteStreamCreateWithAllocatedBuffers(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    buffer_allocator: CFAllocatorRef,
+) -> CFWriteStreamRef {
+    if !(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default())
+        || !(buffer_allocator == kCFAllocatorDefault
+            || env.mem.read(buffer_allocator).is_system_default())
+    {
+        return nil;
+    }
+    allocate_write_stream(env, WriteBuffer::Allocated(Vec::new()))
+}
+
+fn CFWriteStreamOpen(env: &mut Environment, stream: CFWriteStreamRef) -> bool {
+    let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
+    if host.status != NOT_OPEN {
+        return false;
+    }
+    host.status = OPEN;
+    true
+}
+
+fn CFWriteStreamClose(env: &mut Environment, stream: CFWriteStreamRef) {
+    env.objc.borrow_mut::<MemoryWriteStream>(stream).status = CLOSED;
+}
+
+fn CFWriteStreamGetStatus(env: &mut Environment, stream: CFWriteStreamRef) -> i32 {
+    env.objc.borrow::<MemoryWriteStream>(stream).status
+}
+
+fn CFWriteStreamCanAcceptBytes(env: &mut Environment, stream: CFWriteStreamRef) -> bool {
+    let host = env.objc.borrow::<MemoryWriteStream>(stream);
+    host.status == OPEN
+        && match &host.buffer {
+            WriteBuffer::Fixed {
+                capacity, offset, ..
+            } => offset < capacity,
+            WriteBuffer::Allocated(_) => true,
+        }
+}
+
+fn CFWriteStreamWrite(
+    env: &mut Environment,
+    stream: CFWriteStreamRef,
+    bytes: ConstPtr<u8>,
+    length: CFIndex,
+) -> CFIndex {
+    if length < 0 || (length > 0 && bytes.is_null()) {
+        return -1;
+    }
+    let host = env.objc.borrow::<MemoryWriteStream>(stream);
+    if host.status == AT_END {
+        return 0;
+    }
+    if host.status != OPEN {
+        return -1;
+    }
+    if length == 0 {
+        return 0;
+    }
+    let data = env.mem.bytes_at(bytes, length as u32).to_vec();
+    let host = env.objc.borrow_mut::<MemoryWriteStream>(stream);
+    match &mut host.buffer {
+        WriteBuffer::Fixed {
+            bytes,
+            capacity,
+            offset,
+        } => {
+            let count = (length as u32).min(*capacity - *offset);
+            if count > 0 {
+                env.mem
+                    .bytes_at_mut(*bytes + *offset, count)
+                    .copy_from_slice(&data[..count as usize]);
+            }
+            *offset += count;
+            if *offset == *capacity {
+                host.status = AT_END;
+            }
+            count as CFIndex
+        }
+        WriteBuffer::Allocated(buffer) => {
+            if buffer.try_reserve(data.len()).is_err() {
+                host.status = ERROR;
+                return -1;
+            }
+            buffer.extend_from_slice(&data);
+            length
+        }
+    }
+}
+
+fn CFWriteStreamCopyProperty(
+    env: &mut Environment,
+    stream: CFWriteStreamRef,
+    name: id,
+) -> CFTypeRef {
+    if name.is_null() || ns_string::to_rust_string(env, name) != DATA_WRITTEN {
+        return nil;
+    }
+    let host = env.objc.borrow::<MemoryWriteStream>(stream);
+    let WriteBuffer::Allocated(data) = &host.buffer else {
+        return nil;
+    };
+    let data = data.clone();
+    let Ok(length) = CFIndex::try_from(data.len()) else {
+        return nil;
+    };
+    let bytes: MutPtr<u8> = env.mem.alloc((length as u32).max(1)).cast();
+    env.mem
+        .bytes_at_mut(bytes, length as u32)
+        .copy_from_slice(&data);
+    let result = super::cf_data::CFDataCreate(env, kCFAllocatorDefault, bytes.cast_const(), length);
+    env.mem.free(bytes.cast());
+    result
+}
 
 fn CFReadStreamCreateWithBytesNoCopy(
     env: &mut Environment,
@@ -242,6 +418,14 @@ fn CFReadStreamRead(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFWriteStreamCreateWithBuffer(_, _, _)),
+    export_c_func!(CFWriteStreamCreateWithAllocatedBuffers(_, _)),
+    export_c_func!(CFWriteStreamOpen(_)),
+    export_c_func!(CFWriteStreamClose(_)),
+    export_c_func!(CFWriteStreamGetStatus(_)),
+    export_c_func!(CFWriteStreamCanAcceptBytes(_)),
+    export_c_func!(CFWriteStreamWrite(_, _, _)),
+    export_c_func!(CFWriteStreamCopyProperty(_, _)),
     export_c_func!(CFReadStreamCreateWithBytesNoCopy(_, _, _, _)),
     export_c_func!(CFReadStreamCreateWithFile(_, _)),
     export_c_func!(CFReadStreamOpen(_)),

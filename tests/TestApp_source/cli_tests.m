@@ -94,6 +94,21 @@ extern void CGContextSetStrokeColor(CGContextRef context,
                                     const CGFloat *components);
 typedef const void *TestCTFontRef;
 typedef const void *TestCFReadStreamRef;
+typedef const void *TestCFWriteStreamRef;
+extern const CFStringRef kCFStreamPropertyDataWritten;
+extern TestCFWriteStreamRef
+CFWriteStreamCreateWithBuffer(CFAllocatorRef allocator, UInt8 *buffer,
+                              CFIndex capacity);
+extern TestCFWriteStreamRef
+CFWriteStreamCreateWithAllocatedBuffers(CFAllocatorRef allocator,
+                                        CFAllocatorRef bufferAllocator);
+extern bool CFWriteStreamOpen(TestCFWriteStreamRef stream);
+extern void CFWriteStreamClose(TestCFWriteStreamRef stream);
+extern bool CFWriteStreamCanAcceptBytes(TestCFWriteStreamRef stream);
+extern CFIndex CFWriteStreamWrite(TestCFWriteStreamRef stream,
+                                  const UInt8 *bytes, CFIndex count);
+extern CFTypeRef CFWriteStreamCopyProperty(TestCFWriteStreamRef stream,
+                                           CFStringRef name);
 extern TestCFReadStreamRef CFReadStreamCreateWithFile(CFAllocatorRef allocator,
                                                       CFURLRef url);
 extern TestCFReadStreamRef
@@ -185,6 +200,30 @@ int test_CFReadStream_file(void) {
   CFRelease(file);
   CFRelease(filename);
   CFRelease(bundle);
+  return passed ? 0 : -1;
+}
+
+int test_CFWriteStream_memory(void) {
+  const UInt8 bytes[] = {1, 2, 3, 4, 5};
+  UInt8 fixed[3] = {0};
+  TestCFWriteStreamRef stream = CFWriteStreamCreateWithBuffer(NULL, fixed, 3);
+  int passed = stream && CFWriteStreamOpen(stream) &&
+               CFWriteStreamCanAcceptBytes(stream) &&
+               CFWriteStreamWrite(stream, bytes, 5) == 3 &&
+               !CFWriteStreamCanAcceptBytes(stream) && fixed[2] == 3;
+  CFWriteStreamClose(stream);
+  CFRelease(stream);
+  stream = CFWriteStreamCreateWithAllocatedBuffers(NULL, NULL);
+  passed = passed && stream && CFWriteStreamOpen(stream) &&
+           CFWriteStreamWrite(stream, bytes, 5) == 5;
+  CFDataRef data = (CFDataRef)CFWriteStreamCopyProperty(
+      stream, kCFStreamPropertyDataWritten);
+  passed = passed && data && CFDataGetLength(data) == 5 &&
+           CFDataGetBytePtr(data)[4] == 5;
+  if (data)
+    CFRelease(data);
+  CFWriteStreamClose(stream);
+  CFRelease(stream);
   return passed ? 0 : -1;
 }
 
@@ -9638,6 +9677,7 @@ struct {
     FUNC_DEF(test_CFAttributedString_basic),
     FUNC_DEF(test_CFReadStream_memory),
     FUNC_DEF(test_CFReadStream_file),
+    FUNC_DEF(test_CFWriteStream_memory),
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),
