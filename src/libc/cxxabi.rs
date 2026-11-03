@@ -34,6 +34,9 @@ pub(super) fn register_atexit(env: &mut Environment, function: GuestFunction) ->
     if function.to_ptr().is_null() {
         return -1;
     }
+    if let Some(register) = env.dyld.guest_cxxabi_export("___cxa_atexit") {
+        return register.call_from_host(env, (function, MutVoidPtr::null(), MutVoidPtr::null()));
+    }
     env.libc_state
         .cxxabi
         .destructors
@@ -125,6 +128,13 @@ pub(super) fn __cxa_finalize(env: &mut Environment, d: MutVoidPtr) {
             }
         }
     }
+}
+
+pub(super) fn finalize_for_exit(env: &mut Environment) {
+    if let Some(finalize) = env.dyld.guest_cxxabi_export("___cxa_finalize") {
+        let (): () = finalize.call_from_host(env, (MutVoidPtr::null(),));
+    }
+    __cxa_finalize(env, MutVoidPtr::null());
 }
 
 const MAX_RTTI_SUBOBJECTS: usize = 4096;

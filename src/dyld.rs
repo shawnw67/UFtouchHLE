@@ -568,6 +568,13 @@ impl Dyld {
         self.cxxabi_typeinfo_vtables.get(&address).copied()
     }
 
+    pub(crate) fn guest_cxxabi_export(&self, symbol: &str) -> Option<GuestFunction> {
+        self.guest_cxxabi_exports
+            .get(symbol)
+            .copied()
+            .map(GuestFunction::from_addr_with_thumb_bit)
+    }
+
     /// Dumps all lazy symbols (functions) referenced by the binary
     /// as JSON to stdout.
     ///
