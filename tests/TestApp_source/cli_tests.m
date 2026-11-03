@@ -125,6 +125,13 @@ extern void *ABAddressBookGetPersonWithRecordID(void *book, int record_id);
 extern CFArrayRef ABAddressBookCopyArrayOfAllPeople(void *book);
 extern bool ABAddressBookHasUnsavedChanges(void *book);
 extern bool ABAddressBookSave(void *book, CFTypeRef *error);
+extern CFArrayRef ABAddressBookCopyPeopleWithName(void *book, CFStringRef name);
+extern int ABPersonComparePeopleByName(void *first, void *second, int order);
+extern bool ABPersonSetImageData(void *person, CFDataRef image,
+                                 CFTypeRef *error);
+extern CFDataRef ABPersonCopyImageData(void *person);
+extern bool ABPersonHasImageData(void *person);
+extern bool ABPersonRemoveImageData(void *person, CFTypeRef *error);
 extern CFStringRef kABHomeLabel;
 extern void *ABMultiValueCreateMutable(int property_type);
 extern bool ABMultiValueAddValueAndLabel(void *multi, CFTypeRef value,
@@ -6705,6 +6712,31 @@ int test_address_book_virtual_records(void) {
            CFArrayGetCount(people) == 1 &&
            ABAddressBookHasUnsavedChanges(book) &&
            !ABAddressBookSave(book, NULL);
+  void *other = ABPersonCreate();
+  CFStringRef other_name =
+      CFStringCreateWithCString(NULL, "Zoe", kCFStringEncodingUTF8);
+  CFStringRef search =
+      CFStringCreateWithCString(NULL, "es", kCFStringEncodingUTF8);
+  ABRecordSetValue(other, kABPersonFirstNameProperty, other_name, NULL);
+  CFArrayRef found = ABAddressBookCopyPeopleWithName(book, search);
+  const unsigned char image_byte = 7;
+  CFDataRef image = CFDataCreate(NULL, &image_byte, 1);
+  passed = passed && ABPersonComparePeopleByName(person, other, 0) < 0 &&
+           found && CFArrayGetCount(found) == 1 &&
+           ABPersonSetImageData(person, image, NULL) &&
+           ABPersonHasImageData(person);
+  CFDataRef copied_image = ABPersonCopyImageData(person);
+  passed = passed && copied_image && CFEqual(copied_image, image) &&
+           ABPersonRemoveImageData(person, NULL) &&
+           !ABPersonHasImageData(person);
+  if (copied_image)
+    CFRelease(copied_image);
+  if (found)
+    CFRelease(found);
+  CFRelease(image);
+  CFRelease(search);
+  CFRelease(other_name);
+  CFRelease(other);
   passed = passed && ABAddressBookRemoveRecord(book, person, NULL) &&
            ABAddressBookGetPersonCount(book) == 0;
   if (people)

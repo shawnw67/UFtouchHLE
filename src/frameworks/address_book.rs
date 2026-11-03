@@ -27,6 +27,7 @@ struct Record {
     record_id: i32,
     kind: u32,
     values: HashMap<i32, id>,
+    image_data: id,
 }
 impl HostObject for Record {}
 #[derive(Default)]
@@ -49,6 +50,8 @@ pub const CLASSES: ClassExports = objc_classes! {
     - (())dealloc {
         let values = std::mem::take(&mut env.objc.borrow_mut::<Record>(this).values);
         for value in values.into_values() { release(env, value); }
+        let image = env.objc.borrow::<Record>(this).image_data;
+        if !image.is_null() { release(env, image); }
         env.objc.dealloc_object(this, &mut env.mem)
     }
     @end
@@ -75,6 +78,7 @@ fn new_record(env: &mut Environment, kind: u32) -> id {
             record_id: -1,
             kind,
             values: HashMap::new(),
+            image_data: nil,
         }),
         &mut env.mem,
     )
@@ -203,6 +207,82 @@ fn ABRecordCopyCompositeName(env: &mut Environment, record: id) -> id {
         from_rust_string(env, name)
     }
 }
+
+fn person_name_part(env: &mut Environment, person: id, property: i32) -> String {
+    if person.is_null() {
+        return String::new();
+    }
+    let value = env
+        .objc
+        .borrow::<Record>(person)
+        .values
+        .get(&property)
+        .copied()
+        .unwrap_or(nil);
+    if value.is_null() {
+        String::new()
+    } else {
+        to_rust_string(env, value).to_lowercase()
+    }
+}
+fn ABPersonComparePeopleByName(env: &mut Environment, first: id, second: id, order: i32) -> i32 {
+    if first.is_null() || second.is_null() {
+        return 0;
+    }
+    let (primary, secondary) = if order == 0 { (0, 1) } else { (1, 0) };
+    for property in [primary, secondary] {
+        let left = person_name_part(env, first, property);
+        let right = person_name_part(env, second, property);
+        match left.cmp(&right) {
+            std::cmp::Ordering::Less => return -1,
+            std::cmp::Ordering::Greater => return 1,
+            std::cmp::Ordering::Equal => {}
+        }
+    }
+    0
+}
+fn ABPersonGetSortOrdering(_env: &mut Environment) -> i32 {
+    0
+}
+fn ABPersonGetCompositeNameFormat(_env: &mut Environment) -> i32 {
+    0
+}
+fn ABPersonHasImageData(env: &mut Environment, person: id) -> bool {
+    !person.is_null() && !env.objc.borrow::<Record>(person).image_data.is_null()
+}
+fn ABPersonCopyImageData(env: &mut Environment, person: id) -> id {
+    if person.is_null() {
+        return nil;
+    }
+    let data = env.objc.borrow::<Record>(person).image_data;
+    if !data.is_null() {
+        retain(env, data);
+    }
+    data
+}
+fn ABPersonSetImageData(env: &mut Environment, person: id, data: id, error: MutPtr<id>) -> bool {
+    clear_error(env, error);
+    if person.is_null() || data.is_null() {
+        return false;
+    }
+    retain(env, data);
+    let old = std::mem::replace(&mut env.objc.borrow_mut::<Record>(person).image_data, data);
+    if !old.is_null() {
+        release(env, old);
+    }
+    true
+}
+fn ABPersonRemoveImageData(env: &mut Environment, person: id, error: MutPtr<id>) -> bool {
+    clear_error(env, error);
+    if person.is_null() {
+        return false;
+    }
+    let old = std::mem::replace(&mut env.objc.borrow_mut::<Record>(person).image_data, nil);
+    if !old.is_null() {
+        release(env, old);
+    }
+    true
+}
 fn ABAddressBookAddRecord(env: &mut Environment, book: id, record: id, error: MutPtr<id>) -> bool {
     clear_error(env, error);
     if book.is_null() || record.is_null() {
@@ -295,6 +375,29 @@ fn ABAddressBookCopyArrayOfAllPeople(env: &mut Environment, book: id) -> id {
         .collect();
     for &person in &people {
         retain(env, person);
+    }
+    ns_array::from_vec(env, people)
+}
+fn ABAddressBookCopyPeopleWithName(env: &mut Environment, book: id, name: id) -> id {
+    if book.is_null() || name.is_null() {
+        return nil;
+    }
+    let query = to_rust_string(env, name).to_lowercase();
+    let records = env.objc.borrow::<AddressBook>(book).records.clone();
+    let mut people = Vec::new();
+    for record in records {
+        if env.objc.borrow::<Record>(record).kind != 0 {
+            continue;
+        }
+        let first = person_name_part(env, record, 0);
+        let last = person_name_part(env, record, 1);
+        if first.contains(&query)
+            || last.contains(&query)
+            || format!("{first} {last}").contains(&query)
+        {
+            retain(env, record);
+            people.push(record);
+        }
     }
     ns_array::from_vec(env, people)
 }
@@ -447,6 +550,14 @@ fn ABMultiValueRemoveValueAndLabelAtIndex(env: &mut Environment, multi: id, inde
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(ABAddressBookCopyPeopleWithName(_, _)),
+    export_c_func!(ABPersonComparePeopleByName(_, _, _)),
+    export_c_func!(ABPersonGetSortOrdering()),
+    export_c_func!(ABPersonGetCompositeNameFormat()),
+    export_c_func!(ABPersonHasImageData(_)),
+    export_c_func!(ABPersonCopyImageData(_)),
+    export_c_func!(ABPersonSetImageData(_, _, _)),
+    export_c_func!(ABPersonRemoveImageData(_, _)),
     export_c_func!(ABMultiValueCreateMutable(_)),
     export_c_func!(ABMultiValueGetCount(_)),
     export_c_func!(ABMultiValueCopyValueAtIndex(_, _)),
