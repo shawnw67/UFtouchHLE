@@ -51,14 +51,19 @@ pub struct State {
     queue_labels: HashMap<ConstVoidPtr, ConstPtr<u8>>,
     queue_specifics: HashMap<(ConstVoidPtr, ConstVoidPtr), (MutVoidPtr, GuestFunction)>,
     contexts: HashMap<MutVoidPtr, MutVoidPtr>,
+    current_queues: HashMap<usize, Vec<ConstVoidPtr>>,
     draining: bool,
 }
 
 enum DispatchWork {
-    Block(MutVoidPtr),
+    Block {
+        block: MutVoidPtr,
+        queue: ConstVoidPtr,
+    },
     Function {
         context: MutVoidPtr,
         function: GuestFunction,
+        queue: ConstVoidPtr,
     },
 }
 
@@ -77,6 +82,7 @@ struct TimerSource {
     /// Sources are created suspended.
     suspend_count: i32,
     cancelled: bool,
+    queue: ConstVoidPtr,
 }
 
 /// Turn a `dispatch_time_t` into an [Instant] ([None] if it's "forever").
@@ -326,6 +332,44 @@ fn dispatch_get_main_queue(env: &mut Environment) -> ConstVoidPtr {
     main_queue(env)
 }
 
+fn dispatch_get_current_queue(env: &mut Environment) -> ConstVoidPtr {
+    if let Some(queue) = env
+        .libc_state
+        .dispatch
+        .current_queues
+        .get(&env.current_thread)
+        .and_then(|stack| stack.last())
+        .copied()
+    {
+        return queue;
+    }
+    if env.current_thread == 0 {
+        main_queue(env)
+    } else {
+        dispatch_get_global_queue(env, 0, 0)
+    }
+}
+fn push_queue(env: &mut Environment, queue: ConstVoidPtr) {
+    env.libc_state
+        .dispatch
+        .current_queues
+        .entry(env.current_thread)
+        .or_default()
+        .push(queue);
+}
+fn pop_queue(env: &mut Environment) {
+    env.libc_state
+        .dispatch
+        .current_queues
+        .get_mut(&env.current_thread)
+        .unwrap()
+        .pop();
+}
+fn dispatch_get_specific(env: &mut Environment, key: ConstVoidPtr) -> MutVoidPtr {
+    let queue = dispatch_get_current_queue(env);
+    dispatch_queue_get_specific(env, queue, key)
+}
+
 fn dispatch_queue_create(
     env: &mut Environment,
     label: ConstPtr<u8>,
@@ -347,7 +391,7 @@ fn dispatch_queue_create(
 }
 fn dispatch_queue_get_label(env: &mut Environment, queue: ConstVoidPtr) -> ConstPtr<u8> {
     let queue = if queue.is_null() {
-        main_queue(env)
+        dispatch_get_current_queue(env)
     } else {
         queue
     };
@@ -390,10 +434,15 @@ fn dispatch_queue_set_specific(
     };
     if let Some((context, function)) = old {
         if !function.to_ptr().is_null() {
+            let queue = dispatch_get_global_queue(env, 0, 0);
             env.libc_state
                 .dispatch
                 .pending
-                .push_back(DispatchWork::Function { context, function });
+                .push_back(DispatchWork::Function {
+                    context,
+                    function,
+                    queue,
+                });
         }
     }
 }
@@ -437,35 +486,45 @@ fn dispatch_queue_attr_make_with_qos_class(
 
 fn dispatch_async_f(
     env: &mut Environment,
-    _queue: ConstVoidPtr,
+    queue: ConstVoidPtr,
     context: MutVoidPtr,
     function: GuestFunction,
 ) {
     env.libc_state
         .dispatch
         .pending
-        .push_back(DispatchWork::Function { context, function });
+        .push_back(DispatchWork::Function {
+            context,
+            function,
+            queue,
+        });
 }
 fn dispatch_sync_f(
     env: &mut Environment,
-    _queue: ConstVoidPtr,
+    queue: ConstVoidPtr,
     context: MutVoidPtr,
     function: GuestFunction,
 ) {
+    push_queue(env, queue);
     let _: () = function.call_from_host(env, (context,));
+    pop_queue(env);
 }
 fn dispatch_after_f(
     env: &mut Environment,
     when: dispatch_time_t,
-    _queue: ConstVoidPtr,
+    queue: ConstVoidPtr,
     context: MutVoidPtr,
     function: GuestFunction,
 ) {
     if let Some(when) = time_to_instant(env, when) {
-        env.libc_state
-            .dispatch
-            .delayed
-            .push((when, DispatchWork::Function { context, function }));
+        env.libc_state.dispatch.delayed.push((
+            when,
+            DispatchWork::Function {
+                context,
+                function,
+                queue,
+            },
+        ));
     }
 }
 fn dispatch_once_f(
@@ -483,24 +542,28 @@ fn dispatch_once_f(
 fn dispatch_apply_f(
     env: &mut Environment,
     iterations: u32,
-    _queue: ConstVoidPtr,
+    queue: ConstVoidPtr,
     context: MutVoidPtr,
     function: GuestFunction,
 ) {
+    push_queue(env, queue);
     for index in 0..iterations {
         let _: () = function.call_from_host(env, (context, index));
     }
+    pop_queue(env);
 }
 fn dispatch_apply(
     env: &mut Environment,
     iterations: u32,
-    _queue: ConstVoidPtr,
+    queue: ConstVoidPtr,
     block: ConstVoidPtr,
 ) {
     let function = block_invoke_function(env, block);
+    push_queue(env, queue);
     for index in 0..iterations {
         let _: () = function.call_from_host(env, (block, index));
     }
+    pop_queue(env);
 }
 fn dispatch_group_async_f(
     env: &mut Environment,
@@ -534,23 +597,25 @@ fn dispatch_barrier_sync_f(
     dispatch_sync_f(env, queue, context, function);
 }
 
-fn dispatch_async(env: &mut Environment, _queue: ConstVoidPtr, block: ConstVoidPtr) {
+fn dispatch_async(env: &mut Environment, queue: ConstVoidPtr, block: ConstVoidPtr) {
     let block = _Block_copy(env, block);
     env.libc_state
         .dispatch
         .pending
-        .push_back(DispatchWork::Block(block));
+        .push_back(DispatchWork::Block { block, queue });
     crate::network_trace::scheduled(env, block.to_bits(), "dispatch_async");
 }
 
-fn dispatch_sync(env: &mut Environment, _queue: ConstVoidPtr, block: ConstVoidPtr) {
+fn dispatch_sync(env: &mut Environment, queue: ConstVoidPtr, block: ConstVoidPtr) {
+    push_queue(env, queue);
     invoke_block(env, block);
+    pop_queue(env);
 }
 
 fn dispatch_after(
     env: &mut Environment,
     when: dispatch_time_t,
-    _queue: ConstVoidPtr,
+    queue: ConstVoidPtr,
     block: ConstVoidPtr,
 ) {
     let Some(when) = time_to_instant(env, when) else {
@@ -560,7 +625,7 @@ fn dispatch_after(
     env.libc_state
         .dispatch
         .delayed
-        .push((when, DispatchWork::Block(block)));
+        .push((when, DispatchWork::Block { block, queue }));
     crate::network_trace::scheduled(env, block.to_bits(), "dispatch_after");
 }
 
@@ -583,11 +648,11 @@ fn dispatch_group_create(env: &mut Environment) -> MutVoidPtr {
 fn dispatch_group_async(
     env: &mut Environment,
     _group: MutVoidPtr,
-    _queue: ConstVoidPtr,
+    queue: ConstVoidPtr,
     block: ConstVoidPtr,
 ) {
     // Run immediately, so the group is never waiting for anything.
-    invoke_block(env, block);
+    dispatch_sync(env, queue, block);
 }
 fn dispatch_group_wait(
     _env: &mut Environment,
@@ -653,7 +718,7 @@ fn dispatch_source_create(
     type_: ConstVoidPtr,
     _handle: u32,
     _mask: u32,
-    _queue: ConstVoidPtr,
+    queue: ConstVoidPtr,
 ) -> MutVoidPtr {
     assert_eq!(
         type_,
@@ -669,6 +734,7 @@ fn dispatch_source_create(
             interval: None,
             suspend_count: 1,
             cancelled: false,
+            queue,
         }),
     )
 }
@@ -710,11 +776,15 @@ fn dispatch_source_cancel(env: &mut Environment, source: MutVoidPtr) {
     }
     timer.cancelled = true;
     let cancel_handler = std::mem::take(&mut timer.cancel_handler);
+    let queue = timer.queue;
     if !cancel_handler.is_null() {
         env.libc_state
             .dispatch
             .pending
-            .push_back(DispatchWork::Block(cancel_handler));
+            .push_back(DispatchWork::Block {
+                block: cancel_handler,
+                queue,
+            });
     }
 }
 
@@ -772,14 +842,17 @@ fn queue_due_work(env: &mut Environment) {
             }
             next
         });
-        handlers.push(timer.event_handler);
+        handlers.push((timer.event_handler, timer.queue));
     }
-    for handler in handlers {
+    for (handler, queue) in handlers {
         let handler = _Block_copy(env, handler.cast_const());
         env.libc_state
             .dispatch
             .pending
-            .push_back(DispatchWork::Block(handler));
+            .push_back(DispatchWork::Block {
+                block: handler,
+                queue,
+            });
     }
 }
 
@@ -797,16 +870,24 @@ pub fn drain_main_queue(env: &mut Environment) {
     let pending = std::mem::take(&mut env.libc_state.dispatch.pending);
     for work in pending {
         match work {
-            DispatchWork::Block(block) => {
+            DispatchWork::Block { block, queue } => {
+                push_queue(env, queue);
                 let invoke =
                     GuestFunction::from_addr_with_thumb_bit(block_word(env, block.cast_const(), 3));
                 let trace = crate::network_trace::callback_begin(env, block.to_bits());
                 let _: () = invoke.call_from_host(env, (block,));
                 crate::network_trace::end(env, trace);
                 _Block_release(env, block);
+                pop_queue(env);
             }
-            DispatchWork::Function { context, function } => {
+            DispatchWork::Function {
+                context,
+                function,
+                queue,
+            } => {
+                push_queue(env, queue);
                 let _: () = function.call_from_host(env, (context,));
+                pop_queue(env);
             }
         }
     }
@@ -824,6 +905,8 @@ pub const CONSTANTS: ConstantExports = &[
     ),
 ];
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(dispatch_get_current_queue()),
+    export_c_func!(dispatch_get_specific(_)),
     export_c_func!(dispatch_queue_create(_, _)),
     export_c_func!(dispatch_queue_get_label(_)),
     export_c_func!(dispatch_queue_set_specific(_, _, _, _)),

@@ -79,6 +79,8 @@ extern void dispatch_queue_set_specific(const void *queue, const void *key,
 extern void *dispatch_queue_get_specific(const void *queue, const void *key);
 extern void dispatch_set_context(void *object, void *context);
 extern void *dispatch_get_context(void *object);
+extern const void *dispatch_get_current_queue(void);
+extern void *dispatch_get_specific(const void *key);
 struct TestSplitComplex {
   float *realp;
   float *imagp;
@@ -6482,6 +6484,18 @@ int test_dispatch_function_calls(void) {
   return value == 10 ? 0 : -2;
 }
 
+struct dispatch_queue_probe {
+  const void *queue;
+  const void *key;
+  void *expected;
+  int count;
+};
+static void test_dispatch_queue_probe(void *context) {
+  struct dispatch_queue_probe *probe = context;
+  if (dispatch_get_current_queue() == probe->queue &&
+      dispatch_get_specific(probe->key) == probe->expected)
+    probe->count++;
+}
 int test_dispatch_queue_metadata(void) {
   int key, first = 0, second = 0;
   void *queue = dispatch_queue_create("podroid.test.queue", NULL);
@@ -6492,9 +6506,12 @@ int test_dispatch_queue_metadata(void) {
   int passed = dispatch_get_context(queue) == &second &&
                dispatch_queue_get_specific(queue, &key) == &first;
   dispatch_queue_set_specific(queue, &key, &second, NULL);
+  struct dispatch_queue_probe probe = {queue, &key, &second, 0};
+  dispatch_sync_f(queue, &probe, test_dispatch_queue_probe);
+  dispatch_async_f(queue, &probe, test_dispatch_queue_probe);
   void *semaphore = dispatch_semaphore_create(0);
   dispatch_semaphore_wait(semaphore, 0);
-  passed = passed && first == 1 &&
+  passed = passed && first == 1 && probe.count == 2 &&
            dispatch_queue_get_specific(queue, &key) == &second;
   dispatch_queue_set_specific(queue, &key, NULL, NULL);
   return passed && !dispatch_queue_get_specific(queue, &key) ? 0 : -1;
