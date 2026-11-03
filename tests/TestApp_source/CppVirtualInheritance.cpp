@@ -87,3 +87,23 @@ int test_cpp_virtual_inheritance(void) {
 
   return 0;
 }
+
+struct CastLeft {
+  virtual ~CastLeft() {}
+};
+struct CastRight {
+  virtual ~CastRight() {}
+};
+struct CastCombined : CastLeft, CastRight {};
+struct CastOther : CastLeft {};
+
+extern "C" int test_cxx_dynamic_cast_exact_type(void) {
+  CastCombined object;
+  CastLeft *left = &object;
+  CastRight *right = &object;
+  if (dynamic_cast<CastCombined *>(left) != &object ||
+      dynamic_cast<CastRight *>(left) != right ||
+      dynamic_cast<CastOther *>(left) != nullptr)
+    return -1;
+  return 0;
+}
