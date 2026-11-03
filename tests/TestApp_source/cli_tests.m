@@ -138,6 +138,10 @@ extern unsigned int CGImageGetBitmapInfo(CGImageRef image);
 extern bool CGImageGetShouldInterpolate(CGImageRef image);
 extern int CGImageGetRenderingIntent(CGImageRef image);
 extern bool CGImageIsMask(CGImageRef image);
+extern CGImageRef CGImageCreateFlippedVertically(CGImageRef image);
+extern CGImageRef CGImageCreateScaled(CGImageRef image, unsigned int width,
+                                      unsigned int height);
+extern void CGImageReadPixels(CGImageRef image, unsigned char *output);
 
 @interface UIBezierPath : NSObject
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
@@ -6321,6 +6325,29 @@ int test_CGImage_copy_metadata(void) {
   return passed ? 0 : -1;
 }
 
+int test_CGImage_transform_helpers(void) {
+  const unsigned char pixels[] = {255, 0, 0, 255, 0, 0, 255, 255};
+  CFDataRef data = CFDataCreate(NULL, pixels, sizeof(pixels));
+  CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGImageRef image =
+      CGImageCreate(1, 2, 8, 32, 4, space, 1, provider, NULL, false, 0);
+  CGImageRef flipped = CGImageCreateFlippedVertically(image);
+  CGImageRef scaled = CGImageCreateScaled(flipped, 2, 4);
+  unsigned char result[2 * 4 * 4];
+  CGImageReadPixels(scaled, result);
+  int passed = CGImageGetWidth(scaled) == 2 && CGImageGetHeight(scaled) == 4 &&
+               result[0] == 0 && result[2] == 255 && result[24] == 255 &&
+               result[26] == 0;
+  CGImageRelease(scaled);
+  CGImageRelease(flipped);
+  CGImageRelease(image);
+  CGColorSpaceRelease(space);
+  CFRelease(provider);
+  CFRelease(data);
+  return passed ? 0 : -1;
+}
+
 int test_CGImage_JPEG() {
   FILE *file = fopen("test_1x1_black_pixel.jpg", "r");
   if (file == NULL) {
@@ -10548,6 +10575,7 @@ struct {
     FUNC_DEF(test_CFURLHasDirectoryPath),
     FUNC_DEF(test_CGImage_invalid_rgb32),
     FUNC_DEF(test_CGImage_copy_metadata),
+    FUNC_DEF(test_CGImage_transform_helpers),
     FUNC_DEF(test_CGImage_JPEG),
     FUNC_DEF(test_NSMutableString_deleteCharactersInRange),
     FUNC_DEF(test_NSString_stringByReplacingOccurrencesOfString),

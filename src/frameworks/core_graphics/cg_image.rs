@@ -16,7 +16,7 @@ use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::core_foundation::{CFRelease, CFRetain, CFTypeRef};
 use crate::frameworks::foundation::ns_string;
 use crate::image::Image;
-use crate::mem::{ConstPtr, GuestUSize};
+use crate::mem::{ConstPtr, GuestUSize, MutPtr};
 use crate::objc::{autorelease, nil, objc_classes, ClassExports, HostObject, ObjC};
 use crate::Environment;
 
@@ -373,7 +373,78 @@ fn CGImageIsMask(_env: &mut Environment, _image: CGImageRef) -> bool {
 fn CGImageGetPixelFormatInfo(_env: &mut Environment, _image: CGImageRef) -> u32 {
     0
 }
+
+// HyperHLE helper exports used by some applications for raw image conversion.
+fn CGImageReadPixels(env: &mut Environment, image: CGImageRef, output: MutPtr<u8>) {
+    if image.is_null() || output.is_null() {
+        return;
+    }
+    let pixels = borrow_image(&env.objc, image).pixels();
+    let len = u32::try_from(pixels.len()).expect("image exceeds guest address space");
+    env.mem.bytes_at_mut(output, len).copy_from_slice(pixels);
+}
+
+fn CGImageCreateFlippedVertically(env: &mut Environment, image: CGImageRef) -> CGImageRef {
+    if image.is_null() {
+        return nil;
+    }
+    let source = env.objc.borrow::<CGImageHostObject>(image);
+    let (width, height) = source.image.dimensions();
+    let stride = width as usize * 4;
+    let mut pixels = Vec::with_capacity(source.image.pixels().len());
+    for row in (0..height as usize).rev() {
+        pixels.extend_from_slice(&source.image.pixels()[row * stride..(row + 1) * stride]);
+    }
+    let (interpolate, intent) = (source.should_interpolate, source.rendering_intent);
+    from_image_with_options(
+        env,
+        Image::from_pixel_vec(pixels, (width, height)),
+        interpolate,
+        intent,
+    )
+}
+
+fn CGImageCreateScaled(
+    env: &mut Environment,
+    image: CGImageRef,
+    width: u32,
+    height: u32,
+) -> CGImageRef {
+    if image.is_null() || width == 0 || height == 0 {
+        return nil;
+    }
+    let Some(bytes) = width.checked_mul(height).and_then(|n| n.checked_mul(4)) else {
+        return nil;
+    };
+    let source = env.objc.borrow::<CGImageHostObject>(image);
+    let (src_width, src_height) = source.image.dimensions();
+    if src_width == 0 || src_height == 0 {
+        return nil;
+    }
+    let mut pixels = Vec::new();
+    if pixels.try_reserve_exact(bytes as usize).is_err() {
+        return nil;
+    }
+    for y in 0..height {
+        let sy = u64::from(y) * u64::from(src_height) / u64::from(height);
+        for x in 0..width {
+            let sx = u64::from(x) * u64::from(src_width) / u64::from(width);
+            let offset = ((sy * u64::from(src_width) + sx) * 4) as usize;
+            pixels.extend_from_slice(&source.image.pixels()[offset..offset + 4]);
+        }
+    }
+    let (interpolate, intent) = (source.should_interpolate, source.rendering_intent);
+    from_image_with_options(
+        env,
+        Image::from_pixel_vec(pixels, (width, height)),
+        interpolate,
+        intent,
+    )
+}
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CGImageReadPixels(_, _)),
+    export_c_func!(CGImageCreateFlippedVertically(_)),
+    export_c_func!(CGImageCreateScaled(_, _, _)),
     export_c_func!(CGImageCreateCopy(_)),
     export_c_func!(CGImageGetBitmapInfo(_)),
     export_c_func!(CGImageGetDecode(_)),
