@@ -201,7 +201,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/cpu/dynarmic_wrapper/lib.rs` | hyper-modified | — | partial: libc batch (FPSCR access) |
 | `src/crash_handler.rs` | hyper-added | — | pending |
 | `src/device_profiles.rs` | uf-added | — | pending |
-| `src/dyld.rs` | both-modified | cxxabi_throw_intercept, dyld_stub_binder | pending |
+| `src/dyld.rs` | both-modified | cxxabi_throw_intercept, dyld_stub_binder | partial (RTTI vtable registration and preference for complete guest C++ runtime; other linker differences remain) |
 | `src/dyld/dylib_list.rs` | both-modified | — | pending |
 | `src/dyld/swift_runtime.rs` | hyper-added | — | pending |
 | `src/env_flags.rs` | hyper-added | — | ported: ES2/ES3 batch |

@@ -120,6 +120,77 @@ mod symbol_visibility_tests {
         Dyld::new().do_non_lazy_linking(&images[1], &images, &mut memory, &mut ObjC::new());
         assert_eq!(memory.read(slot), 0x3031);
     }
+
+    #[test]
+    fn bundled_cxx_runtime_is_used_only_when_complete() {
+        let required = [
+            "___cxa_throw",
+            "___gxx_personality_sj0",
+            "__Unwind_SjLj_RaiseException",
+            "__Unwind_SjLj_Register",
+        ];
+        let mut app = image("app", 0, false);
+        let mut runtime = image("runtime", 0, false);
+        app.exported_symbols
+            .insert("___cxa_guard_acquire".into(), 0x1111);
+        runtime
+            .exported_symbols
+            .insert("___cxa_guard_acquire".into(), 0x2221);
+        runtime
+            .exported_symbols
+            .insert("_unrelated_private".into(), 0x3331);
+        for (index, symbol) in required.iter().enumerate() {
+            let address = 0x4001 + index as u32 * 4;
+            runtime.external_symbols.insert((*symbol).into(), address);
+            runtime.exported_symbols.insert((*symbol).into(), address);
+        }
+        let images = [app, runtime];
+        let symbols = guest_cxxabi_exports(&images);
+        assert_eq!(symbols.get("___cxa_guard_acquire"), Some(&0x2221));
+        assert!(!symbols.contains_key("_unrelated_private"));
+        let mut incomplete = images;
+        incomplete[1]
+            .external_symbols
+            .remove("__Unwind_SjLj_Register");
+        assert!(guest_cxxabi_exports(&incomplete).is_empty());
+    }
+
+    #[test]
+    fn complete_cxx_runtime_wins_over_host_guard_in_nonlazy_linking() {
+        let mut mem = Mem::new();
+        let relocation = mem.alloc_and_write(0u32);
+        let nonlazy = mem.alloc_and_write(0u32);
+        let mut app = image("app", 0, false);
+        app.external_relocations
+            .push((relocation.to_bits(), "___cxa_guard_acquire".into()));
+        app.sections.push(Section {
+            name: "__nl_symbol_ptr".into(),
+            addr: nonlazy.to_bits(),
+            size: 4,
+            type_: SectionType::NonLazySymbolPointers,
+            dyld_indirect_symbol_info: Some(DyldIndirectSymbolInfo {
+                entry_size: 4,
+                indirect_undef_symbols: vec![Some("___cxa_guard_acquire".into())],
+            }),
+        });
+        let mut runtime = image("runtime", 0, false);
+        runtime
+            .exported_symbols
+            .insert("___cxa_guard_acquire".into(), 0x2221);
+        let images = [app, runtime];
+        let mut dyld = Dyld::new();
+        dyld.guest_cxxabi_exports
+            .insert("___cxa_guard_acquire".into(), 0x2221);
+        dyld.do_non_lazy_linking(&images[0], &images, &mut mem, &mut ObjC::new());
+        assert_eq!(mem.read(relocation), 0x2221);
+        assert_eq!(mem.read(nonlazy), 0x2221);
+        assert_eq!(
+            dyld.create_proc_address_no_inval(&mut mem, "___cxa_guard_acquire")
+                .unwrap()
+                .addr_with_thumb_bit(),
+            0x2221
+        );
+    }
 }
 
 use crate::abi::{CallFromGuest, GuestFunction};
@@ -330,6 +401,39 @@ pub(crate) enum CxxAbiTypeInfoKind {
     MultipleInheritance,
 }
 
+fn guest_cxxabi_exports(bins: &[MachO]) -> HashMap<String, u32> {
+    let required = [
+        "___cxa_throw",
+        "___gxx_personality_sj0",
+        "__Unwind_SjLj_RaiseException",
+        "__Unwind_SjLj_Register",
+    ];
+    if !required.iter().all(|symbol| {
+        bins.iter().any(|bin| {
+            bin.external_symbols
+                .get(*symbol)
+                .is_some_and(|&address| address != 0)
+        })
+    }) {
+        return HashMap::new();
+    }
+    let mut result = HashMap::new();
+    // Bundled libraries precede app-level hooks that might forward to them.
+    for bin in bins.iter().skip(1).chain(bins.iter().take(1)) {
+        for (name, &address) in &bin.exported_symbols {
+            if address != 0
+                && (name.starts_with("___cxa_")
+                    || name.starts_with("__Unwind_")
+                    || name.starts_with("___gxx_personality_")
+                    || name == "___dynamic_cast")
+            {
+                result.entry(name.clone()).or_insert(address);
+            }
+        }
+    }
+    result
+}
+
 pub struct Dyld {
     /// List of host functions that have been "linked" and had SVCs assigned.
     ///
@@ -341,6 +445,7 @@ pub struct Dyld {
     constants_to_link_later: Vec<(MutPtr<ConstVoidPtr>, &'static HostConstant, u32)>,
     non_lazy_host_functions: HashMap<&'static str, GuestFunction>,
     cxxabi_typeinfo_vtables: HashMap<u32, CxxAbiTypeInfoKind>,
+    guest_cxxabi_exports: HashMap<String, u32>,
 }
 
 impl Dyld {
@@ -371,6 +476,7 @@ impl Dyld {
             constants_to_link_later: Vec::new(),
             non_lazy_host_functions: HashMap::new(),
             cxxabi_typeinfo_vtables: HashMap::new(),
+            guest_cxxabi_exports: HashMap::new(),
         }
     }
 
@@ -387,6 +493,7 @@ impl Dyld {
     pub fn do_initial_linking(&mut self, bins: &[MachO], mem: &mut Mem, objc: &mut ObjC) {
         assert!(self.return_to_host_routine.is_none());
         assert!(self.thread_exit_routine.is_none());
+        self.guest_cxxabi_exports = guest_cxxabi_exports(bins);
         self.return_to_host_routine =
             Some(write_return_to_host_routine(mem, Self::SVC_RETURN_TO_HOST));
         self.thread_exit_routine = Some(write_return_to_host_routine(mem, Self::SVC_THREAD_EXIT));
@@ -621,6 +728,8 @@ impl Dyld {
             } else if name == "___CFConstantStringClassReference" {
                 // See ns_string::register_constant_strings
                 nil.cast().cast_const()
+            } else if let Some(&address) = self.guest_cxxabi_exports.get(name) {
+                Ptr::from_bits(address)
             } else if let Some(external_addr) = bins
                 .iter()
                 .filter_map(|other_bin| other_bin.symbol_for_linking(bin, name))
@@ -695,6 +804,11 @@ impl Dyld {
             };
 
             let ptr_ptr: MutPtr<ConstVoidPtr> = Ptr::from_bits(ptrs.addr + i * entry_size);
+
+            if let Some(&address) = self.guest_cxxabi_exports.get(symbol) {
+                mem.write(ptr_ptr, Ptr::from_bits(address));
+                continue;
+            }
 
             for other_bin in bins {
                 if let Some(addr) = other_bin.symbol_for_linking(bin, symbol) {
@@ -882,6 +996,11 @@ impl Dyld {
 
         let symbol = info.indirect_undef_symbols[idx].as_deref().unwrap();
 
+        if let Some(&address) = self.guest_cxxabi_exports.get(symbol) {
+            link_by_restoring_stub(mem, cpu, address, svc_pc, info.entry_size, pic_offset);
+            return None;
+        }
+
         if let Some(&addr) = self.non_lazy_host_functions.get(symbol) {
             // The host function was already linked non-lazily, point the
             // stub and __la_symbol_ptr to the function.
@@ -983,6 +1102,9 @@ impl Dyld {
         mem: &mut Mem,
         symbol: &str,
     ) -> Result<GuestFunction, ()> {
+        if let Some(&address) = self.guest_cxxabi_exports.get(symbol) {
+            return Ok(GuestFunction::from_addr_with_thumb_bit(address));
+        }
         let &(symbol, f) = search_host_dylibs(|dylib| dylib.function_exports, symbol).ok_or(())?;
         if let Some(&cached_fn) = self.non_lazy_host_functions.get(symbol) {
             return Ok(cached_fn);
