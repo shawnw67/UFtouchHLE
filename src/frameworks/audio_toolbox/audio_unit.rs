@@ -928,6 +928,85 @@ fn AudioUnitGetParameter(
     0
 }
 
+fn AudioUnitRender(
+    env: &mut Environment,
+    unit: AudioUnit,
+    flags: MutPtr<u32>,
+    timestamp: ConstVoidPtr,
+    bus: u32,
+    frames: u32,
+    data: MutVoidPtr,
+) -> OSStatus {
+    if flags.is_null() || data.is_null() || bus != 0 {
+        return paramErr;
+    }
+    let Some(object) = audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&unit)
+    else {
+        return paramErr;
+    };
+    if !object.passthrough_converter
+        || !object.initialized
+        || object.disposing
+        || frames > object.maximum_frames_per_slice
+    {
+        return paramErr;
+    }
+    let Some(callback) = object.render_callback else {
+        return paramErr;
+    };
+    let notifications = object.render_notifies.clone();
+    let original_flags = env.mem.read(flags);
+    for (notify, context, _) in &notifications {
+        env.mem.write(flags, original_flags | (1 << 2));
+        let _: OSStatus =
+            notify.call_from_host(env, (*context, flags, timestamp, bus, frames, data));
+        if !audio_components::State::get(&mut env.framework_state)
+            .audio_component_instances
+            .get(&unit)
+            .is_some_and(|object| object.initialized && !object.disposing)
+        {
+            return paramErr;
+        }
+    }
+    env.mem.write(flags, original_flags);
+    let input_proc = callback.input_proc;
+    let status: OSStatus = input_proc.call_from_host(
+        env,
+        (
+            callback.input_proc_ref_con,
+            flags,
+            timestamp,
+            bus,
+            frames,
+            data,
+        ),
+    );
+    let after_render = env.mem.read(flags);
+    if audio_components::State::get(&mut env.framework_state)
+        .audio_component_instances
+        .get(&unit)
+        .is_some_and(|object| object.initialized && !object.disposing)
+    {
+        for (notify, context, _) in notifications {
+            let error_flag = if status != 0 { 1 << 8 } else { 0 };
+            env.mem.write(flags, after_render | (1 << 3) | error_flag);
+            let _: OSStatus =
+                notify.call_from_host(env, (context, flags, timestamp, bus, frames, data));
+            if !audio_components::State::get(&mut env.framework_state)
+                .audio_component_instances
+                .get(&unit)
+                .is_some_and(|object| object.initialized && !object.disposing)
+            {
+                break;
+            }
+        }
+        env.mem.write(flags, after_render);
+    }
+    status
+}
+
 fn AudioUnitReset(env: &mut Environment, unit: AudioUnit, scope: u32, element: u32) -> OSStatus {
     if scope > kAudioUnitScope_Output || element != 0 {
         return paramErr;
@@ -1575,6 +1654,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitGetPropertyInfo(_, _, _, _, _, _)),
     export_c_func!(AudioUnitSetParameter(_, _, _, _, _, _)),
     export_c_func!(AudioUnitGetParameter(_, _, _, _, _)),
+    export_c_func!(AudioUnitRender(_, _, _, _, _, _)),
     export_c_func!(AudioUnitReset(_, _, _)),
     export_c_func!(AudioOutputUnitStart(_)),
     export_c_func!(AudioOutputUnitStop(_)),

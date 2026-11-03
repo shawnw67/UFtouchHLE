@@ -10915,6 +10915,8 @@ extern int AudioComponentInstanceNew(void *, void **);
 extern int AudioComponentInstanceDispose(void *);
 extern int AudioUnitInitialize(void *);
 extern int AudioUnitReset(void *, uint32_t, uint32_t);
+extern int AudioUnitRender(void *, uint32_t *, const void *, uint32_t, uint32_t,
+                           void *);
 extern int AudioUnitSetParameter(void *, uint32_t, uint32_t, uint32_t, float,
                                  uint32_t);
 extern int AudioUnitGetParameter(void *, uint32_t, uint32_t, uint32_t, float *);
@@ -11190,6 +11192,62 @@ static int test_converter_render(void *ctx, uint32_t *flags,
     return -1;
   ++*count;
   memset(list->buffers[0].data, 0, list->buffers[0].size);
+  return 0;
+}
+struct TestPullState {
+  int step, bad, fail;
+};
+static int test_converter_pull(void *ctx, uint32_t *flags,
+                               const void *timestamp, uint32_t bus,
+                               uint32_t frames, void *data) {
+  struct TestPullState *state = ctx;
+  struct TestAudioBufferList *list = data;
+  if (state->step++ != 1 || *flags != 0 || !timestamp || bus != 0 ||
+      frames != 8 || list->count != 1 || list->buffers[0].size != 16)
+    state->bad = 1;
+  memset(list->buffers[0].data, 0x5a, list->buffers[0].size);
+  return state->fail ? -42 : 0;
+}
+static int test_converter_pull_notify(void *ctx, uint32_t *flags,
+                                      const void *timestamp, uint32_t bus,
+                                      uint32_t frames, void *data) {
+  struct TestPullState *state = ctx;
+  uint32_t expected = state->step == 0 ? 4 : (8 | (state->fail ? 256 : 0));
+  if ((state->step != 0 && state->step != 2) || *flags != expected ||
+      !timestamp || bus != 0 || frames != 8 || !data)
+    state->bad = 1;
+  ++state->step;
+  return 0;
+}
+int test_converter_pull_render(void) {
+  const struct TestAudioComponentDescription description = {
+      0x61756663, 0x636f6e76, 0x6170706c, 0, 0};
+  const struct TestStreamFormat format = {44100.0, 0x6c70636d, 12, 2, 1,
+                                          2,       1,          16, 0};
+  struct TestPullState state = {0};
+  struct TestRenderCallback callback = {test_converter_pull, &state};
+  unsigned char pcm[16] = {0};
+  struct TestAudioBufferList list = {1, {{1, sizeof(pcm), pcm}, {0}}};
+  uint64_t timestamp[8] = {0};
+  uint32_t flags = 0;
+  void *component = AudioComponentFindNext(NULL, &description), *unit = NULL;
+  if (!component || AudioComponentInstanceNew(component, &unit) ||
+      AudioUnitSetProperty(unit, 8, 1, 0, &format, sizeof(format)) ||
+      AudioUnitSetProperty(unit, 8, 2, 0, &format, sizeof(format)) ||
+      AudioUnitSetProperty(unit, 23, 1, 0, &callback, sizeof(callback)) ||
+      AudioUnitAddRenderNotify(unit, test_converter_pull_notify, &state) ||
+      !AudioUnitRender(unit, &flags, timestamp, 0, 8, &list) ||
+      AudioUnitInitialize(unit) ||
+      !AudioUnitRender(unit, &flags, timestamp, 1, 8, &list) ||
+      AudioUnitRender(unit, &flags, timestamp, 0, 8, &list) || state.bad ||
+      state.step != 3 || flags != 0 || pcm[0] != 0x5a || pcm[15] != 0x5a)
+    return -1;
+  state.step = 0;
+  state.fail = 1;
+  if (AudioUnitRender(unit, &flags, timestamp, 0, 8, &list) != -42 ||
+      state.bad || state.step != 3 || flags != 0 ||
+      AudioComponentInstanceDispose(unit))
+    return -2;
   return 0;
 }
 static int test_augraph_converters_with_order(int connect_after_open) {
@@ -11677,6 +11735,7 @@ struct {
     FUNC_DEF(test_audio_planar_render_callbacks),
     FUNC_DEF(test_augraph_two_input_mixer),
     FUNC_DEF(test_augraph_passthrough_converters),
+    FUNC_DEF(test_converter_pull_render),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
 #endif
