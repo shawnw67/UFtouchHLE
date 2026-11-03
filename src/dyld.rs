@@ -156,6 +156,32 @@ mod symbol_visibility_tests {
     }
 
     #[test]
+    fn guest_typeinfo_vtables_resolve_at_base_and_address_point() {
+        let mut bin = image("runtime", 0, false);
+        bin.exported_symbols
+            .insert("__ZTVN10__cxxabiv117__class_type_infoE".into(), 0x1000);
+        bin.exported_symbols
+            .insert("__ZTVN10__cxxabiv120__si_class_type_infoE".into(), 0x2000);
+        bin.exported_symbols
+            .insert("__ZTVN10__cxxabiv121__vmi_class_type_infoE".into(), 0x3000);
+        let mut dyld = Dyld::new();
+        dyld.register_cxxabi_typeinfo_vtables(&[bin]);
+        assert_eq!(
+            dyld.cxxabi_typeinfo_kind(0x1008),
+            Some(CxxAbiTypeInfoKind::Class)
+        );
+        assert_eq!(
+            dyld.cxxabi_typeinfo_kind(0x2000),
+            Some(CxxAbiTypeInfoKind::SingleInheritance)
+        );
+        assert_eq!(
+            dyld.cxxabi_typeinfo_kind(0x3008),
+            Some(CxxAbiTypeInfoKind::MultipleInheritance)
+        );
+        assert_eq!(dyld.cxxabi_typeinfo_kind(0x4000), None);
+    }
+
+    #[test]
     fn complete_cxx_runtime_wins_over_host_guard_in_nonlazy_linking() {
         let mut mem = Mem::new();
         let relocation = mem.alloc_and_write(0u32);
@@ -503,6 +529,21 @@ impl Dyld {
         objc.register_bin_selectors(&bins[0], mem);
         objc.register_host_selectors(mem);
 
+        self.register_cxxabi_typeinfo_vtables(bins);
+        for bin in bins {
+            self.setup_lazy_linking(bin, mem);
+            // Must happen before `register_bin_classes`, else superclass
+            // pointers will be wrong.
+            self.do_non_lazy_linking(bin, bins, mem, objc);
+        }
+
+        objc.register_bin_classes(&bins[0], mem);
+        objc.register_bin_categories(&bins[0], mem);
+
+        ns_string::register_constant_strings(&bins[0], mem, objc);
+    }
+
+    fn register_cxxabi_typeinfo_vtables(&mut self, bins: &[MachO]) {
         for bin in bins {
             for (name, &address) in &bin.exported_symbols {
                 let kind = match name.as_str() {
@@ -521,17 +562,6 @@ impl Dyld {
                 }
             }
         }
-        for bin in bins {
-            self.setup_lazy_linking(bin, mem);
-            // Must happen before `register_bin_classes`, else superclass
-            // pointers will be wrong.
-            self.do_non_lazy_linking(bin, bins, mem, objc);
-        }
-
-        objc.register_bin_classes(&bins[0], mem);
-        objc.register_bin_categories(&bins[0], mem);
-
-        ns_string::register_constant_strings(&bins[0], mem, objc);
     }
 
     pub(crate) fn cxxabi_typeinfo_kind(&self, address: u32) -> Option<CxxAbiTypeInfoKind> {
