@@ -537,6 +537,7 @@ pub fn is_supported_audio_format(format: &AudioStreamBasicDescription) -> bool {
             // TODO: support more PCM formats
             (channels_per_frame == 1 || channels_per_frame == 2)
                 && (bits_per_channel == 8 || bits_per_channel == 16 || bits_per_channel == 32)
+                && (channels_per_frame == 1 || format_flags & kAudioFormatFlagIsNonInterleaved == 0)
                 && (bits_per_channel != 32
                     || format_flags & (kAudioFormatFlagIsFloat | kAudioFormatFlagIsSignedInteger)
                         != 0)
@@ -544,10 +545,7 @@ pub fn is_supported_audio_format(format: &AudioStreamBasicDescription) -> bool {
                     || ((bits_per_channel / 8) * channels_per_frame) == bytes_per_frame)
                 && (format_flags & kAudioFormatFlagIsBigEndian) == 0
                 && ((format_flags & kAudioFormatFlagIsFloat) == 0
-                    || (bits_per_channel == 32
-                        && bytes_per_frame == channels_per_frame * 4
-                        && (channels_per_frame == 1
-                            || format_flags & kAudioFormatFlagIsNonInterleaved == 0)))
+                    || (bits_per_channel == 32 && bytes_per_frame == channels_per_frame * 4))
         }
         _ => false,
     }
@@ -752,6 +750,25 @@ fn signed_pcm32_conversion_preserves_sample_sign() {
         .map(|bytes| i16::from_le_bytes(*bytes))
         .collect();
     assert_eq!(samples, [i16::MIN, -1, 0, 1, i16::MAX]);
+}
+
+#[cfg(test)]
+#[test]
+fn planar_stereo_is_not_misidentified_as_interleaved() {
+    let mut format = AudioStreamBasicDescription {
+        sample_rate: 44100.0,
+        format_id: kAudioFormatLinearPCM,
+        format_flags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+        bytes_per_packet: 4,
+        frames_per_packet: 1,
+        bytes_per_frame: 4,
+        channels_per_frame: 2,
+        bits_per_channel: 16,
+        _reserved: 0,
+    };
+    assert!(is_supported_audio_format(&format));
+    format.format_flags |= kAudioFormatFlagIsNonInterleaved;
+    assert!(!is_supported_audio_format(&format));
 }
 
 /// Guesses whether 16-bit samples are big endian, by which byte order makes
