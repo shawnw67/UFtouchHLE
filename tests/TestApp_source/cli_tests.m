@@ -68,6 +68,10 @@ extern void CGContextAddCurveToPoint(CGContextRef context, CGFloat c1x,
                                      CGFloat x, CGFloat y);
 extern void CGContextClosePath(CGContextRef context);
 extern void CGContextFillPath(CGContextRef context);
+extern void CGContextAddArc(CGContextRef context, CGFloat x, CGFloat y,
+                            CGFloat radius, CGFloat start, CGFloat end,
+                            int clockwise);
+extern void CGContextFlush(CGContextRef context);
 
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
@@ -338,6 +342,22 @@ int test_CGContext_curves(void) {
   CGContextRelease(context);
   CGColorSpaceRelease(space);
   return filled > 10 && filled < 150 ? 0 : -1;
+}
+
+int test_CGContext_arc(void) {
+  unsigned char pixels[16 * 16 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 16, 16, 8, 16 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  CGContextSetRGBFillColor(context, 1, 0, 0, 1);
+  CGContextAddArc(context, 8, 8, 5, 0, 6.283185307f, 0);
+  CGContextClosePath(context);
+  CGContextFillPath(context);
+  CGContextFlush(context);
+  int passed = pixels[(8 * 16 + 8) * 4 + 3] == 255 && pixels[3] == 0;
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
 }
 
 // Declare test functions from other files.
@@ -9287,6 +9307,7 @@ struct {
     FUNC_DEF(test_CFString_split_join_and_replace),
     FUNC_DEF(test_CGContext_add_rects_even_odd),
     FUNC_DEF(test_CGContext_curves),
+    FUNC_DEF(test_CGContext_arc),
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),

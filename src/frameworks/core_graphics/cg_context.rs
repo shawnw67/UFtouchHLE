@@ -698,6 +698,65 @@ fn CGContextAddArcToPoint(
     }
 }
 
+fn CGContextAddArc(
+    env: &mut Environment,
+    context: CGContextRef,
+    x: CGFloat,
+    y: CGFloat,
+    radius: CGFloat,
+    start: CGFloat,
+    end: CGFloat,
+    clockwise: i32,
+) {
+    if radius < 0.0 || ![x, y, radius, start, end].iter().all(|v| v.is_finite()) {
+        return;
+    }
+    let tau = std::f32::consts::TAU;
+    let raw = end - start;
+    let sweep = if raw.abs() >= tau {
+        if clockwise != 0 {
+            -tau
+        } else {
+            tau
+        }
+    } else if clockwise != 0 {
+        -(-raw).rem_euclid(tau)
+    } else {
+        raw.rem_euclid(tau)
+    };
+    let start_x = x + radius * start.cos();
+    let start_y = y + radius * start.sin();
+    if current_point(env, context).is_none() {
+        CGContextMoveToPoint(env, context, start_x, start_y);
+    } else {
+        CGContextAddLineToPoint(env, context, start_x, start_y);
+    }
+    let steps = (sweep.abs() / std::f32::consts::FRAC_PI_2).ceil().max(1.0) as u32;
+    for i in 0..steps {
+        let a = start + sweep * i as CGFloat / steps as CGFloat;
+        let b = start + sweep * (i + 1) as CGFloat / steps as CGFloat;
+        let k = 4.0 / 3.0 * ((b - a) / 4.0).tan();
+        CGContextAddCurveToPoint(
+            env,
+            context,
+            x + radius * (a.cos() - k * a.sin()),
+            y + radius * (a.sin() + k * a.cos()),
+            x + radius * (b.cos() + k * b.sin()),
+            y + radius * (b.sin() - k * b.cos()),
+            x + radius * b.cos(),
+            y + radius * b.sin(),
+        );
+    }
+}
+
+fn CGContextFlush(_env: &mut Environment, _context: CGContextRef) {
+    // Bitmap drawing is synchronous.
+}
+
+fn CGContextSynchronize(env: &mut Environment, context: CGContextRef) {
+    CGContextFlush(env, context);
+}
+
 fn CGContextAddRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
     let (x0, y0) = (rect.origin.x, rect.origin.y);
     let (x1, y1) = (x0 + rect.size.width, y0 + rect.size.height);
@@ -943,6 +1002,9 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextStrokeRectWithWidth(_, _, _)),
     export_c_func!(CGContextStrokeEllipseInRect(_, _)),
     export_c_func!(CGContextAddArcToPoint(_, _, _, _, _, _)),
+    export_c_func!(CGContextAddArc(_, _, _, _, _, _, _)),
+    export_c_func!(CGContextFlush(_)),
+    export_c_func!(CGContextSynchronize(_)),
     export_c_func!(CGContextAddPath(_, _)),
     export_c_func!(CGContextClip(_)),
     export_c_func!(CGContextDrawPath(_, _)),
