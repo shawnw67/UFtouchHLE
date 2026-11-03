@@ -174,12 +174,16 @@ fn AudioUnitSetProperty(
     in_data: ConstVoidPtr,
     in_data_size: u32,
 ) -> OSStatus {
-    assert!(in_element == 0);
+    if in_element != 0 || in_data.is_null() {
+        return paramErr;
+    }
 
-    let host_object = audio_components::State::get(&mut env.framework_state)
+    let Some(host_object) = audio_components::State::get(&mut env.framework_state)
         .audio_component_instances
         .get_mut(&in_unit)
-        .unwrap();
+    else {
+        return paramErr;
+    };
 
     let result;
     match in_id {
@@ -226,36 +230,48 @@ fn AudioUnitSetProperty(
             result = 0;
         }
         kAudioUnitProperty_SetRenderCallback => {
-            assert_eq!(in_scope, kAudioUnitScope_Global);
-            assert_eq!(in_data_size, guest_size_of::<AURenderCallbackStruct>());
+            if in_scope != kAudioUnitScope_Global
+                || in_data_size != guest_size_of::<AURenderCallbackStruct>()
+            {
+                return paramErr;
+            }
             let render_callback = env.mem.read(in_data.cast::<AURenderCallbackStruct>());
-            host_object.render_callback = Some(render_callback);
+            host_object.render_callback = if render_callback.input_proc.to_ptr().is_null() {
+                None
+            } else {
+                Some(render_callback)
+            };
             result = 0;
             log_dbg!("AudioUnitSetProperty({:?}, kAudioUnitProperty_SetRenderCallback, {:?}, {:?}, {:?}, {:?}) -> {:?}", in_unit, in_scope, in_element, render_callback, in_data_size, result);
         }
         kAudioUnitProperty_StreamFormat => {
-            assert_eq!(in_data_size, guest_size_of::<AudioStreamBasicDescription>());
+            if in_data_size != guest_size_of::<AudioStreamBasicDescription>() {
+                return paramErr;
+            }
             let stream_format = env.mem.read(in_data.cast::<AudioStreamBasicDescription>());
             log_if_broken_audio_format(&stream_format);
             match in_scope {
                 kAudioUnitScope_Global => host_object.global_stream_format = stream_format,
                 kAudioUnitScope_Output => host_object.output_stream_format = Some(stream_format),
                 kAudioUnitScope_Input => host_object.input_stream_format = Some(stream_format),
-                _ => unimplemented!("in_scope {}", in_scope),
+                _ => return paramErr,
             };
             result = 0;
             log_dbg!("AudioUnitSetProperty({:?}, kAudioUnitProperty_StreamFormat, {:?}, {:?}, {:?}, {:?}) -> {:?}", in_unit, in_scope, in_element, stream_format, in_data_size, result);
         }
         kAudioOutputUnitProperty_EnableIO => {
-            assert_eq!(in_scope, kAudioUnitScope_Output);
-            assert_eq!(in_data_size, guest_size_of::<u32>());
+            if in_scope != kAudioUnitScope_Output || in_data_size != guest_size_of::<u32>() {
+                return paramErr;
+            }
             let enabled = env.mem.read(in_data.cast::<u32>());
             // Output is enabled by default.
-            assert_eq!(enabled, 1);
+            if enabled != 1 {
+                return paramErr;
+            }
             result = 0;
             log_dbg!("AudioUnitSetProperty({:?}, kAudioOutputUnitProperty_EnableIO, {:?}, {:?}, {:?}, {:?}) -> {:?}", in_unit, in_scope, in_element, enabled, in_data_size, result);
         }
-        _ => unimplemented!(),
+        _ => return paramErr,
     };
 
     if result == 0 {
@@ -273,25 +289,32 @@ fn AudioUnitGetProperty(
     out_data: MutVoidPtr,
     io_data_size: MutPtr<u32>,
 ) -> OSStatus {
-    assert!(in_element == 0);
+    if in_element != 0 || out_data.is_null() || io_data_size.is_null() {
+        return paramErr;
+    }
 
-    let host_object = audio_components::State::get(&mut env.framework_state)
+    let Some(host_object) = audio_components::State::get(&mut env.framework_state)
         .audio_component_instances
         .get_mut(&in_unit)
-        .unwrap();
+    else {
+        return paramErr;
+    };
 
     match in_id {
         kAudioUnitProperty_MaximumFramesPerSlice => {
-            assert_eq!(env.mem.read(io_data_size), guest_size_of::<u32>());
+            if in_scope != kAudioUnitScope_Global
+                || env.mem.read(io_data_size) < guest_size_of::<u32>()
+            {
+                return paramErr;
+            }
             let max_frames: u32 = host_object.maximum_frames_per_slice;
             env.mem.write(out_data.cast(), max_frames);
             env.mem.write(io_data_size.cast(), guest_size_of::<u32>());
         }
         kAudioUnitProperty_StreamFormat => {
-            assert_eq!(
-                env.mem.read(io_data_size),
-                guest_size_of::<AudioStreamBasicDescription>()
-            );
+            if env.mem.read(io_data_size) < guest_size_of::<AudioStreamBasicDescription>() {
+                return paramErr;
+            }
             let stream_format = match in_scope {
                 kAudioUnitScope_Global => host_object.global_stream_format,
                 kAudioUnitScope_Output => host_object
@@ -300,7 +323,7 @@ fn AudioUnitGetProperty(
                 kAudioUnitScope_Input => host_object
                     .input_stream_format
                     .unwrap_or(host_object.global_stream_format),
-                _ => unimplemented!(),
+                _ => return paramErr,
             };
             env.mem.write(out_data.cast(), stream_format);
             env.mem.write(
@@ -309,7 +332,9 @@ fn AudioUnitGetProperty(
             );
         }
         kAudioUnitProperty_SampleRate => {
-            assert_eq!(env.mem.read(io_data_size), guest_size_of::<f64>());
+            if env.mem.read(io_data_size) < guest_size_of::<f64>() {
+                return paramErr;
+            }
             let sample_rate = match in_scope {
                 kAudioUnitScope_Global => host_object.global_stream_format.sample_rate,
                 kAudioUnitScope_Output => {
@@ -324,12 +349,12 @@ fn AudioUnitGetProperty(
                         .unwrap_or(host_object.global_stream_format)
                         .sample_rate
                 }
-                _ => unimplemented!(),
+                _ => return paramErr,
             };
             env.mem.write(out_data.cast(), sample_rate);
             env.mem.write(io_data_size.cast(), guest_size_of::<f64>());
         }
-        _ => unimplemented!("in_id {}", in_id),
+        _ => return paramErr,
     };
     0 // success
 }

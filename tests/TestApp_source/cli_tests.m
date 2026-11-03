@@ -10949,6 +10949,8 @@ int test_audio_component_enumeration(void) {
           unit, 2, test_audio_property_listener, &notifications) ||
       AudioUnitSetProperty(unit, 2, 0, 0, &rate, 8) || notifications != 1 ||
       AudioUnitGetProperty(unit, 2, 0, 0, &actual, &size) || actual != rate ||
+      !AudioUnitSetProperty(unit, 99999, 0, 0, &rate, 8) ||
+      !AudioUnitGetProperty(unit, 99999, 0, 0, &actual, &size) ||
       AudioComponentInstanceDispose(unit) ||
       !AudioComponentInstanceNew(NULL, &unit))
     return -1;
