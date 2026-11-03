@@ -12,10 +12,10 @@ use crate::abi::DotDotDot;
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::fs::{FsError, GuestFile, GuestOpenOptions, GuestPath};
 use crate::libc::errno::{
-    set_errno, EACCES, EBADF, EEXIST, EFAULT, EINTR, EINVAL, EIO, EISDIR, ENOENT, ENOTDIR, ENOTSUP,
+    set_errno, EACCES, EBADF, EEXIST, EFAULT, EINTR, EINVAL, EIO, EISDIR, ENOENT, ENOTDIR,
     EOVERFLOW, ESPIPE,
 };
-use crate::libc::sys::socket::close_socket;
+use crate::libc::sys::socket::{close_socket, duplicate_socket};
 use crate::libc::unistd::pid_t;
 use crate::mem::{
     ConstPtr, ConstVoidPtr, GuestISize, GuestUSize, MutPtr, MutVoidPtr, Ptr, SafeRead,
@@ -130,9 +130,10 @@ fn duplicate_file(env: &mut Environment, fd: FileDescriptor) -> Option<PosixFile
         set_errno(env, EBADF);
         return None;
     };
-    let Some(file) = source.file.share() else {
-        set_errno(env, ENOTSUP);
-        return None;
+    let file = if matches!(source.file, GuestFile::Socket) {
+        GuestFile::Socket
+    } else {
+        source.file.share().unwrap()
     };
     Some(PosixFileHostObject {
         file,
@@ -163,8 +164,13 @@ fn duplicate_min(env: &mut Environment, fd: FileDescriptor, min: FileDescriptor)
     if files.len() <= idx {
         files.resize_with(idx + 1, || None);
     }
+    let socket = matches!(file.file, GuestFile::Socket);
     files[idx] = Some(file);
-    file_idx_to_fd(idx)
+    let new_fd = file_idx_to_fd(idx);
+    if socket {
+        assert!(duplicate_socket(env, fd, new_fd));
+    }
+    new_fd
 }
 
 fn dup(env: &mut Environment, fd: FileDescriptor) -> FileDescriptor {
@@ -200,7 +206,11 @@ fn dup2(env: &mut Environment, fd: FileDescriptor, target: FileDescriptor) -> Fi
     if files.len() <= idx {
         files.resize_with(idx + 1, || None);
     }
+    let socket = matches!(file.file, GuestFile::Socket);
     files[idx] = Some(file);
+    if socket {
+        assert!(duplicate_socket(env, fd, target));
+    }
     target
 }
 

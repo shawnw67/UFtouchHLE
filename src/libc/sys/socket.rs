@@ -130,9 +130,52 @@ struct SocketHostObject {
     udp_socket: Option<UdpSocket>,
 }
 
+// File descriptor aliases share one socket object, including changes made
+// before a host socket is bound or connected.
+#[derive(Default)]
+struct SocketTable {
+    descriptors: HashMap<i32, u64>,
+    objects: HashMap<u64, SocketHostObject>,
+    next_id: u64,
+}
+impl SocketTable {
+    fn contains_key(&self, fd: &i32) -> bool {
+        self.descriptors.contains_key(fd)
+    }
+    fn get(&self, fd: &i32) -> Option<&SocketHostObject> {
+        self.objects.get(self.descriptors.get(fd)?)
+    }
+    fn get_mut(&mut self, fd: &i32) -> Option<&mut SocketHostObject> {
+        self.objects.get_mut(self.descriptors.get(fd)?)
+    }
+    fn insert(&mut self, fd: i32, object: SocketHostObject) {
+        let id = self.next_id;
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .expect("socket identifier overflow");
+        assert!(self.descriptors.insert(fd, id).is_none());
+        self.objects.insert(id, object);
+    }
+    fn duplicate(&mut self, old: i32, new: i32) -> bool {
+        let Some(&id) = self.descriptors.get(&old) else {
+            return false;
+        };
+        assert!(self.descriptors.insert(new, id).is_none());
+        true
+    }
+    fn remove(&mut self, fd: &i32) -> Option<()> {
+        let id = self.descriptors.remove(fd)?;
+        if !self.descriptors.values().any(|&other| other == id) {
+            self.objects.remove(&id);
+        }
+        Some(())
+    }
+}
+
 #[derive(Default)]
 pub struct State {
-    sockets: HashMap<i32, SocketHostObject>,
+    sockets: SocketTable,
 }
 impl State {
     fn get(env: &Environment) -> &Self {
@@ -141,6 +184,10 @@ impl State {
     fn get_mut(env: &mut Environment) -> &mut Self {
         &mut env.libc_state.socket
     }
+}
+
+pub fn duplicate_socket(env: &mut Environment, old: i32, new: i32) -> bool {
+    State::get_mut(env).sockets.duplicate(old, new)
 }
 
 fn socket(env: &mut Environment, domain: i32, type_: i32, protocol: i32) -> FileDescriptor {
@@ -1105,4 +1152,32 @@ pub const FUNCTIONS: FunctionExports = &[
 /// A helper to close a socket, not a part of API
 pub fn close_socket(env: &mut Environment, socket: i32) -> bool {
     State::get_mut(env).sockets.remove(&socket).is_none()
+}
+
+#[cfg(test)]
+mod socket_alias_tests {
+    use super::*;
+
+    #[test]
+    fn aliases_share_socket_state_and_survive_original_close() {
+        let mut table = SocketTable::default();
+        table.insert(
+            3,
+            SocketHostObject {
+                type_: SOCK_DGRAM,
+                options: HashSet::new(),
+                tcp_listener: None,
+                pending_tcp_stream: None,
+                tcp_stream: None,
+                udp_socket: None,
+            },
+        );
+        assert!(table.duplicate(3, 4));
+        table.get_mut(&4).unwrap().options.insert(SO_BROADCAST);
+        assert!(table.get(&3).unwrap().options.contains(&SO_BROADCAST));
+        assert!(table.remove(&3).is_some());
+        assert!(table.get(&4).unwrap().options.contains(&SO_BROADCAST));
+        assert!(table.remove(&4).is_some());
+        assert!(table.objects.is_empty());
+    }
 }

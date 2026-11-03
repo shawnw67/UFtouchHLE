@@ -603,7 +603,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/libc/mmap.rs` | both-modified | madvise, mlock, mmap, mprotect, msync, munlock, munmap, shm_open, shm_unlink | pending |
 | `src/libc/net/if_.rs` | both-modified | — | pending |
 | `src/libc/netdb.rs` | both-modified | __h_errno_location, freehostent, gai_strerror, gethostbyaddr, gethostbyname2, getipnodebyname, getnameinfo, getservbyname, getservbyport | pending |
-| `src/libc/posix_io.rs` | both-modified | creat, open_dprotected_np, poll, writev | partial (latest Hyper dup/dup2/F_DUPFD for files; sockets and other declarations remain) |
+| `src/libc/posix_io.rs` | both-modified | creat, open_dprotected_np, poll, writev | partial (latest Hyper dup/dup2/F_DUPFD for files and sockets; standard descriptors and other declarations remain) |
 | `src/libc/posix_io/stat.rs` | both-modified | — | pending |
 | `src/libc/posix_io/statvfs.rs` | both-modified | — | pending |
 | `src/libc/pthread.rs` | hyper-modified | — | pending |
