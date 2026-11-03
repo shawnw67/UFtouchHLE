@@ -11043,6 +11043,31 @@ int test_mach_semaphore_timedwait(void) {
 }
 #endif
 
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+extern int vm_allocate(uint32_t, uint32_t *, uint32_t, int);
+extern int vm_deallocate(uint32_t, uint32_t, uint32_t);
+int test_mach_vm_partial_deallocation(void) {
+  const uint32_t task = 0x7461736b, page = 4096;
+  uint32_t base = 0, reuse;
+  if (vm_allocate(task, &base, page * 3, 1))
+    return -1;
+  *(volatile uint32_t *)(uintptr_t)base = 0x13572468;
+  *(volatile uint32_t *)(uintptr_t)(base + 2 * page) = 0x24681357;
+  if (vm_deallocate(task, base + page, page) ||
+      *(volatile uint32_t *)(uintptr_t)base != 0x13572468 ||
+      *(volatile uint32_t *)(uintptr_t)(base + 2 * page) != 0x24681357 ||
+      !vm_deallocate(task, base, page * 3))
+    return -2;
+  reuse = base + page;
+  if (vm_allocate(task, &reuse, page, 0) || reuse != base + page ||
+      vm_deallocate(task, reuse, page) || vm_deallocate(task, base, page) ||
+      vm_deallocate(task, base + 2 * page, page) ||
+      !vm_deallocate(task, base, page))
+    return -3;
+  return 0;
+}
+#endif
+
 // clang-format off
 #define FUNC_DEF(func)                                                         \
   { &func, #func }
@@ -11246,6 +11271,7 @@ struct {
     FUNC_DEF(test_dispatch_data_sources),
     FUNC_DEF(test_dispatch_once_concurrent),
 #ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+    FUNC_DEF(test_mach_vm_partial_deallocation),
     FUNC_DEF(test_mach_semaphore_timedwait),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
