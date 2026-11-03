@@ -295,7 +295,7 @@ fn AUGraphOpen(env: &mut Environment, graph: AUGraph) -> OSStatus {
     if state.unit.is_some() {
         return 0;
     }
-    // The existing renderer supports one RemoteIO unit, not a connected mixer graph.
+    // The renderer supports one RemoteIO unit, not a connected mixer graph.
     if state.nodes.len() != 1 || !state.connections.is_empty() {
         return paramErr;
     }

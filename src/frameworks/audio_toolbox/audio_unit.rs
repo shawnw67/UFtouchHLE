@@ -289,6 +289,11 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
         return;
     }
 
+    // A started output with no callback produces silence until one is set.
+    if audio_unit_host_object.render_callback.is_none() {
+        return;
+    }
+
     if audio_unit_host_object.is_running_handler {
         return;
     }
@@ -312,11 +317,12 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     };
     let sample_rate = if let Some(input_stream_format) = input_stream_format {
         input_stream_format.sample_rate
-    } else {
-        assert!(output_stream_format.is_some());
+    } else if output_stream_format.is_some() {
         // TODO: confirm that this is the general behaviour
         // (and not only RE4 thing)
         current_hardware_sample_rate
+    } else {
+        stream_format.sample_rate
     };
 
     assert!(is_supported_audio_format(&stream_format));
