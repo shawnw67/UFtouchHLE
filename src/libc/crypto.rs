@@ -199,28 +199,41 @@ const kCCOptionECBMode: u32 = 2;
 
 const AES_BLOCK: usize = 16;
 
+#[derive(Clone)]
+struct Rc4 {
+    state: [u8; 256],
+    i: u8,
+    j: u8,
+}
+impl Rc4 {
+    fn new(key: &[u8]) -> Self {
+        let mut state = [0u8; 256];
+        for (i, byte) in state.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
+        let mut j = 0u8;
+        for i in 0..256 {
+            j = j.wrapping_add(state[i]).wrapping_add(key[i % key.len()]);
+            state.swap(i, j as usize);
+        }
+        Self { state, i: 0, j: 0 }
+    }
+    fn crypt(&mut self, input: &[u8]) -> Vec<u8> {
+        input
+            .iter()
+            .map(|byte| {
+                self.i = self.i.wrapping_add(1);
+                self.j = self.j.wrapping_add(self.state[self.i as usize]);
+                self.state.swap(self.i as usize, self.j as usize);
+                let index = self.state[self.i as usize].wrapping_add(self.state[self.j as usize]);
+                byte ^ self.state[index as usize]
+            })
+            .collect()
+    }
+}
+
 fn rc4_crypt(key: &[u8], input: &[u8]) -> Vec<u8> {
-    let mut state = [0u8; 256];
-    for (i, byte) in state.iter_mut().enumerate() {
-        *byte = i as u8;
-    }
-    let mut j = 0u8;
-    for i in 0..256 {
-        j = j.wrapping_add(state[i]).wrapping_add(key[i % key.len()]);
-        state.swap(i, j as usize);
-    }
-    let mut i = 0u8;
-    j = 0;
-    input
-        .iter()
-        .map(|byte| {
-            i = i.wrapping_add(1);
-            j = j.wrapping_add(state[i as usize]);
-            state.swap(i as usize, j as usize);
-            let index = state[i as usize].wrapping_add(state[j as usize]);
-            byte ^ state[index as usize]
-        })
-        .collect()
+    Rc4::new(key).crypt(input)
 }
 
 #[derive(Clone)]
@@ -451,7 +464,8 @@ fn CCCrypt(
 
 #[derive(Clone)]
 struct Cryptor {
-    cipher: AesCipher,
+    cipher: Option<AesCipher>,
+    rc4: Option<Rc4>,
     encrypt: bool,
     ecb: bool,
     padding: bool,
@@ -473,19 +487,32 @@ fn CCCryptorCreate(
     if result.is_null() || key.is_null() || op > 1 || options & !3 != 0 {
         return kCCParamError;
     }
-    if alg != kCCAlgorithmAES {
+    if alg != kCCAlgorithmAES && alg != kCCAlgorithmRC4 {
         return kCCUnimplemented;
     }
-    if ![16, 24, 32].contains(&key_len) {
+    if (alg == kCCAlgorithmAES && ![16, 24, 32].contains(&key_len))
+        || (alg == kCCAlgorithmRC4 && (!(1..=512).contains(&key_len) || options != 0))
+    {
         return kCCParamError;
     }
-    let cipher = AesCipher::new(env.mem.bytes_at(key.cast(), key_len)).unwrap();
+    let key = env.mem.bytes_at(key.cast(), key_len);
+    let cipher = if alg == kCCAlgorithmAES {
+        AesCipher::new(key)
+    } else {
+        None
+    };
+    let rc4 = if alg == kCCAlgorithmRC4 {
+        Some(Rc4::new(key))
+    } else {
+        None
+    };
     let mut chain = [0; AES_BLOCK];
-    if !iv.is_null() {
+    if alg == kCCAlgorithmAES && !iv.is_null() {
         chain.copy_from_slice(env.mem.bytes_at(iv.cast(), AES_BLOCK as u32));
     }
     let state = Cryptor {
         cipher,
+        rc4,
         encrypt: op == kCCEncrypt,
         ecb: options & 2 != 0,
         padding: options & 1 != 0,
@@ -501,7 +528,7 @@ fn CCCryptorCreate(
 fn cryptor_blocks(state: &mut Cryptor, data: &[u8]) -> Vec<u8> {
     let output = aes_crypt(
         state.encrypt,
-        &state.cipher,
+        state.cipher.as_ref().unwrap(),
         state.ecb,
         false,
         state.chain,
@@ -535,6 +562,25 @@ fn CCCryptorUpdate(
     let Some(mut state) = env.libc_state.crypto.cryptors.get(&handle).cloned() else {
         return kCCParamError;
     };
+    if let Some(rc4) = &mut state.rc4 {
+        if input_len > output_len {
+            return kCCBufferTooSmall;
+        }
+        if input_len != 0 && output.is_null() {
+            return kCCParamError;
+        }
+        if input_len != 0 {
+            let result = rc4.crypt(env.mem.bytes_at(input.cast(), input_len));
+            env.mem
+                .bytes_at_mut(output.cast(), input_len)
+                .copy_from_slice(&result);
+        }
+        if !moved.is_null() {
+            env.mem.write(moved, input_len);
+        }
+        env.libc_state.crypto.cryptors.insert(handle, state);
+        return kCCSuccess;
+    }
     if input_len != 0 {
         state
             .buffered
@@ -579,9 +625,12 @@ fn CCCryptorFinal(
     let Some(mut state) = env.libc_state.crypto.cryptors.get(&handle).cloned() else {
         return kCCParamError;
     };
+    if state.rc4.is_some() {
+        return kCCSuccess;
+    }
     let result = match aes_crypt(
         state.encrypt,
-        &state.cipher,
+        state.cipher.as_ref().unwrap(),
         state.ecb,
         state.padding,
         state.chain,
@@ -618,6 +667,9 @@ fn CCCryptorGetOutputLength(
     let Some(state) = env.libc_state.crypto.cryptors.get(&handle) else {
         return 0;
     };
+    if state.rc4.is_some() {
+        return input_len;
+    }
     let total = (state.buffered.len() as u64) + u64::from(input_len);
     let size = if final_ {
         if state.encrypt && state.padding {
@@ -636,6 +688,12 @@ fn CCCryptorGetOutputLength(
     size.min(u64::from(u32::MAX)) as u32
 }
 fn CCCryptorReset(env: &mut Environment, handle: MutVoidPtr, iv: ConstVoidPtr) -> i32 {
+    let Some(state) = env.libc_state.crypto.cryptors.get(&handle) else {
+        return kCCParamError;
+    };
+    if state.rc4.is_some() {
+        return kCCUnimplemented;
+    }
     let mut chain = [0; AES_BLOCK];
     if !iv.is_null() {
         chain.copy_from_slice(env.mem.bytes_at(iv.cast(), AES_BLOCK as u32));

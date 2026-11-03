@@ -197,6 +197,8 @@ extern int CCCryptorUpdate(void *cryptor, const void *input,
 extern int CCCryptorFinal(void *cryptor, void *output,
                           unsigned int output_length, unsigned int *moved);
 extern int CCCryptorRelease(void *cryptor);
+extern size_t CCCryptorGetOutputLength(void *cryptor, size_t input_length,
+                                       bool final);
 extern int CCCrypt(unsigned int op, unsigned int algorithm,
                    unsigned int options, const void *key, size_t key_length,
                    const void *iv, const void *input, size_t input_length,
@@ -899,6 +901,17 @@ int test_CCCrypt_rc4(void) {
               &moved) ||
       memcmp(buffer, "Plaintext", 9))
     return -1;
+  void *cryptor = NULL;
+  if (CCCryptorCreate(0, 4, 0, "Key", 3, NULL, &cryptor) ||
+      CCCryptorGetOutputLength(cryptor, 9, true) != 9 ||
+      CCCryptorUpdate(cryptor, "Plaintext", 3, buffer, 2, &moved) != -4301 ||
+      CCCryptorUpdate(cryptor, "Plaintext", 3, buffer, 3, &moved) ||
+      moved != 3 ||
+      CCCryptorUpdate(cryptor, "Plaintext" + 3, 6, buffer + 3, 6, &moved) ||
+      moved != 6 || memcmp(buffer, expected, 9) ||
+      CCCryptorFinal(cryptor, NULL, 0, &moved) || moved != 0 ||
+      CCCryptorRelease(cryptor))
+    return -2;
   return 0;
 }
 
