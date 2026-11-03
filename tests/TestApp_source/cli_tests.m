@@ -77,6 +77,12 @@ extern void vDSP_vsmul(const float *a, int sa, const float *scalar, float *out,
                        int so, unsigned int count);
 extern void vDSP_dotpr(const float *a, int sa, const float *b, int sb,
                        float *out, unsigned int count);
+extern void cblas_saxpy(int n, float alpha, const float *x, int ix, float *y,
+                        int iy);
+extern float cblas_sdot(int n, const float *x, int ix, const float *y, int iy);
+extern void cblas_sgemv(int order, int trans, int m, int n, float alpha,
+                        const float *a, int lda, const float *x, int ix,
+                        float beta, float *y, int iy);
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
@@ -607,6 +613,28 @@ int test_vDSP_vector_operations(void) {
   float dot = 0;
   vDSP_dotpr(a, 1, result, 1, &dot, 3);
   passed = passed && result[0] == 3.5f && result[2] == 14.5f && dot == 65;
+  return passed ? 0 : -1;
+}
+
+int test_cblas_operations(void) {
+  float x[] = {1, 2, 3};
+  float y[] = {10, 20, 30};
+  cblas_saxpy(3, 2, x, -1, y, 1);
+  int passed = y[0] == 16 && y[1] == 24 && y[2] == 32 &&
+               cblas_sdot(3, x, -1, y, 1) == 128;
+  float row[] = {1, 2, 3, 4, 5, 6};
+  float column[] = {1, 4, 2, 5, 3, 6};
+  float result[] = {1, 1};
+  cblas_sgemv(101, 111, 2, 3, 1, row, 3, x, 1, 1, result, 1);
+  passed = passed && result[0] == 15 && result[1] == 33;
+  result[0] = result[1] = 1;
+  cblas_sgemv(102, 111, 2, 3, 1, column, 2, x, 1, 1, result, 1);
+  passed = passed && result[0] == 15 && result[1] == 33;
+  float transposed[] = {0, 0, 0};
+  float x2[] = {1, 2};
+  cblas_sgemv(101, 112, 2, 3, 1, row, 3, x2, 1, 0, transposed, 1);
+  passed = passed && transposed[0] == 9 && transposed[1] == 12 &&
+           transposed[2] == 15;
   return passed ? 0 : -1;
 }
 
@@ -9922,6 +9950,7 @@ struct {
     FUNC_DEF(test_OSSpinLock_contention),
     FUNC_DEF(test_vDSP_fft_and_packing),
     FUNC_DEF(test_vDSP_vector_operations),
+    FUNC_DEF(test_cblas_operations),
     FUNC_DEF(test_named_semaphore_reopen),
     FUNC_DEF(test_semaphore_lifecycle_and_unlink),
     FUNC_DEF(test_semaphore_error_boundaries),

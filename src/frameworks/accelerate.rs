@@ -33,7 +33,7 @@ fn at<T, const MUT: bool>(
     stride: i32,
     index: u32,
 ) -> crate::mem::Ptr<T, MUT> {
-    let address = i64::from(base.to_bits()) + i64::from(stride) * i64::from(index) * 4;
+    let address = i128::from(base.to_bits()) + i128::from(stride) * i128::from(index) * 4;
     crate::mem::Ptr::from_bits(u32::try_from(address).expect("vDSP address overflow"))
 }
 
@@ -475,7 +475,194 @@ fn vDSP_vma(
     }
 }
 
+fn vDSP_normalize(
+    env: &mut Environment,
+    input: ConstPtr<f32>,
+    si: i32,
+    output: MutPtr<f32>,
+    so: i32,
+    mean_out: MutPtr<f32>,
+    deviation_out: MutPtr<f32>,
+    count: u32,
+) {
+    if count == 0 {
+        return;
+    }
+    let mut sum = 0.0f64;
+    for i in 0..count {
+        sum += f64::from(env.mem.read(at(input, si, i)));
+    }
+    let mean = (sum / count as f64) as f32;
+    let mut squares = 0.0f64;
+    for i in 0..count {
+        let d = f64::from(env.mem.read(at(input, si, i))) - f64::from(mean);
+        squares += d * d;
+    }
+    let deviation = (squares / count as f64).sqrt() as f32;
+    if !mean_out.is_null() {
+        env.mem.write(mean_out, mean);
+    }
+    if !deviation_out.is_null() {
+        env.mem.write(deviation_out, deviation);
+    }
+    if !output.is_null() {
+        for i in 0..count {
+            let value = env.mem.read(at(input, si, i));
+            env.mem.write(at(output, so, i), (value - mean) / deviation);
+        }
+    }
+}
+fn vDSP_vintb(
+    env: &mut Environment,
+    a: ConstPtr<f32>,
+    sa: i32,
+    b: ConstPtr<f32>,
+    sb: i32,
+    factor: ConstPtr<f32>,
+    output: MutPtr<f32>,
+    so: i32,
+    count: u32,
+) {
+    let factor: f32 = env.mem.read(factor);
+    for i in 0..count {
+        let x: f32 = env.mem.read(at(a, sa, i));
+        let y: f32 = env.mem.read(at(b, sb, i));
+        env.mem.write(at(output, so, i), x + factor * (y - x));
+    }
+}
+
+// CBLAS negative increments index from the end of the supplied base array.
+fn blas_at<T, const MUT: bool>(
+    base: crate::mem::Ptr<T, MUT>,
+    stride: i32,
+    n: u32,
+    i: u32,
+) -> crate::mem::Ptr<T, MUT> {
+    let offset = if stride < 0 {
+        i128::from(n - 1 - i) * -i128::from(stride)
+    } else {
+        i128::from(i) * i128::from(stride)
+    };
+    let address = i128::from(base.to_bits()) + 4 * offset;
+    crate::mem::Ptr::from_bits(u32::try_from(address).expect("BLAS address overflow"))
+}
+fn cblas_saxpy(
+    env: &mut Environment,
+    n: i32,
+    alpha: f32,
+    x: ConstPtr<f32>,
+    ix: i32,
+    y: MutPtr<f32>,
+    iy: i32,
+) {
+    for i in 0..n.max(0) as u32 {
+        let xp = blas_at(x, ix, n as u32, i);
+        let yp = blas_at(y, iy, n as u32, i);
+        let value: f32 = env.mem.read(xp);
+        let old: f32 = env.mem.read(yp);
+        env.mem.write(yp, old + alpha * value);
+    }
+}
+fn cblas_scopy(env: &mut Environment, n: i32, x: ConstPtr<f32>, ix: i32, y: MutPtr<f32>, iy: i32) {
+    for i in 0..n.max(0) as u32 {
+        let value = env.mem.read(blas_at(x, ix, n as u32, i));
+        env.mem.write(blas_at(y, iy, n as u32, i), value);
+    }
+}
+fn cblas_sdot(
+    env: &mut Environment,
+    n: i32,
+    x: ConstPtr<f32>,
+    ix: i32,
+    y: ConstPtr<f32>,
+    iy: i32,
+) -> f32 {
+    let mut value = 0.0;
+    for i in 0..n.max(0) as u32 {
+        value +=
+            env.mem.read(blas_at(x, ix, n as u32, i)) * env.mem.read(blas_at(y, iy, n as u32, i));
+    }
+    value
+}
+fn cblas_sscal(env: &mut Environment, n: i32, alpha: f32, x: MutPtr<f32>, ix: i32) {
+    if ix <= 0 {
+        return;
+    }
+    for i in 0..n.max(0) as u32 {
+        let p = blas_at(x, ix, n as u32, i);
+        let value: f32 = env.mem.read(p);
+        env.mem.write(p, alpha * value);
+    }
+}
+fn cblas_snrm2(env: &mut Environment, n: i32, x: ConstPtr<f32>, ix: i32) -> f32 {
+    if ix <= 0 {
+        return 0.0;
+    }
+    let mut norm = 0.0f32;
+    for i in 0..n.max(0) as u32 {
+        norm = norm.hypot(env.mem.read(blas_at(x, ix, n as u32, i)));
+    }
+    norm
+}
+fn cblas_sgemv(
+    env: &mut Environment,
+    order: i32,
+    trans: i32,
+    m: i32,
+    n: i32,
+    alpha: f32,
+    matrix: ConstPtr<f32>,
+    lda: i32,
+    x: ConstPtr<f32>,
+    ix: i32,
+    beta: f32,
+    y: MutPtr<f32>,
+    iy: i32,
+) {
+    if m <= 0
+        || n <= 0
+        || lda < if order == 101 { n } else { m }.max(1)
+        || ix == 0
+        || iy == 0
+        || ![101, 102].contains(&order)
+        || ![111, 112, 113].contains(&trans)
+    {
+        return;
+    }
+    let (rows, cols) = if trans == 111 {
+        (m as u32, n as u32)
+    } else {
+        (n as u32, m as u32)
+    };
+    for i in 0..rows {
+        let mut sum = 0.0;
+        for j in 0..if alpha == 0.0 { 0 } else { cols } {
+            let (row, col) = if trans == 111 { (i, j) } else { (j, i) };
+            let index = if order == 101 {
+                u64::from(row) * lda as u64 + u64::from(col)
+            } else {
+                u64::from(col) * lda as u64 + u64::from(row)
+            };
+            let index = u32::try_from(index).expect("BLAS matrix index overflow");
+            let a: f32 = env.mem.read(at(matrix, 1, index));
+            let b: f32 = env.mem.read(blas_at(x, ix, cols, j));
+            sum += a * b;
+        }
+        let out = blas_at(y, iy, rows, i);
+        let old: f32 = if beta == 0.0 { 0.0 } else { env.mem.read(out) };
+        env.mem.write(out, alpha * sum + beta * old);
+    }
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(vDSP_normalize(_, _, _, _, _, _, _)),
+    export_c_func!(vDSP_vintb(_, _, _, _, _, _, _, _)),
+    export_c_func!(cblas_saxpy(_, _, _, _, _, _)),
+    export_c_func!(cblas_scopy(_, _, _, _, _)),
+    export_c_func!(cblas_sdot(_, _, _, _, _)),
+    export_c_func!(cblas_sscal(_, _, _, _)),
+    export_c_func!(cblas_snrm2(_, _, _)),
+    export_c_func!(cblas_sgemv(_, _, _, _, _, _, _, _, _, _, _, _)),
     export_c_func!(vDSP_vadd(_, _, _, _, _, _, _)),
     export_c_func!(vDSP_vsub(_, _, _, _, _, _, _)),
     export_c_func!(vDSP_vmul(_, _, _, _, _, _, _)),
