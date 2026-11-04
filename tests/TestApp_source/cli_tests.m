@@ -11886,6 +11886,57 @@ struct TestStreamFormat {
   uint32_t format, flags, bytes_packet, frames_packet, bytes_frame, channels,
       bits, reserved;
 };
+extern int AudioConverterNew(const struct TestStreamFormat *,
+                             const struct TestStreamFormat *, void **);
+extern int AudioConverterDispose(void *);
+extern int AudioConverterReset(void *);
+extern int AudioConverterConvertBuffer(void *, uint32_t, const void *,
+                                       uint32_t *, void *);
+extern int AudioConverterGetProperty(void *, uint32_t, uint32_t *, void *);
+extern int AudioConverterSetProperty(void *, uint32_t, uint32_t, const void *);
+extern int AudioConverterGetPropertyInfo(void *, uint32_t, uint32_t *,
+                                         unsigned char *);
+
+int test_audio_converter_pcm(void) {
+  const struct TestStreamFormat source = {44100, 0x6c70636d, 12, 2, 1,
+                                          2,     1,          16, 0};
+  struct TestStreamFormat destination = {44100, 0x6c70636d, 9,  8, 1,
+                                         8,     2,          32, 0};
+  int16_t input[] = {-32768, 0, 32767};
+  float output[6] = {99, 99, 99, 99, 99, 99};
+  void *converter = NULL;
+  uint32_t size = 4, quality = 0;
+  unsigned char writable = 0;
+  if (AudioConverterNew(&source, &destination, &converter) || !converter ||
+      AudioConverterGetPropertyInfo(converter, 0x73726371, &size, &writable) ||
+      size != 4 || !writable ||
+      AudioConverterGetProperty(converter, 0x73726371, &size, &quality) ||
+      quality != 0x40)
+    return -1;
+  quality = 0x60;
+  if (AudioConverterSetProperty(converter, 0x73726371, 4, &quality))
+    return -2;
+  size = 4;
+  if (!AudioConverterConvertBuffer(converter, sizeof(input), input, &size,
+                                   output) ||
+      output[0] != 99)
+    return -3;
+  size = sizeof(output);
+  if (AudioConverterConvertBuffer(converter, sizeof(input), input, &size,
+                                  output) ||
+      size != sizeof(output) || output[0] != -1 || output[1] != -1 ||
+      output[2] != 0 || output[3] != 0 ||
+      fabsf(output[4] - 32767.0f / 32768.0f) > 0.00001f ||
+      output[4] != output[5] || AudioConverterReset(converter) ||
+      AudioConverterDispose(converter) || !AudioConverterDispose(converter) ||
+      !AudioConverterReset(converter))
+    return -4;
+  destination.rate = 22050;
+  converter = (void *)1;
+  if (!AudioConverterNew(&source, &destination, &converter) || converter)
+    return -5;
+  return 0;
+}
 struct TestAudioBuffer {
   uint32_t channels, size;
   void *data;
@@ -12629,6 +12680,7 @@ struct {
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
     FUNC_DEF(test_cfcollection_ownership_exports),
+    FUNC_DEF(test_audio_converter_pcm),
 #endif
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),

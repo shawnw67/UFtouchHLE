@@ -25,6 +25,7 @@ macro_rules! return_if_null {
 
 pub mod au_graph;
 pub mod audio_components;
+pub mod audio_converter;
 pub mod audio_file;
 pub mod audio_queue;
 pub mod audio_services;
@@ -40,6 +41,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     function_exports: &[
         au_graph::FUNCTIONS,
         audio_components::FUNCTIONS,
+        audio_converter::FUNCTIONS,
         audio_file::FUNCTIONS,
         audio_queue::FUNCTIONS,
         audio_services::FUNCTIONS,
@@ -56,6 +58,7 @@ pub struct State {
     audio_queue: audio_queue::State,
     audio_services: audio_services::State,
     audio_components: audio_components::State,
+    audio_converter: audio_converter::State,
     audio_session: audio_session::State,
     al_context: LazyALContext,
     extended_audio_file: extended_audio_file::State,
