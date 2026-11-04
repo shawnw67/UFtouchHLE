@@ -7185,6 +7185,49 @@ int test_CGImage_JPEG() {
   return 0;
 }
 
+int test_CFString_range_and_trim(void) {
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "x AbC abc Y", kCFStringEncodingUTF8);
+  CFStringRef needle =
+      CFStringCreateWithCString(NULL, "ABC", kCFStringEncodingUTF8);
+  CFRange found = CFRangeMake(-1, -1);
+  int passed = CFStringFindWithOptions(text, needle, CFRangeMake(1, 8),
+                                       1 | 4 | 8, &found) &&
+               found.location == 6 && found.length == 3;
+  CFRange unchanged = found;
+  passed =
+      passed &&
+      !CFStringFindWithOptions(text, needle, CFRangeMake(9, 2), 1, &found) &&
+      found.location == unchanged.location && found.length == unchanged.length;
+  CFStringRef original =
+      CFStringCreateWithCString(NULL, "ababAXab", kCFStringEncodingUTF8);
+  CFStringRef trim =
+      CFStringCreateWithCString(NULL, "ab", kCFStringEncodingUTF8);
+  CFMutableStringRef mutable = CFStringCreateMutableCopy(NULL, 0, original);
+  CFStringTrim(mutable, trim);
+  CFStringLowercase(mutable, NULL);
+  char buffer[16];
+  passed = passed &&
+           CFStringGetCString(mutable, buffer, sizeof(buffer),
+                              kCFStringEncodingUTF8) &&
+           strcmp(buffer, "ax") == 0;
+  CFStringRef spaces =
+      CFStringCreateWithCString(NULL, " \tvalue\r\n", kCFStringEncodingUTF8);
+  CFStringReplaceAll(mutable, spaces);
+  CFStringTrimWhitespace(mutable);
+  passed = passed &&
+           CFStringGetCString(mutable, buffer, sizeof(buffer),
+                              kCFStringEncodingUTF8) &&
+           strcmp(buffer, "value") == 0;
+  CFRelease(spaces);
+  CFRelease(mutable);
+  CFRelease(trim);
+  CFRelease(original);
+  CFRelease(needle);
+  CFRelease(text);
+  return passed ? 0 : -1;
+}
+
 int test_CFStringFind() {
   CFStringRef a =
       CFStringCreateWithCString(NULL, "/a/b/c/b", kCFStringEncodingASCII);
@@ -12033,6 +12076,7 @@ struct {
     FUNC_DEF(test_fscanf),
     FUNC_DEF(test_fscanf_new),
     FUNC_DEF(test_CFStringFind),
+    FUNC_DEF(test_CFString_range_and_trim),
     FUNC_DEF(test_strcspn),
     FUNC_DEF(test_mbstowcs),
     FUNC_DEF(test_CFMutableString),

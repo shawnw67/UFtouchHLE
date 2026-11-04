@@ -15,7 +15,7 @@ use super::cf_locale::CFLocaleRef;
 use super::{kCFNotFound, CFComparisonResult, CFIndex, CFOptionFlags, CFRange};
 use crate::abi::{DotDotDot, VaList};
 use crate::dyld::{export_c_func, FunctionExports};
-use crate::frameworks::foundation::{ns_string, unichar, NSNotFound, NSRange, NSUInteger};
+use crate::frameworks::foundation::{ns_string, unichar, NSRange, NSUInteger};
 use crate::libc::string::strlen;
 use crate::mem::{ConstPtr, GuestUSize, MutPtr};
 use crate::objc::{id, msg, msg_class, release, retain};
@@ -524,17 +524,117 @@ fn CFStringFind(
     to_find: CFStringRef,
     options: CFStringCompareFlags,
 ) -> CFRange {
-    let range: NSRange = msg![env; string rangeOfString:to_find options:options];
-    let location: CFIndex = if range.location == NSNotFound as NSUInteger {
-        // NSNotFound and kCFNotFound are not the same!
-        kCFNotFound
-    } else {
-        range.location.try_into().unwrap()
+    let range = CFRange {
+        location: 0,
+        length: CFStringGetLength(env, string),
     };
-    CFRange {
-        location,
-        length: range.length.try_into().unwrap(),
+    find_in_range(env, string, to_find, range, options).unwrap_or(CFRange {
+        location: kCFNotFound,
+        length: 0,
+    })
+}
+
+fn find_in_range(
+    env: &mut Environment,
+    string: CFStringRef,
+    needle: CFStringRef,
+    range: CFRange,
+    options: CFStringCompareFlags,
+) -> Option<CFRange> {
+    if string.is_null() || needle.is_null() || options & !15 != 0 {
+        return None;
     }
+    let start = usize::try_from(range.location).ok()?;
+    let length = usize::try_from(range.length).ok()?;
+    let mut haystack = Vec::new();
+    ns_string::for_each_code_unit(env, string, |_, c| haystack.push(c));
+    let mut target = Vec::new();
+    ns_string::for_each_code_unit(env, needle, |_, c| target.push(c));
+    let end = start.checked_add(length)?;
+    if end > haystack.len() || target.is_empty() || target.len() > length {
+        return None;
+    }
+    let last = end - target.len();
+    let matches = |index: usize| {
+        haystack[index..index + target.len()]
+            .iter()
+            .zip(&target)
+            .all(|(&a, &b)| {
+                a == b
+                    || (options & 1 != 0
+                        && match (char::from_u32(a.into()), char::from_u32(b.into())) {
+                            (Some(a), Some(b)) => a.to_lowercase().eq(b.to_lowercase()),
+                            _ => false,
+                        })
+            })
+    };
+    let backwards = options & 4 != 0;
+    let index = if options & 8 != 0 {
+        let at = if backwards { last } else { start };
+        matches(at).then_some(at)
+    } else if backwards {
+        (start..=last).rev().find(|&i| matches(i))
+    } else {
+        (start..=last).find(|&i| matches(i))
+    }?;
+    Some(CFRange {
+        location: index as CFIndex,
+        length: target.len() as CFIndex,
+    })
+}
+
+fn CFStringFindWithOptions(
+    env: &mut Environment,
+    string: CFStringRef,
+    needle: CFStringRef,
+    range: CFRange,
+    options: CFStringCompareFlags,
+    result: MutPtr<CFRange>,
+) -> bool {
+    if let Some(found) = find_in_range(env, string, needle, range, options) {
+        if !result.is_null() {
+            env.mem.write(result, found);
+        }
+        true
+    } else {
+        false
+    }
+}
+
+fn CFStringLowercase(env: &mut Environment, string: CFMutableStringRef, _locale: CFLocaleRef) {
+    if string.is_null() {
+        return;
+    }
+    let lowercase: id = msg![env; string lowercaseString];
+    msg![env; string setString:lowercase]
+}
+
+fn CFStringTrim(env: &mut Environment, string: CFMutableStringRef, trim: CFStringRef) {
+    if string.is_null() || trim.is_null() {
+        return;
+    }
+    let text = ns_string::to_rust_string(env, string);
+    let trim = ns_string::to_rust_string(env, trim);
+    if trim.is_empty() {
+        return;
+    }
+    let trimmed = text
+        .trim_start_matches(trim.as_ref())
+        .trim_end_matches(trim.as_ref())
+        .to_owned();
+    let result = ns_string::from_rust_string(env, trimmed);
+    let _: () = msg![env; string setString:result];
+    release(env, result);
+}
+
+fn CFStringTrimWhitespace(env: &mut Environment, string: CFMutableStringRef) {
+    if string.is_null() {
+        return;
+    }
+    let text = ns_string::to_rust_string(env, string);
+    let result = ns_string::from_rust_string(env, text.trim().to_owned());
+    let _: () = msg![env; string setString:result];
+    release(env, result);
 }
 
 fn CFStringHasSuffix(env: &mut Environment, the_string: CFStringRef, suffix: CFStringRef) -> bool {
@@ -648,6 +748,10 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringGetIntValue(_)),
     export_c_func!(CFStringGetLength(_)),
     export_c_func!(CFStringFind(_, _, _)),
+    export_c_func!(CFStringFindWithOptions(_, _, _, _, _)),
+    export_c_func!(CFStringLowercase(_, _)),
+    export_c_func!(CFStringTrim(_, _)),
+    export_c_func!(CFStringTrimWhitespace(_)),
     export_c_func!(CFStringHasSuffix(_, _)),
     export_c_func!(CFStringUppercase(_, _)),
     export_c_func!(CFStringCreateWithPascalString(_, _, _)),
