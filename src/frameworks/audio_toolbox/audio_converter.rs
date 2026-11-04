@@ -4,7 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 //! AudioConverter entry points based on HyperHLE's LPCM conversion support.
-//! Currently accepts packed interleaved LPCM at matching sample rates.
+//! Currently accepts packed interleaved or planar LPCM at matching sample rates.
 
 use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::{export_c_func, FunctionExports};
@@ -52,6 +52,7 @@ struct Shape {
     float: bool,
     signed: bool,
     big: bool,
+    planar: bool,
 }
 impl Shape {
     fn parse(format: AudioStreamBasicDescription) -> Option<Self> {
@@ -62,7 +63,7 @@ impl Shape {
             || format.sample_rate <= 0.0
             || !(1..=2).contains(&channels)
             || !matches!(format.bits_per_channel, 8 | 16 | 24 | 32)
-            || flags & !(15 | 64) != 0
+            || flags & !(15 | 32 | 64) != 0
             || flags & 8 == 0
             || (flags & 1 != 0 && format.bits_per_channel != 32)
         {
@@ -74,6 +75,7 @@ impl Shape {
             float: flags & 1 != 0,
             signed: flags & 4 != 0,
             big: flags & 2 != 0,
+            planar: flags & 32 != 0,
         };
         if format.frames_per_packet != 1
             || format.bytes_per_frame != shape.frame_bytes()
@@ -84,7 +86,24 @@ impl Shape {
         Some(shape)
     }
     fn frame_bytes(self) -> u32 {
-        self.channels * (self.bits / 8)
+        if self.planar {
+            self.bits / 8
+        } else {
+            self.channels * (self.bits / 8)
+        }
+    }
+    fn interleaved(self) -> Self {
+        Self {
+            planar: false,
+            ..self
+        }
+    }
+    fn buffer_count(self) -> u32 {
+        if self.planar {
+            self.channels
+        } else {
+            1
+        }
     }
     fn read(self, input: &[u8]) -> f64 {
         let mut raw = 0u32;
@@ -267,6 +286,9 @@ fn AudioConverterConvertBuffer(
     else {
         return paramErr;
     };
+    if converter.input.planar || converter.output.planar {
+        return FORMAT;
+    }
     if !size.is_multiple_of(converter.input.frame_bytes()) {
         return INPUT_SIZE;
     }
@@ -295,51 +317,134 @@ fn AudioConverterConvertBuffer(
     0
 }
 
+fn buffers(
+    env: &Environment,
+    list: ConstPtr<BufferList>,
+    shape: Shape,
+) -> Result<Vec<Buffer>, OSStatus> {
+    if list.is_null() {
+        return Err(paramErr);
+    }
+    let count: u32 = env.mem.read(list.cast());
+    if count != shape.buffer_count() {
+        return Err(FORMAT);
+    }
+    let pointer: ConstPtr<Buffer> = (list.cast::<u8>() + 4).cast();
+    let mut result = Vec::new();
+    for index in 0..count {
+        let buffer: Buffer = env.mem.read(pointer + index);
+        if buffer.channels != if shape.planar { 1 } else { shape.channels } {
+            return Err(FORMAT);
+        }
+        result.push(buffer);
+    }
+    Ok(result)
+}
+
+fn set_buffer_sizes(env: &mut Environment, list: MutPtr<BufferList>, values: &[Buffer], size: u32) {
+    let pointer: MutPtr<Buffer> = (list.cast::<u8>() + 4).cast();
+    for (index, &buffer) in values.iter().enumerate() {
+        env.mem
+            .write(pointer + index as u32, Buffer { size, ..buffer });
+    }
+}
+
 fn write_list(
     env: &mut Environment,
     converter: Converter,
     frames: u32,
-    input: BufferList,
+    input_pointer: ConstPtr<BufferList>,
     output_pointer: MutPtr<BufferList>,
-    mut output: BufferList,
     descriptions: MutPtr<PacketDescription>,
 ) -> OSStatus {
-    if input.count != 1
-        || output.count != 1
-        || input.buffer.channels != converter.input.channels
-        || output.buffer.channels != converter.output.channels
-    {
-        return FORMAT;
-    }
+    let input = match buffers(env, input_pointer, converter.input) {
+        Ok(buffers) => buffers,
+        Err(status) => return status,
+    };
+    let output = match buffers(env, output_pointer.cast_const(), converter.output) {
+        Ok(buffers) => buffers,
+        Err(status) => return status,
+    };
     let Some(input_size) = frames.checked_mul(converter.input.frame_bytes()) else {
         return INPUT_SIZE;
     };
     let Some(output_size) = frames.checked_mul(converter.output.frame_bytes()) else {
         return OUTPUT_SIZE;
     };
-    if input.buffer.size < input_size {
+    let Some(packed_size) = frames.checked_mul(converter.input.interleaved().frame_bytes()) else {
         return INPUT_SIZE;
-    }
-    if output.buffer.size < output_size {
+    };
+    if frames
+        .checked_mul(converter.output.interleaved().frame_bytes())
+        .is_none()
+    {
         return OUTPUT_SIZE;
     }
-    let source = input.buffer.data;
-    let destination = output.buffer.data;
-    if frames != 0 && (source.is_null() || destination.is_null()) {
-        return paramErr;
+    for buffer in &input {
+        let data = buffer.data;
+        if buffer.size < input_size {
+            return INPUT_SIZE;
+        }
+        if frames != 0 && data.is_null() {
+            return paramErr;
+        }
+    }
+    for buffer in &output {
+        let data = buffer.data;
+        if buffer.size < output_size {
+            return OUTPUT_SIZE;
+        }
+        if frames != 0 && data.is_null() {
+            return paramErr;
+        }
     }
     if frames != 0 {
+        // Snapshot every input plane before writing any output, including
+        // when callers reuse their input storage as output storage.
+        let planes: Vec<_> = input
+            .iter()
+            .map(|buffer| {
+                env.mem
+                    .bytes_at(buffer.data.cast_const().cast(), input_size)
+                    .to_vec()
+            })
+            .collect();
+        let source = if converter.input.planar {
+            let width = converter.input.bits as usize / 8;
+            let mut packed = vec![0; packed_size as usize];
+            for frame in 0..frames as usize {
+                for (channel, plane) in planes.iter().enumerate() {
+                    let index = (frame * planes.len() + channel) * width;
+                    packed[index..index + width]
+                        .copy_from_slice(&plane[frame * width..(frame + 1) * width]);
+                }
+            }
+            packed
+        } else {
+            planes.into_iter().next().unwrap()
+        };
         let converted = convert(
-            env.mem.bytes_at(source.cast_const().cast(), input_size),
-            converter.input,
-            converter.output,
+            &source,
+            converter.input.interleaved(),
+            converter.output.interleaved(),
         );
-        env.mem
-            .bytes_at_mut(destination.cast(), output_size)
-            .copy_from_slice(&converted);
+        if converter.output.planar {
+            let width = converter.output.bits as usize / 8;
+            for (channel, buffer) in output.iter().enumerate() {
+                let target = env.mem.bytes_at_mut(buffer.data.cast(), output_size);
+                for frame in 0..frames as usize {
+                    let index = (frame * output.len() + channel) * width;
+                    target[frame * width..(frame + 1) * width]
+                        .copy_from_slice(&converted[index..index + width]);
+                }
+            }
+        } else {
+            env.mem
+                .bytes_at_mut(output[0].data.cast(), output_size)
+                .copy_from_slice(&converted);
+        }
     }
-    output.buffer.size = output_size;
-    env.mem.write(output_pointer, output);
+    set_buffer_sizes(env, output_pointer, &output, output_size);
     if !descriptions.is_null() {
         for index in 0..frames {
             env.mem.write(
@@ -362,9 +467,6 @@ fn AudioConverterConvertComplexBuffer(
     input: ConstPtr<BufferList>,
     output: MutPtr<BufferList>,
 ) -> OSStatus {
-    if input.is_null() || output.is_null() {
-        return paramErr;
-    }
     let Some(converter) = env
         .framework_state
         .audio_toolbox
@@ -375,17 +477,7 @@ fn AudioConverterConvertComplexBuffer(
     else {
         return paramErr;
     };
-    let input = env.mem.read(input);
-    let output_list = env.mem.read(output);
-    write_list(
-        env,
-        converter,
-        frames,
-        input,
-        output,
-        output_list,
-        MutPtr::null(),
-    )
+    write_list(env, converter, frames, input, output, MutPtr::null())
 }
 
 fn AudioConverterFillComplexBuffer(
@@ -397,7 +489,7 @@ fn AudioConverterFillComplexBuffer(
     output: MutPtr<BufferList>,
     descriptions: MutPtr<PacketDescription>,
 ) -> OSStatus {
-    if output_packets.is_null() || output.is_null() || callback.to_ptr().is_null() {
+    if output_packets.is_null() || callback.to_ptr().is_null() {
         return paramErr;
     }
     let Some(converter) = env
@@ -410,32 +502,38 @@ fn AudioConverterFillComplexBuffer(
     else {
         return paramErr;
     };
-    let output_list = env.mem.read(output);
-    if output_list.count != 1 || output_list.buffer.channels != converter.output.channels {
-        return FORMAT;
-    }
-    let frames = env
-        .mem
-        .read(output_packets)
-        .min(output_list.buffer.size / converter.output.frame_bytes());
+    let output_buffers = match buffers(env, output.cast_const(), converter.output) {
+        Ok(buffers) => buffers,
+        Err(status) => return status,
+    };
+    let capacity = output_buffers
+        .iter()
+        .map(|buffer| buffer.size / converter.output.frame_bytes())
+        .min()
+        .unwrap();
+    let frames = env.mem.read(output_packets).min(capacity);
     env.mem.write(output_packets, 0);
     if frames == 0 {
-        let mut empty = output_list;
-        empty.buffer.size = 0;
-        env.mem.write(output, empty);
+        set_buffer_sizes(env, output, &output_buffers, 0);
         return 0;
     }
-    let destination = output_list.buffer.data;
-    if destination.is_null() {
+    if output_buffers.iter().any(|buffer| {
+        let data = buffer.data;
+        data.is_null()
+    }) {
         return paramErr;
     }
     let Some(input_size) = frames.checked_mul(converter.input.frame_bytes()) else {
         return INPUT_SIZE;
     };
-    let Some(aligned) = input_size.checked_add(3).map(|n| n & !3) else {
+    let Some(packed_size) = frames.checked_mul(converter.input.interleaved().frame_bytes()) else {
         return INPUT_SIZE;
     };
-    let Some(total) = aligned.checked_add(guest_size_of::<BufferList>() + 8) else {
+    let Some(aligned) = packed_size.checked_add(3).map(|n| n & !3) else {
+        return INPUT_SIZE;
+    };
+    let list_size = 4 + converter.input.buffer_count() * guest_size_of::<Buffer>();
+    let Some(total) = aligned.checked_add(list_size + 8) else {
         return INPUT_SIZE;
     };
     let Some(allocation) = env.mem.try_alloc(total) else {
@@ -443,19 +541,25 @@ fn AudioConverterFillComplexBuffer(
     };
     let bytes: MutPtr<u8> = allocation.cast();
     let input_list: MutPtr<BufferList> = (bytes + aligned).cast();
-    let packets: MutPtr<u32> = (bytes + aligned + guest_size_of::<BufferList>()).cast();
-    let packet_pointer: MutPtr<MutPtr<PacketDescription>> = (packets + 1).cast();
-    env.mem.write(
-        input_list,
-        BufferList {
-            count: 1,
-            buffer: Buffer {
-                channels: converter.input.channels,
+    let input_buffers: MutPtr<Buffer> = (input_list.cast::<u8>() + 4).cast();
+    env.mem
+        .write(input_list.cast::<u32>(), converter.input.buffer_count());
+    for index in 0..converter.input.buffer_count() {
+        env.mem.write(
+            input_buffers + index,
+            Buffer {
+                channels: if converter.input.planar {
+                    1
+                } else {
+                    converter.input.channels
+                },
                 size: input_size,
-                data: allocation,
+                data: (bytes + index * input_size).cast(),
             },
-        },
-    );
+        );
+    }
+    let packets: MutPtr<u32> = (bytes + aligned + list_size).cast();
+    let packet_pointer: MutPtr<MutPtr<PacketDescription>> = (packets + 1).cast();
     env.mem.write(packets, frames);
     env.mem
         .write(packet_pointer, MutPtr::<PacketDescription>::null());
@@ -476,16 +580,12 @@ fn AudioConverterFillComplexBuffer(
         if returned > frames {
             INPUT_SIZE
         } else {
-            // Input callbacks may replace both the buffer pointer and byte
-            // count. Read the returned list instead of the staging defaults.
-            let input = env.mem.read(input_list);
             let status = write_list(
                 env,
                 converter,
                 returned,
-                input,
+                input_list.cast_const(),
                 output,
-                output_list,
                 descriptions,
             );
             if status == 0 {
@@ -679,6 +779,7 @@ mod tests {
             float: false,
             signed: true,
             big: false,
+            planar: false,
         };
         let destination = Shape {
             bits: 16,
@@ -705,6 +806,7 @@ mod tests {
             float: true,
             signed: false,
             big: false,
+            planar: false,
         };
         let mut input = Vec::new();
         input.extend_from_slice(&1.0f32.to_le_bytes());
@@ -716,6 +818,7 @@ mod tests {
             float: false,
             signed: true,
             big: false,
+            planar: false,
         };
         assert_eq!(convert(&input, source, destination), [0, 0]);
     }

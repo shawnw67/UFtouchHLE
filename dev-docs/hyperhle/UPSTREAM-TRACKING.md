@@ -18,8 +18,8 @@ into the port branch. `unique-declarations.json` remains the original fixed
 declaration snapshot; its coverage audit is a textual comparison, not a measure
 of game compatibility or of every change in the latest reference.
 
-Recent AudioConverter work implements packed interleaved mono/stereo LPCM at
+Recent AudioConverter work implements packed interleaved and planar mono/stereo LPCM at
 matching sample rates, integer/float and endian conversion, buffer-list and
 input-callback APIs. Unsupported formats fail explicitly. Sample-rate
-conversion, planar LPCM and compressed codecs remain pending. Real-game and
+conversion and compressed codecs remain pending. Real-game and
 Android-device verification are deferred at the user's request.

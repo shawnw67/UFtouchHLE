@@ -12020,6 +12020,59 @@ int test_audio_converter_lists_and_callback(void) {
     return -4;
   return 0;
 }
+struct TestPlanarConverterState {
+  float *left, *right;
+};
+static int test_planar_converter_input(void *converter, uint32_t *packets,
+                                       struct TestAudioBufferList *list,
+                                       void **descriptions, void *context) {
+  struct TestPlanarConverterState *state = context;
+  if (*packets != 2 || list->count != 2 || list->buffers[0].channels != 1 ||
+      list->buffers[1].channels != 1)
+    return -1;
+  list->buffers[0] = (struct TestAudioBuffer){1, 8, state->left};
+  list->buffers[1] = (struct TestAudioBuffer){1, 8, state->right};
+  return 0;
+}
+int test_audio_converter_planar(void) {
+  const struct TestStreamFormat planar = {44100, 0x6c70636d, 41, 4, 1,
+                                          4,     2,          32, 0};
+  const struct TestStreamFormat packed = {44100, 0x6c70636d, 12, 4, 1,
+                                          4,     2,          16, 0};
+  float left[] = {-1.0f, 0.5f}, right[] = {0.25f, -0.5f};
+  int16_t output[4] = {99, 99, 99, 99};
+  const int16_t expected[] = {-32768, 8192, 16384, -16384};
+  struct TestAudioBufferList input = {2, {{1, 8, left}, {1, 8, right}}};
+  struct TestAudioBufferList result = {1, {{2, sizeof(output), output}, {0}}};
+  void *converter = NULL;
+  if (AudioConverterNew(&planar, &packed, &converter) ||
+      AudioConverterConvertComplexBuffer(converter, 2, &input, &result) ||
+      memcmp(output, expected, sizeof(output)))
+    return -1;
+  memset(output, 0, sizeof(output));
+  struct TestPlanarConverterState state = {left, right};
+  uint32_t packets = 2;
+  if (AudioConverterFillComplexBuffer(converter, test_planar_converter_input,
+                                      &state, &packets, &result, NULL) ||
+      packets != 2 || memcmp(output, expected, sizeof(output)) ||
+      AudioConverterDispose(converter))
+    return -2;
+  float outLeft[2] = {99, 99}, outRight[2] = {99, 99};
+  input = result;
+  result = (struct TestAudioBufferList){2, {{1, 8, outLeft}, {1, 4, outRight}}};
+  if (AudioConverterNew(&packed, &planar, &converter) ||
+      !AudioConverterConvertComplexBuffer(converter, 2, &input, &result) ||
+      outLeft[0] != 99 || outRight[0] != 99)
+    return -3;
+  result.buffers[1].size = 8;
+  if (AudioConverterConvertComplexBuffer(converter, 2, &input, &result) ||
+      memcmp(left, outLeft, sizeof(left)) ||
+      memcmp(right, outRight, sizeof(right)) || result.buffers[0].size != 8 ||
+      result.buffers[1].size != 8 || AudioConverterDispose(converter))
+    return -4;
+  return 0;
+}
+
 struct TestRenderState {
   int pre, render, post, bad;
 };
@@ -12757,6 +12810,7 @@ struct {
     FUNC_DEF(test_cfcollection_ownership_exports),
     FUNC_DEF(test_audio_converter_pcm),
     FUNC_DEF(test_audio_converter_lists_and_callback),
+    FUNC_DEF(test_audio_converter_planar),
 #endif
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),
