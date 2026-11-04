@@ -28,12 +28,10 @@ pub enum IMP {
     Host(&'static dyn HostIMP),
     Guest(GuestIMP),
 }
+impl Copy for IMP {}
 impl Clone for IMP {
     fn clone(&self) -> Self {
-        match self {
-            IMP::Guest(guest_imp) => IMP::Guest(*guest_imp),
-            IMP::Host(_) => unimplemented!(),
-        }
+        *self
     }
 }
 impl std::fmt::Debug for IMP {

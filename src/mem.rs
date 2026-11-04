@@ -836,6 +836,17 @@ impl Mem {
         self.bytes_at(ptr, len)
     }
 
+    /// Whether the C string at `ptr` is exactly `expected`, without building a
+    /// slice of it first.
+    pub fn cstr_eq<const MUT: bool>(&self, ptr: Ptr<u8, MUT>, expected: &[u8]) -> bool {
+        for (i, &b) in expected.iter().enumerate() {
+            if self.read(ptr + i as u32) != b {
+                return false;
+            }
+        }
+        self.read(ptr + expected.len() as u32) == b'\0'
+    }
+
     /// Whether a host pointer points into guest memory.
     pub fn is_host_ptr_in_guest_mem(&self, host_ptr: *const std::ffi::c_void) -> bool {
         let host_ptr = host_ptr as usize;

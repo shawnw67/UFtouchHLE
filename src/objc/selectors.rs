@@ -41,6 +41,16 @@ pub use crate::selector; // #[macro_export] is weird...
 #[allow(clippy::upper_case_acronyms)] // silly clippit, this isn't an acronym!
 pub struct SEL(ConstPtr<u8>);
 
+impl SEL {
+    pub fn to_bits(self) -> crate::mem::GuestUSize {
+        self.0.to_bits()
+    }
+    /// Reconstruct a [SEL] from a raw guest address from [SEL::to_bits].
+    pub fn from_bits(bits: crate::mem::GuestUSize) -> Self {
+        SEL(Ptr::from_bits(bits))
+    }
+}
+
 impl GuestArg for SEL {
     const REG_COUNT: usize = <ConstPtr<u8> as GuestArg>::REG_COUNT;
     fn from_regs(regs: &[u32]) -> Self {
@@ -284,4 +294,38 @@ pub(super) fn sel_registerName(env: &mut Environment, name: ConstPtr<u8>) -> SEL
 
     let name = name.to_string();
     env.objc.register_host_selector(name, &mut env.mem)
+}
+/// `const char *sel_getName(SEL sel)` — returns the C string name of a
+/// selector. In our runtime a [SEL] already wraps a pointer to its
+/// null-terminated name string, so we simply return that pointer.
+/// A null selector maps to the C string "`<null selector>`" in Apple's
+/// implementation; we return a null pointer, which callers treat as an
+/// empty/absent name.
+/// Reference: <https://developer.apple.com/documentation/objectivec/sel_getname(_:)>
+pub(super) fn sel_getName(_env: &mut Environment, sel: SEL) -> ConstPtr<u8> {
+    sel.0
+}
+
+/// `SEL sel_getUid(const char *str)` — per Apple's runtime, this is
+/// functionally identical to `sel_registerName`: it registers a method
+/// name with the runtime and returns the corresponding selector.
+/// Reference: <https://developer.apple.com/documentation/objectivec/sel_getuid(_:)>
+pub(super) fn sel_getUid(env: &mut Environment, name: ConstPtr<u8>) -> SEL {
+    sel_registerName(env, name)
+}
+
+/// `BOOL sel_isEqual(SEL lhs, SEL rhs)` — returns whether two selectors
+/// are equal. Selectors are registered/deduplicated, so a pointer
+/// comparison matches Apple's behavior. As a fallback (e.g. for an
+/// unregistered binary selector pointer), compare the underlying name
+/// strings too.
+/// Reference: <https://developer.apple.com/documentation/objectivec/sel_isequal(_:_:)>
+pub(super) fn sel_isEqual(env: &mut Environment, lhs: SEL, rhs: SEL) -> bool {
+    if lhs.0 == rhs.0 {
+        return true;
+    }
+    if lhs.is_null() || rhs.is_null() {
+        return false;
+    }
+    lhs.as_str(&env.mem) == rhs.as_str(&env.mem)
 }

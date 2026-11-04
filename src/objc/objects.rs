@@ -359,6 +359,10 @@ impl super::ObjC {
 
         std::mem::drop(host_object);
 
+        self.zero_weak_references_for(object, mem);
+        self.associated_objects
+            .retain(|&(owner, _), _| owner != object);
+
         mem.free(object.cast());
     }
 }
