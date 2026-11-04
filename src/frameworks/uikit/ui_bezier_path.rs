@@ -13,6 +13,7 @@ use crate::frameworks::core_graphics::cg_context::{
 use crate::frameworks::core_graphics::cg_path::{self, Path};
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect};
 use crate::frameworks::uikit::ui_graphics::UIGraphicsGetCurrentContext;
+use crate::mem::{ConstPtr, MutPtr};
 use crate::objc::{
     autorelease, id, msg, objc_classes, release, ClassExports, HostObject, NSZonePtr,
 };
@@ -23,6 +24,8 @@ struct UIBezierPathHostObject {
     cached_path: Option<id>,
     line_width: CGFloat,
     even_odd: bool,
+    dash: Vec<CGFloat>,
+    dash_phase: CGFloat,
 }
 impl Default for UIBezierPathHostObject {
     fn default() -> Self {
@@ -31,6 +34,8 @@ impl Default for UIBezierPathHostObject {
             cached_path: None,
             line_width: 1.0,
             even_odd: false,
+            dash: Vec::new(),
+            dash_phase: 0.0,
         }
     }
 }
@@ -58,6 +63,74 @@ fn add_rect(path: &mut Path, rect: CGRect) {
     path.line_to(CGPoint { x: x + w, y: y + h });
     path.line_to(CGPoint { x, y: y + h });
     path.close();
+}
+
+/// Split flattened user-space geometry into the visible dash segments.
+fn dashed_path(path: &Path, dash: &[CGFloat], phase: CGFloat) -> Path {
+    if dash.is_empty() {
+        return path.clone();
+    }
+    let mut pattern = dash.to_vec();
+    if pattern.len() % 2 != 0 {
+        pattern.extend_from_slice(dash);
+    }
+    let total: f64 = pattern.iter().map(|&x| f64::from(x)).sum();
+    if !total.is_finite() || total <= 0.0 {
+        return path.clone();
+    }
+    let mut result = Path::default();
+    let mut budget = 100_000usize;
+    for subpath in &path.subpaths {
+        let mut index = 0usize;
+        let mut offset = f64::from(phase).rem_euclid(total);
+        while offset >= f64::from(pattern[index]) {
+            offset -= f64::from(pattern[index]);
+            index = (index + 1) % pattern.len();
+        }
+        let mut left = f64::from(pattern[index]) - offset;
+        let closing = (subpath.closed && subpath.points.len() > 2)
+            .then(|| (*subpath.points.last().unwrap(), subpath.points[0]));
+        for (a, b) in subpath
+            .points
+            .windows(2)
+            .map(|p| (p[0], p[1]))
+            .chain(closing)
+        {
+            let dx = f64::from(b.x) - f64::from(a.x);
+            let dy = f64::from(b.y) - f64::from(a.y);
+            let distance = dx.hypot(dy);
+            if !distance.is_finite() || distance == 0.0 {
+                continue;
+            }
+            let mut position = 0.0;
+            while position < distance {
+                if budget == 0 {
+                    return result;
+                }
+                budget -= 1;
+                if left <= 0.0 {
+                    index = (index + 1) % pattern.len();
+                    left = f64::from(pattern[index]);
+                    continue;
+                }
+                let next = (position + left).min(distance);
+                if next <= position {
+                    break;
+                }
+                if index % 2 == 0 {
+                    let point = |p: f64| CGPoint {
+                        x: (f64::from(a.x) + dx * p / distance) as CGFloat,
+                        y: (f64::from(a.y) + dy * p / distance) as CGFloat,
+                    };
+                    result.move_to(point(position));
+                    result.line_to(point(next));
+                }
+                left -= next - position;
+                position = next;
+            }
+        }
+    }
+    result
 }
 
 pub const CLASSES: ClassExports = objc_classes! {
@@ -126,12 +199,16 @@ pub const CLASSES: ClassExports = objc_classes! {
     let path = object.path.clone();
     let width = object.line_width;
     let even_odd = object.even_odd;
+    let dash = object.dash.clone();
+    let dash_phase = object.dash_phase;
     let class: id = msg![env; this class];
     let copy: id = msg![env; class new];
     let object = env.objc.borrow_mut::<UIBezierPathHostObject>(copy);
     object.path = path;
     object.line_width = width;
     object.even_odd = even_odd;
+    object.dash = dash;
+    object.dash_phase = dash_phase;
     copy
 }
 - (())moveToPoint:(CGPoint)point { update_path(env, this, |path| path.move_to(point)); }
@@ -164,6 +241,24 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (())setLineWidth:(CGFloat)width { env.objc.borrow_mut::<UIBezierPathHostObject>(this).line_width = width; }
 - (CGFloat)lineWidth { env.objc.borrow::<UIBezierPathHostObject>(this).line_width }
+- (())setLineDash:(ConstPtr<CGFloat>)pattern count:(i32)count phase:(CGFloat)phase {
+    if count < 0 || count > 4096 || (count != 0 && pattern.is_null()) || !phase.is_finite() { return; }
+    let values: Vec<_> = (0..count).map(|i| env.mem.read(pattern + i as u32)).collect();
+    if values.iter().any(|value| !value.is_finite() || *value < 0.0) { return; }
+    let object = env.objc.borrow_mut::<UIBezierPathHostObject>(this);
+    object.dash = values;
+    object.dash_phase = phase;
+}
+- (())getLineDash:(MutPtr<CGFloat>)pattern count:(MutPtr<i32>)count phase:(MutPtr<CGFloat>)phase {
+    let object = env.objc.borrow::<UIBezierPathHostObject>(this);
+    let values = object.dash.clone();
+    let dash_phase = object.dash_phase;
+    if !pattern.is_null() {
+        for (index, value) in values.iter().enumerate() { env.mem.write(pattern + index as u32, *value); }
+    }
+    if !count.is_null() { env.mem.write(count, values.len() as i32); }
+    if !phase.is_null() { env.mem.write(phase, dash_phase); }
+}
 - (())setUsesEvenOddFillRule:(bool)value { env.objc.borrow_mut::<UIBezierPathHostObject>(this).even_odd = value; }
 - (bool)usesEvenOddFillRule { env.objc.borrow::<UIBezierPathHostObject>(this).even_odd }
 - (bool)isEmpty { env.objc.borrow::<UIBezierPathHostObject>(this).path.subpaths.is_empty() }
@@ -193,13 +288,16 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())stroke {
     let context = UIGraphicsGetCurrentContext(env);
     if context.is_null() { return; }
-    let width = env.objc.borrow::<UIBezierPathHostObject>(this).line_width;
-    let path: id = msg![env; this CGPath];
+    let object = env.objc.borrow::<UIBezierPathHostObject>(this);
+    let width = object.line_width;
+    let dashed = dashed_path(&object.path, &object.dash, object.dash_phase);
+    let path = cg_path::alloc_path(env, dashed);
     CGContextSaveGState(env, context);
     CGContextSetLineWidth(env, context, width);
     CGContextAddPath(env, context, path);
     CGContextStrokePath(env, context);
     CGContextRestoreGState(env, context);
+    release(env, path);
 }
 - (())fillWithBlendMode:(i32)mode alpha:(CGFloat)alpha {
     let context = UIGraphicsGetCurrentContext(env);
@@ -232,3 +330,29 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 @end
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dashes_continue_across_segments_and_restart_at_subpaths() {
+        let mut path = Path::default();
+        path.move_to(CGPoint { x: 0.0, y: 0.0 });
+        path.line_to(CGPoint { x: 3.0, y: 0.0 });
+        path.line_to(CGPoint { x: 10.0, y: 0.0 });
+        path.move_to(CGPoint { x: 0.0, y: 1.0 });
+        path.line_to(CGPoint { x: 3.0, y: 1.0 });
+        let dashed = dashed_path(&path, &[2.0, 2.0], 0.0);
+        let segments: Vec<_> = dashed.stroke_segments().collect();
+        assert_eq!(segments.len(), 4);
+        assert_eq!({ segments[0].0.x }, 0.0);
+        assert_eq!({ segments[0].1.x }, 2.0);
+        assert_eq!({ segments[1].0.x }, 4.0);
+        assert_eq!({ segments[1].1.x }, 6.0);
+        assert_eq!({ segments[2].0.x }, 8.0);
+        assert_eq!({ segments[3].0.y }, 1.0);
+        let phased = dashed_path(&path, &[2.0, 2.0], 1.0);
+        assert_eq!({ phased.stroke_segments().next().unwrap().1.x }, 1.0);
+    }
+}

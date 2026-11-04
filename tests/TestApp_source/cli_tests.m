@@ -263,6 +263,7 @@ extern CFStringRef kCGImagePropertyPixelWidth;
 extern CFStringRef kCGImageSourceCreateThumbnailFromImageAlways;
 
 @interface UIBezierPath : NSObject
++ (id)bezierPath;
 + (id)bezierPathWithRoundedRect:(CGRect)rect cornerRadius:(CGFloat)radius;
 + (id)bezierPathWithOvalInRect:(CGRect)rect;
 + (id)bezierPathWithRect:(CGRect)rect;
@@ -275,6 +276,16 @@ extern CFStringRef kCGImageSourceCreateThumbnailFromImageAlways;
 - (void)appendPath:(id)path;
 - (void)setUsesEvenOddFillRule:(bool)value;
 - (void)addClip;
+- (void)moveToPoint:(CGPoint)point;
+- (void)addLineToPoint:(CGPoint)point;
+- (void)setLineWidth:(CGFloat)width;
+- (void)setLineDash:(const CGFloat *)pattern
+              count:(NSInteger)count
+              phase:(CGFloat)phase;
+- (void)getLineDash:(CGFloat *)pattern
+              count:(NSInteger *)count
+              phase:(CGFloat *)phase;
+- (void)stroke;
 @end
 extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
@@ -1383,6 +1394,33 @@ int test_UIBezierPath_copy(void) {
   int passed = [copy containsPoint:center] && ![copy isEmpty];
   [oval removeAllPoints];
   passed = passed && [oval isEmpty] && [copy containsPoint:center];
+  return passed ? 0 : -1;
+}
+
+int test_UIBezierPath_dash(void) {
+  unsigned char pixels[20 * 5 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 20, 5, 8, 20 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  UIBezierPath *path = [UIBezierPath bezierPath];
+  [path moveToPoint:CGPointMake(0, 2)];
+  [path addLineToPoint:CGPointMake(20, 2)];
+  CGFloat dash[] = {4, 4}, actual[2] = {0}, phase = -1;
+  NSInteger count = 0;
+  [path setLineWidth:1];
+  [path setLineDash:dash count:2 phase:0];
+  UIBezierPath *copy = [path copy];
+  [copy getLineDash:actual count:&count phase:&phase];
+  UIGraphicsPushContext(context);
+  [copy stroke];
+  UIGraphicsPopContext();
+  int passed = count == 2 && actual[0] == 4 && actual[1] == 4 && phase == 0 &&
+               pixels[(2 * 20 + 1) * 4 + 3] != 0 &&
+               pixels[(2 * 20 + 6) * 4 + 3] == 0 &&
+               pixels[(2 * 20 + 9) * 4 + 3] != 0;
+  [copy release];
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
   return passed ? 0 : -1;
 }
 
@@ -11614,6 +11652,7 @@ struct {
     FUNC_DEF(test_CGPath_transformed_arc),
     FUNC_DEF(test_UIBezierPath_rounded_fill),
     FUNC_DEF(test_UIBezierPath_copy),
+    FUNC_DEF(test_UIBezierPath_dash),
     FUNC_DEF(test_UIBezierPath_even_odd),
     FUNC_DEF(test_CGContext_tiled_image),
     FUNC_DEF(test_CGContext_curves),
