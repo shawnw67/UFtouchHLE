@@ -528,6 +528,27 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.borrow_mut::<NSAttributedStringHostObject>(this).string = new_string;
     release(env, string);
 }
+- (())replaceCharactersInRange:(NSRange)range withAttributedString:(id)replacement {
+    if replacement == nil { return; }
+    let old = env.objc.borrow::<NSAttributedStringHostObject>(this).string;
+    let old_length: NSUInteger = msg![env; old length];
+    let Some(end) = range.location.checked_add(range.length) else { return; };
+    if end > old_length { return; }
+    let replacement_text: id = msg![env; replacement string];
+    let replacement_text: id = msg![env; replacement_text copy];
+    let replacement_len: NSUInteger = msg![env; replacement_text length];
+    let runs = copy_runs(env, replacement);
+    splice_runs(env, this, range, replacement_len, runs);
+    let location = range.location;
+    let before: id = msg![env; old substringToIndex:location];
+    let after: id = msg![env; old substringFromIndex:end];
+    let text: id = msg![env; before stringByAppendingString:replacement_text];
+    let text: id = msg![env; text stringByAppendingString:after];
+    let text: id = msg![env; text copy];
+    env.objc.borrow_mut::<NSAttributedStringHostObject>(this).string = text;
+    release(env, replacement_text);
+    release(env, old);
+}
 - (())appendAttributedString:(id)other {
     let other_string: id = msg![env; other string];
     let string = env.objc.borrow::<NSAttributedStringHostObject>(this).string;

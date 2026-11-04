@@ -830,6 +830,45 @@ int test_CFAttributedString_attribute_runs(void) {
   return passed ? 0 : -1;
 }
 
+int test_CFAttributedString_mutable(void) {
+  CFStringRef text =
+      CFStringCreateWithCString(NULL, "hello", kCFStringEncodingUTF8);
+  CFStringRef key =
+      CFStringCreateWithCString(NULL, "color", kCFStringEncodingUTF8);
+  CFStringRef value =
+      CFStringCreateWithCString(NULL, "red", kCFStringEncodingUTF8);
+  CFMutableAttributedStringRef string =
+      CFAttributedStringCreateMutable(NULL, 0);
+  CFAttributedStringBeginEditing(string);
+  CFAttributedStringReplaceString(string, CFRangeMake(0, 0), text);
+  CFAttributedStringSetAttribute(string, CFRangeMake(1, 3), key, value);
+  CFAttributedStringEndEditing(string);
+  CFMutableAttributedStringRef copy =
+      CFAttributedStringCreateMutableCopy(NULL, 0, string);
+  CFAttributedStringRemoveAttribute(copy, CFRangeMake(2, 1), key);
+  CFRange range = CFRangeMake(0, 0);
+  int passed = copy && CFAttributedStringGetLength(copy) == 5 &&
+               CFAttributedStringGetAttribute(copy, 1, key, &range) &&
+               range.location == 1 && range.length == 1 &&
+               !CFAttributedStringGetAttribute(copy, 2, key, NULL) &&
+               CFAttributedStringGetAttribute(string, 2, key, NULL);
+  CFAttributedStringSetAttributes(copy, CFRangeMake(1, 3), NULL, true);
+  passed = passed && !CFAttributedStringGetAttribute(copy, 1, key, NULL) &&
+           !CFAttributedStringGetAttribute(copy, 3, key, NULL);
+  CFAttributedStringReplaceAttributedString(string, CFRangeMake(0, 1), string);
+  passed = passed && CFAttributedStringGetLength(string) == 9 &&
+           !CFAttributedStringGetAttribute(string, 0, key, NULL) &&
+           CFAttributedStringGetAttribute(string, 1, key, NULL) &&
+           !CFAttributedStringGetAttribute(string, 4, key, NULL) &&
+           CFAttributedStringGetAttribute(string, 5, key, NULL);
+  CFRelease(copy);
+  CFRelease(string);
+  CFRelease(value);
+  CFRelease(key);
+  CFRelease(text);
+  return passed ? 0 : -1;
+}
+
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
 
@@ -11777,6 +11816,7 @@ struct {
     FUNC_DEF(test_CFWriteStream_file),
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CFAttributedString_attribute_runs),
+    FUNC_DEF(test_CFAttributedString_mutable),
     FUNC_DEF(test_attributed_string_enumeration),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),

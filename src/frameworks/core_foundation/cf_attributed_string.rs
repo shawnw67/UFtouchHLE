@@ -17,6 +17,129 @@ use crate::Environment;
 
 pub(crate) type CFAttributedStringRef = CFTypeRef;
 
+fn valid_allocator(env: &Environment, allocator: CFAllocatorRef) -> bool {
+    allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()
+}
+
+fn mutable_range(range: CFRange) -> Option<NSRange> {
+    Some(NSRange {
+        location: range.location.try_into().ok()?,
+        length: range.length.try_into().ok()?,
+    })
+}
+
+fn CFAttributedStringCreateMutable(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    max_length: CFIndex,
+) -> CFAttributedStringRef {
+    if max_length < 0 || !valid_allocator(env, allocator) {
+        return nil;
+    }
+    msg_class![env; NSMutableAttributedString new]
+}
+
+fn CFAttributedStringCreateMutableCopy(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    max_length: CFIndex,
+    string: CFAttributedStringRef,
+) -> CFAttributedStringRef {
+    if max_length < 0 || string == nil || !valid_allocator(env, allocator) {
+        return nil;
+    }
+    msg![env; string mutableCopy]
+}
+
+fn CFAttributedStringReplaceString(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+    range: CFRange,
+    replacement: CFStringRef,
+) {
+    if string == nil || replacement == nil {
+        return;
+    }
+    if let Some(range) = mutable_range(range) {
+        let _: () = msg![env; string replaceCharactersInRange:range withString:replacement];
+    }
+}
+
+fn CFAttributedStringReplaceAttributedString(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+    range: CFRange,
+    replacement: CFAttributedStringRef,
+) {
+    if string == nil || replacement == nil {
+        return;
+    }
+    if let Some(range) = mutable_range(range) {
+        let _: () =
+            msg![env; string replaceCharactersInRange:range withAttributedString:replacement];
+    }
+}
+
+fn CFAttributedStringSetAttribute(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+    range: CFRange,
+    name: CFStringRef,
+    value: CFTypeRef,
+) {
+    if string == nil || name == nil || value == nil {
+        return;
+    }
+    if let Some(range) = mutable_range(range) {
+        let _: () = msg![env; string addAttribute:name value:value range:range];
+    }
+}
+
+fn CFAttributedStringSetAttributes(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+    range: CFRange,
+    attributes: CFDictionaryRef,
+    clear: bool,
+) {
+    if string == nil {
+        return;
+    }
+    if let Some(range) = mutable_range(range) {
+        if clear {
+            let _: () = msg![env; string setAttributes:attributes range:range];
+        } else if attributes != nil {
+            let _: () = msg![env; string addAttributes:attributes range:range];
+        }
+    }
+}
+
+fn CFAttributedStringRemoveAttribute(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+    range: CFRange,
+    name: CFStringRef,
+) {
+    if string == nil || name == nil {
+        return;
+    }
+    if let Some(range) = mutable_range(range) {
+        let _: () = msg![env; string removeAttribute:name range:range];
+    }
+}
+
+fn CFAttributedStringBeginEditing(env: &mut Environment, string: CFAttributedStringRef) {
+    if string != nil {
+        let _: () = msg![env; string beginEditing];
+    }
+}
+
+fn CFAttributedStringEndEditing(env: &mut Environment, string: CFAttributedStringRef) {
+    if string != nil {
+        let _: () = msg![env; string endEditing];
+    }
+}
+
 fn CFAttributedStringCreate(
     env: &mut Environment,
     allocator: CFAllocatorRef,
@@ -256,6 +379,15 @@ fn CFAttributedStringGetTypeID(env: &mut Environment) -> u32 {
 
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFAttributedStringCreate(_, _, _)),
+    export_c_func!(CFAttributedStringCreateMutable(_, _)),
+    export_c_func!(CFAttributedStringCreateMutableCopy(_, _, _)),
+    export_c_func!(CFAttributedStringReplaceString(_, _, _)),
+    export_c_func!(CFAttributedStringReplaceAttributedString(_, _, _)),
+    export_c_func!(CFAttributedStringSetAttribute(_, _, _, _)),
+    export_c_func!(CFAttributedStringSetAttributes(_, _, _, _)),
+    export_c_func!(CFAttributedStringRemoveAttribute(_, _, _)),
+    export_c_func!(CFAttributedStringBeginEditing(_)),
+    export_c_func!(CFAttributedStringEndEditing(_)),
     export_c_func!(CFAttributedStringCreateCopy(_, _)),
     export_c_func!(CFAttributedStringCreateWithSubstring(_, _, _)),
     export_c_func!(CFAttributedStringGetLength(_)),
