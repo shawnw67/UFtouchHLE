@@ -202,6 +202,10 @@ touchHLE 自身源码采用 **Mozilla Public License 2.0**；由于依赖的许�
 
 ### 贡献者
 
+**维护者**
+
+<a href="https://github.com/shawnw67" title="shawnw67"><img src="https://github.com/shawnw67.png?size=96" width="48" height="48" alt="shawnw67"></a>
+
 **本分支 PR 贡献者**
 
 <a href="https://github.com/Dearly-Not-Beloved" title="Dearly-Not-Beloved"><img src="https://github.com/Dearly-Not-Beloved.png?size=96" width="48" height="48" alt="Dearly-Not-Beloved"></a>

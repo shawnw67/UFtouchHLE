@@ -204,6 +204,10 @@ Some changes in this fork are AI-assisted (Anthropic Claude). The commits involv
 
 ### Contributors
 
+**Maintainer**
+
+<a href="https://github.com/shawnw67" title="shawnw67"><img src="https://github.com/shawnw67.png?size=96" width="48" height="48" alt="shawnw67"></a>
+
 **Pull request contributors to this fork**
 
 <a href="https://github.com/Dearly-Not-Beloved" title="Dearly-Not-Beloved"><img src="https://github.com/Dearly-Not-Beloved.png?size=96" width="48" height="48" alt="Dearly-Not-Beloved"></a>
