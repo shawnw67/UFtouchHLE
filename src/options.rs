@@ -952,3 +952,6 @@ mod device_geometry_options_tests {
         }
     }
 }
+/// Highest iOS version currently exposed by the emulator compatibility layer.
+#[allow(dead_code)]
+pub const LATEST_IOS_VERSION: (i32, i32, i32) = (12, 0, 0);

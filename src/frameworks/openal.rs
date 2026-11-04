@@ -43,6 +43,7 @@ pub struct State {
     warned_invalid_contexts: HashSet<MutPtr<GuestALCcontext>>,
     warned_invalid_devices: HashSet<MutPtr<GuestALCdevice>>,
     warned_null_device: bool,
+    macosx_rendering_quality: ALint,
     warned_mixer_rate: bool,
     warned_mixer_get_rate: bool,
     warned_mixer_output_rate_proc: bool,
@@ -1474,6 +1475,87 @@ fn alIsEnabled(_env: &mut Environment, _capability: ALenum) -> ALboolean {
     todo!();
 }
 
+/// `ALenum alcASAGetListener(const ALuint property, ALvoid *data,
+///                           ALuint *dataSize)` (Apple).
+fn alcASAGetListener(
+    env: &mut Environment,
+    property: ALuint,
+    data: MutVoidPtr,
+    data_size: MutPtr<ALuint>,
+) -> ALenum {
+    log_dbg!(
+        "alcASAGetListener(property={:#x}) — unsupported, zeroing out",
+        property
+    );
+    if !data_size.is_null() {
+        let n = env.mem.read(data_size);
+        if !data.is_null() && n > 0 {
+            let dst = env.mem.bytes_at_mut(data.cast(), n);
+            for b in dst.iter_mut() {
+                *b = 0;
+            }
+        }
+    }
+    al::AL_NO_ERROR
+}
+
+/// `ALenum alcASAGetSource(const ALuint property, ALuint source,
+///                         ALvoid *data, ALuint *dataSize)` (Apple).
+///
+/// ASA == Apple Sound API. Properties include
+/// `ALC_ASA_REVERB_ON` (0x1) / `_ROOM_TYPE` (0x2) / `_PRESET` (0x3) /
+/// `_OCCLUSION` (0x4) / `_OBSTRUCTION` (0x5).
+fn alcASAGetSource(
+    env: &mut Environment,
+    property: ALuint,
+    source: ALuint,
+    data: MutVoidPtr,
+    data_size: MutPtr<ALuint>,
+) -> ALenum {
+    log_dbg!(
+        "alcASAGetSource(property={:#x}, source={}) — unsupported, zeroing out",
+        property,
+        source
+    );
+    // Per Apple's headers, write 0 / leave size at 0 when the
+    // property is unknown. We zero the destination buffer if the
+    // caller told us its size.
+    if !data_size.is_null() {
+        let n = env.mem.read(data_size);
+        if !data.is_null() && n > 0 {
+            let dst = env.mem.bytes_at_mut(data.cast(), n);
+            for b in dst.iter_mut() {
+                *b = 0;
+            }
+        }
+    }
+    al::AL_NO_ERROR
+}
+
+/// `ALint alcMacOSXGetRenderingQuality()` (Apple).
+fn alcMacOSXGetRenderingQuality(env: &mut Environment) -> ALint {
+    // Default: high quality, matching iPhone OS 4.x's documented value.
+    let q = env.framework_state.openal.macosx_rendering_quality;
+    if q == 0 {
+        0x0002 // ALC_IPHONE_SPATIAL_RENDERING_QUALITY_HIGH
+    } else {
+        q
+    }
+}
+
+/// `ALvoid alcMacOSXRenderingQuality(const ALint quality)` (Apple).
+///
+/// Selects the spatial-rendering quality:
+/// `ALC_IPHONE_SPATIAL_RENDERING_QUALITY_LOW` (1) /
+/// `ALC_IPHONE_SPATIAL_RENDERING_QUALITY_HIGH` (2). On stock OpenAL
+/// Soft the rendering pipeline is configured at device-open time and
+/// can't be changed on the fly, so we just remember the request and
+/// hand it back to `alcMacOSXGetRenderingQuality`.
+fn alcMacOSXRenderingQuality(env: &mut Environment, quality: ALint) {
+    log_dbg!("alcMacOSXRenderingQuality({}) — remembered", quality);
+    env.framework_state.openal.macosx_rendering_quality = quality;
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(alcOpenDevice(_)),
     export_c_func!(alcCloseDevice(_)),
@@ -1560,4 +1642,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(alSourceStopv(_, _)),
     export_c_func!(alSourceRewindv(_, _)),
     export_c_func!(alSpeedOfSound(_)),
+    export_c_func!(alcASAGetListener(_, _, _)),
+    export_c_func!(alcASAGetSource(_, _, _, _)),
+    export_c_func!(alcMacOSXGetRenderingQuality()),
+    export_c_func!(alcMacOSXRenderingQuality(_)),
 ];

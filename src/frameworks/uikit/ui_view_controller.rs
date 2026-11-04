@@ -26,7 +26,7 @@ use crate::Environment;
 pub mod ui_navigation_controller;
 
 #[derive(Default)]
-struct UIViewControllerHostObject {
+pub struct UIViewControllerHostObject {
     /// The root view.
     /// `UIView*`
     view: id,

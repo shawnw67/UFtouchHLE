@@ -9,6 +9,35 @@ use crate::frameworks;
 use crate::libc;
 use crate::objc;
 
+// Social: `SLComposeViewController`, whose services are all unavailable.
+const SOCIAL: super::HostDylib = super::HostDylib {
+    path: "/System/Library/Frameworks/Social.framework/Social",
+    aliases: &[],
+    class_exports: &[frameworks::social::CLASSES],
+    constant_exports: &[frameworks::social::CONSTANTS],
+    function_exports: &[frameworks::social::FUNCTIONS],
+};
+
+const CORE_IMAGE: super::HostDylib = super::HostDylib {
+    path: "/System/Library/Frameworks/CoreImage.framework/CoreImage",
+    aliases: &[],
+    class_exports: &[
+        frameworks::core_image::CLASSES,
+        frameworks::core_image::pipeline::CLASSES,
+    ],
+    constant_exports: &[frameworks::core_image::CONSTANTS],
+    function_exports: &[frameworks::core_image::FUNCTIONS],
+};
+
+// The CaptiveNetwork part of SystemConfiguration.
+const CAPTIVE_NETWORK: super::HostDylib = super::HostDylib {
+    path: "/System/Library/Frameworks/SystemConfiguration.framework/CaptiveNetwork",
+    aliases: &["/System/Library/SystemConfiguration/CaptiveNetwork.bundle/CaptiveNetwork"],
+    class_exports: &[],
+    constant_exports: &[frameworks::captive_network::CONSTANTS],
+    function_exports: &[frameworks::captive_network::FUNCTIONS],
+};
+
 /// The single list of host dylibs that the linker (and Objective-C runtime)
 /// searches through.
 pub const DYLIB_LIST: &[&super::HostDylib] = &[
@@ -40,6 +69,21 @@ pub const DYLIB_LIST: &[&super::HostDylib] = &[
     &frameworks::store_kit::DYLIB,
     &frameworks::system_configuration::DYLIB,
     &frameworks::uikit::DYLIB,
+    &frameworks::libicucore::DYLIB,
+    &frameworks::libsqlite3::DYLIB,
+    &frameworks::libbz2::DYLIB,
+    &frameworks::metal::DYLIB,
+    &frameworks::pass_kit::DYLIB,
+    &frameworks::watch_connectivity::DYLIB,
+    &frameworks::gl_kit::DYLIB,
+    &frameworks::accounts::DYLIB,
+    &frameworks::contacts::DYLIB,
+    &frameworks::media_toolbox::DYLIB,
+    &frameworks::replay_kit::DYLIB,
+    &frameworks::safari_services::DYLIB,
+    &SOCIAL,
+    &CORE_IMAGE,
+    &CAPTIVE_NETWORK,
 ];
 
 #[cfg(test)]

@@ -22,16 +22,20 @@
 #![allow(clippy::too_many_arguments)] // It's not our fault!
 
 pub mod accelerate;
+pub mod accounts;
 pub mod address_book;
 pub mod audio_toolbox;
 pub mod avfoundation;
+pub mod captive_network;
 pub mod carbon_core;
 pub mod cf_http_message;
 pub mod cf_network;
+pub mod contacts;
 pub mod core_animation;
 pub mod core_audio_types;
 pub mod core_foundation;
 pub mod core_graphics;
+pub mod core_image;
 pub mod core_location;
 pub mod core_media;
 pub mod core_motion;
@@ -40,15 +44,28 @@ pub mod core_text;
 pub mod foundation;
 pub mod game_controller;
 pub mod game_kit;
+pub mod gl_kit;
 pub mod image_io;
+pub mod libbz2;
+pub mod libicucore;
+pub mod libsqlite3;
+pub mod localytics;
 pub mod media_player;
+pub mod media_toolbox;
 pub mod message_ui;
+pub mod metal;
 pub mod openal;
 pub mod opengles;
+pub mod pass_kit;
+pub mod replay_kit;
+pub mod safari_services;
 pub mod security;
+pub mod social;
 pub mod store_kit;
 pub mod system_configuration;
+pub mod tw_tweet_compose_view_controller;
 pub mod uikit;
+pub mod watch_connectivity;
 
 /// Container for state of various child modules
 #[derive(Default)]
@@ -64,6 +81,9 @@ pub struct State {
     foundation: foundation::State,
     game_controller: game_controller::State,
     game_kit: game_kit::State,
+    pub media_toolbox: media_toolbox::State,
+    replay_kit: replay_kit::State,
+    watch_connectivity: watch_connectivity::State,
     media_player: media_player::State,
     openal: openal::State,
     opengles: opengles::State,

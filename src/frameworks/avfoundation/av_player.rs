@@ -10,8 +10,6 @@
 //! `AVPlayerLayer`s of the player, and the audio is played with OpenAL.
 //! Audio mixes are accepted but have no effect.
 
-use crate::abi::impl_GuestRet_for_large_struct;
-use crate::abi::GuestArg;
 use crate::audio::openal::al_types::*;
 use crate::audio::openal::{
     AL_BUFFER, AL_FORMAT_MONO16, AL_FORMAT_STEREO16, AL_SOURCE_STATE, AL_STOPPED,
@@ -59,31 +57,6 @@ struct Playback {
     clock_started: Option<Instant>,
     ended: bool,
 }
-
-impl GuestArg for CMTime {
-    const REG_COUNT: usize = 6;
-    fn from_regs(regs: &[u32]) -> Self {
-        CMTime {
-            value: GuestArg::from_regs(&regs[0..2]),
-            timescale: GuestArg::from_regs(&regs[2..3]),
-            flags: GuestArg::from_regs(&regs[3..4]),
-            epoch: GuestArg::from_regs(&regs[4..6]),
-        }
-    }
-    fn to_regs(self, regs: &mut [u32]) {
-        let CMTime {
-            value,
-            timescale,
-            flags,
-            epoch,
-        } = self;
-        value.to_regs(&mut regs[0..2]);
-        timescale.to_regs(&mut regs[2..3]);
-        flags.to_regs(&mut regs[3..4]);
-        epoch.to_regs(&mut regs[4..6]);
-    }
-}
-impl_GuestRet_for_large_struct!(CMTime);
 
 fn cmtime_from_duration(duration: Duration) -> CMTime {
     CMTime {
