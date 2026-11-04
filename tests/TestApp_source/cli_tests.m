@@ -291,6 +291,10 @@ extern void CGContextAddRects(CGContextRef context, const CGRect *rects,
                               size_t count);
 extern void CGContextEOFillPath(CGContextRef context);
 extern void CGContextMoveToPoint(CGContextRef context, CGFloat x, CGFloat y);
+extern void CGContextAddLineToPoint(CGContextRef context, CGFloat x, CGFloat y);
+extern void CGContextSetLineDash(CGContextRef context, CGFloat phase,
+                                 const CGFloat *lengths, size_t count);
+extern void CGContextStrokePath(CGContextRef context);
 extern void CGContextAddQuadCurveToPoint(CGContextRef context, CGFloat cx,
                                          CGFloat cy, CGFloat x, CGFloat y);
 extern void CGContextAddCurveToPoint(CGContextRef context, CGFloat c1x,
@@ -1419,6 +1423,27 @@ int test_UIBezierPath_dash(void) {
                pixels[(2 * 20 + 6) * 4 + 3] == 0 &&
                pixels[(2 * 20 + 9) * 4 + 3] != 0;
   [copy release];
+  CGContextRelease(context);
+  CGColorSpaceRelease(space);
+  return passed ? 0 : -1;
+}
+
+int test_CGContext_dash_state(void) {
+  unsigned char pixels[20 * 5 * 4] = {0};
+  CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+  CGContextRef context = CGBitmapContextCreate(pixels, 20, 5, 8, 20 * 4, space,
+                                               kCGImageAlphaPremultipliedLast);
+  CGFloat dash[] = {4, 4};
+  CGContextSetLineDash(context, 0, dash, 2);
+  CGContextSaveGState(context);
+  CGContextSetLineDash(context, 0, NULL, 0);
+  CGContextRestoreGState(context);
+  CGContextMoveToPoint(context, 0, 2);
+  CGContextAddLineToPoint(context, 20, 2);
+  CGContextStrokePath(context);
+  int passed = pixels[(2 * 20 + 1) * 4 + 3] != 0 &&
+               pixels[(2 * 20 + 6) * 4 + 3] == 0 &&
+               pixels[(2 * 20 + 9) * 4 + 3] != 0;
   CGContextRelease(context);
   CGColorSpaceRelease(space);
   return passed ? 0 : -1;
@@ -11653,6 +11678,7 @@ struct {
     FUNC_DEF(test_UIBezierPath_rounded_fill),
     FUNC_DEF(test_UIBezierPath_copy),
     FUNC_DEF(test_UIBezierPath_dash),
+    FUNC_DEF(test_CGContext_dash_state),
     FUNC_DEF(test_UIBezierPath_even_odd),
     FUNC_DEF(test_CGContext_tiled_image),
     FUNC_DEF(test_CGContext_curves),

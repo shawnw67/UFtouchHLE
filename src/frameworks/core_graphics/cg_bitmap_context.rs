@@ -124,6 +124,7 @@ pub fn CGBitmapContextCreate(
         fill_color_model: super::cg_color_space::kCGColorSpaceModelRGB,
         stroke_color_model: super::cg_color_space::kCGColorSpaceModelRGB,
         line_width: 1.0,
+        line_dash: (Vec::new(), 0.0),
     };
     let isa = env.objc.get_known_class("_Podroid_CGContext", &mut env.mem);
     env.objc

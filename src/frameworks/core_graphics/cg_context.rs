@@ -83,6 +83,7 @@ type ContextState = (
     CGFloat,                              // global alpha
     i32,                                  // fill color space model
     i32,                                  // stroke color space model
+    (Vec<CGFloat>, CGFloat),              // dash pattern and phase
 );
 
 pub(super) struct CGContextHostObject {
@@ -104,6 +105,7 @@ pub(super) struct CGContextHostObject {
     pub(super) clip: Vec<(Path, bool)>,
     pub(super) rgb_stroke_color: (CGFloat, CGFloat, CGFloat, CGFloat),
     pub(super) line_width: CGFloat,
+    pub(super) line_dash: (Vec<CGFloat>, CGFloat),
     pub(super) alpha: CGFloat,
     pub(super) fill_color_model: i32,
     pub(super) stroke_color_model: i32,
@@ -421,6 +423,7 @@ pub(crate) fn CGContextSaveGState(env: &mut Environment, context: CGContextRef) 
         host_obj.alpha,
         host_obj.fill_color_model,
         host_obj.stroke_color_model,
+        host_obj.line_dash.clone(),
     ));
     CGFontRetain(env, env.objc.borrow::<CGContextHostObject>(context).font);
 }
@@ -445,6 +448,7 @@ pub(crate) fn CGContextRestoreGState(env: &mut Environment, context: CGContextRe
     host_obj.alpha = state.8;
     host_obj.fill_color_model = state.9;
     host_obj.stroke_color_model = state.10;
+    host_obj.line_dash = state.11;
 }
 
 fn CGContextSetInterpolationQuality(
@@ -1054,7 +1058,28 @@ fn CGContextDrawPath(env: &mut Environment, context: CGContextRef, mode: CGPathD
         cg_bitmap_context::fill_path(env, context, &path, even_odd);
     }
     if stroke {
-        cg_bitmap_context::stroke_path(env, context, &path);
+        let object = env.objc.borrow::<CGContextHostObject>(context);
+        let (dash, phase) = object.line_dash.clone();
+        let transform = object.transform;
+        let stroke_path = if dash.is_empty() {
+            path.clone()
+        } else {
+            let inverse = transform.invert();
+            let mut user_path = path.clone();
+            for subpath in &mut user_path.subpaths {
+                for point in &mut subpath.points {
+                    *point = inverse.apply_to_point(*point);
+                }
+            }
+            let mut dashed = cg_path::dashed_path(&user_path, &dash, phase);
+            for subpath in &mut dashed.subpaths {
+                for point in &mut subpath.points {
+                    *point = transform.apply_to_point(*point);
+                }
+            }
+            dashed
+        };
+        cg_bitmap_context::stroke_path(env, context, &stroke_path);
     }
 }
 
@@ -1100,6 +1125,37 @@ pub(crate) fn CGContextSetLineWidth(env: &mut Environment, context: CGContextRef
     env.objc
         .borrow_mut::<CGContextHostObject>(context)
         .line_width = width;
+}
+
+pub(crate) fn set_line_dash(
+    env: &mut Environment,
+    context: CGContextRef,
+    pattern: Vec<CGFloat>,
+    phase: CGFloat,
+) {
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .line_dash = (pattern, phase);
+}
+
+fn CGContextSetLineDash(
+    env: &mut Environment,
+    context: CGContextRef,
+    phase: CGFloat,
+    lengths: ConstPtr<CGFloat>,
+    count: GuestUSize,
+) {
+    if count > 4096 || (count != 0 && lengths.is_null()) || !phase.is_finite() {
+        return;
+    }
+    let pattern: Vec<_> = (0..count).map(|i| env.mem.read(lengths + i)).collect();
+    if pattern
+        .iter()
+        .any(|value| !value.is_finite() || *value < 0.0)
+    {
+        return;
+    }
+    set_line_dash(env, context, pattern, phase);
 }
 
 fn CGContextSetShouldAntialias(_env: &mut Environment, _context: CGContextRef, _antialias: bool) {
@@ -1232,6 +1288,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextGetClipBoundingBox(_)),
     export_c_func!(CGContextDrawPath(_, _)),
     export_c_func!(CGContextSetLineWidth(_, _)),
+    export_c_func!(CGContextSetLineDash(_, _, _, _)),
     export_c_func!(CGContextSetShouldAntialias(_, _)),
     export_c_func!(CGContextDrawLinearGradient(_, _, _, _, _)),
     export_c_func!(CGContextDrawRadialGradient(_, _, _, _, _, _, _)),

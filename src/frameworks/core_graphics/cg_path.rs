@@ -107,6 +107,74 @@ impl Path {
     }
 }
 
+/// Split flattened user-space geometry into the visible dash segments.
+pub(crate) fn dashed_path(path: &Path, dash: &[CGFloat], phase: CGFloat) -> Path {
+    if dash.is_empty() {
+        return path.clone();
+    }
+    let mut pattern = dash.to_vec();
+    if pattern.len() % 2 != 0 {
+        pattern.extend_from_slice(dash);
+    }
+    let total: f64 = pattern.iter().map(|&x| f64::from(x)).sum();
+    if !total.is_finite() || total <= 0.0 {
+        return path.clone();
+    }
+    let mut result = Path::default();
+    let mut budget = 100_000usize;
+    for subpath in &path.subpaths {
+        let mut index = 0usize;
+        let mut offset = f64::from(phase).rem_euclid(total);
+        while offset >= f64::from(pattern[index]) {
+            offset -= f64::from(pattern[index]);
+            index = (index + 1) % pattern.len();
+        }
+        let mut left = f64::from(pattern[index]) - offset;
+        let closing = (subpath.closed && subpath.points.len() > 2)
+            .then(|| (*subpath.points.last().unwrap(), subpath.points[0]));
+        for (a, b) in subpath
+            .points
+            .windows(2)
+            .map(|p| (p[0], p[1]))
+            .chain(closing)
+        {
+            let dx = f64::from(b.x) - f64::from(a.x);
+            let dy = f64::from(b.y) - f64::from(a.y);
+            let distance = dx.hypot(dy);
+            if !distance.is_finite() || distance == 0.0 {
+                continue;
+            }
+            let mut position = 0.0;
+            while position < distance {
+                if budget == 0 {
+                    return result;
+                }
+                budget -= 1;
+                if left <= 0.0 {
+                    index = (index + 1) % pattern.len();
+                    left = f64::from(pattern[index]);
+                    continue;
+                }
+                let next = (position + left).min(distance);
+                if next <= position {
+                    break;
+                }
+                if index % 2 == 0 {
+                    let point = |p: f64| CGPoint {
+                        x: (f64::from(a.x) + dx * p / distance) as CGFloat,
+                        y: (f64::from(a.y) + dy * p / distance) as CGFloat,
+                    };
+                    result.move_to(point(position));
+                    result.line_to(point(next));
+                }
+                left -= next - position;
+                position = next;
+            }
+        }
+    }
+    result
+}
+
 /// Which side of the line from `a` to `b` the point `p` is on.
 fn cross(a: CGPoint, b: CGPoint, p: CGPoint) -> CGFloat {
     (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y)
