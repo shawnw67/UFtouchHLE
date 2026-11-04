@@ -1357,6 +1357,71 @@ int test_CFBundle_create_from_url(void) {
   return matches && dictionary ? 0 : -2;
 }
 
+@interface NSFileManager : NSObject
++ (id)defaultManager;
+- (bool)removeItemAtPath:(id)path error:(id *)error;
+@end
+
+int test_CFBundle_internal_directories(void) {
+  char root[1024], path[1200], actual[1200];
+  const char *home = getenv("HOME");
+  if (!home ||
+      snprintf(root, sizeof(root), "%s/tmp/bundle-XXXXXX", home) >=
+          sizeof(root) ||
+      !mkdtemp(root))
+    return -1;
+  const char *children[] = {"Frameworks", "SharedSupport", "PlugIns"};
+  for (int i = 0; i < 3; ++i) {
+    snprintf(path, sizeof(path), "%s/%s", root, children[i]);
+    if (mkdir(path, 0700))
+      return -2;
+  }
+  snprintf(path, sizeof(path), "%s/helper", root);
+  FILE *file = fopen(path, "wb");
+  if (!file)
+    return -3;
+  fputc(0, file);
+  fclose(file);
+  CFStringRef rootString =
+      CFStringCreateWithCString(NULL, root, kCFStringEncodingUTF8);
+  CFURLRef rootURL = CFURLCreateWithFileSystemPath(NULL, rootString,
+                                                   kCFURLPOSIXPathStyle, true);
+  CFBundleRef bundle = CFBundleCreate(NULL, rootURL);
+  CFURLRef urls[] = {CFBundleCopyPrivateFrameworksURL(bundle),
+                     CFBundleCopySharedSupportURL(bundle),
+                     CFBundleCopyBuiltInPlugInsURL(bundle)};
+  int passed = bundle && !CFBundleCopySharedFrameworksURL(bundle);
+  for (int i = 0; i < 3; ++i) {
+    snprintf(path, sizeof(path), "%s/%s", root, children[i]);
+    passed = passed && urls[i] &&
+             CFURLGetFileSystemRepresentation(urls[i], true, (UInt8 *)actual,
+                                              sizeof(actual)) &&
+             strcmp(path, actual) == 0;
+    CFRelease(urls[i]);
+    [[NSFileManager defaultManager]
+        removeItemAtPath:[NSString stringWithUTF8String:path]
+                   error:NULL];
+  }
+  CFStringRef helper =
+      CFStringCreateWithCString(NULL, "helper", kCFStringEncodingUTF8);
+  CFURLRef helperURL = CFBundleCopyAuxiliaryExecutableURL(bundle, helper);
+  snprintf(path, sizeof(path), "%s/helper", root);
+  passed = passed && helperURL &&
+           CFURLGetFileSystemRepresentation(helperURL, true, (UInt8 *)actual,
+                                            sizeof(actual)) &&
+           strcmp(path, actual) == 0;
+  CFRelease(helperURL);
+  CFRelease(helper);
+  CFRelease(bundle);
+  CFRelease(rootURL);
+  CFRelease(rootString);
+  unlink(path);
+  [[NSFileManager defaultManager]
+      removeItemAtPath:[NSString stringWithUTF8String:root]
+                 error:NULL];
+  return passed ? 0 : -4;
+}
+
 int test_CFBundle_resource_urls(void) {
   CFStringRef extension =
       CFStringCreateWithCString(NULL, "plist", kCFStringEncodingUTF8);
@@ -12059,6 +12124,7 @@ struct {
     FUNC_DEF(test_CFRunLoop_stop),
     FUNC_DEF(test_CFBundle_create_from_url),
     FUNC_DEF(test_CFBundle_resource_urls),
+    FUNC_DEF(test_CFBundle_internal_directories),
     FUNC_DEF(test_CFString_split_join_and_replace),
     FUNC_DEF(test_CFString_encoding_queries),
     FUNC_DEF(test_CTFont_graphics_font_round_trip),

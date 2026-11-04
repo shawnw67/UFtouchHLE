@@ -13,6 +13,7 @@ use crate::frameworks::core_foundation::cf_bundle::{
 use crate::frameworks::foundation::ns_string::{
     from_rust_string, to_rust_string, NSUTF8StringEncoding,
 };
+use crate::fs::GuestPath;
 use crate::mem::{ConstVoidPtr, MutPtr, Ptr};
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, Class, ClassExports,
@@ -20,6 +21,33 @@ use crate::objc::{
 };
 use crate::Environment;
 use std::collections::{HashMap, HashSet};
+
+fn bundle_child_path(env: &mut Environment, bundle: id, child: &str, directory: bool) -> id {
+    let root: id = msg![env; bundle bundlePath];
+    if root == nil {
+        return nil;
+    }
+    let root = to_rust_string(env, root);
+    let path = format!("{}/{child}", root.trim_end_matches('/'));
+    let exists = if directory {
+        env.fs.is_dir(GuestPath::new(&path))
+    } else {
+        env.fs.is_file(GuestPath::new(&path))
+    };
+    if !exists {
+        return nil;
+    }
+    let path = from_rust_string(env, path);
+    autorelease(env, path)
+}
+
+fn bundle_child_url(env: &mut Environment, bundle: id, child: &str, directory: bool) -> id {
+    let path = bundle_child_path(env, bundle, child, directory);
+    if path == nil {
+        return nil;
+    }
+    msg_class![env; NSURL fileURLWithPath:path isDirectory:directory]
+}
 
 // Should be ISO 639-1 (or ISO 639-2) compliant
 // Legacy projects use language names while newer ones use language code lprojs
@@ -222,6 +250,21 @@ pub const CLASSES: ClassExports = objc_classes! {
     // This seems to be the same as the bundle path. The iPhone OS bundle
     // structure is a lot flatter than the macOS one.
     msg![env; this bundleURL]
+}
+
+- (id)privateFrameworksURL { bundle_child_url(env, this, "Frameworks", true) }
+- (id)sharedFrameworksURL { bundle_child_url(env, this, "SharedFrameworks", true) }
+- (id)sharedSupportURL { bundle_child_url(env, this, "SharedSupport", true) }
+- (id)builtInPlugInsURL { bundle_child_url(env, this, "PlugIns", true) }
+- (id)pathForAuxiliaryExecutable:(id)name {
+    if name == nil { return nil; }
+    let name = to_rust_string(env, name);
+    bundle_child_path(env, this, &name, false)
+}
+- (id)URLForAuxiliaryExecutable:(id)name {
+    if name == nil { return nil; }
+    let name = to_rust_string(env, name);
+    bundle_child_url(env, this, &name, false)
 }
 
 - (id)executablePath {

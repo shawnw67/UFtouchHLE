@@ -218,6 +218,28 @@ fn CFBundleCopyExecutableURL(env: &mut Environment, bundle: CFBundleRef) -> CFUR
     msg![env; url copy]
 }
 
+fn CFBundleCopyAuxiliaryExecutableURL(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    name: CFStringRef,
+) -> CFURLRef {
+    let url: id = msg![env; bundle URLForAuxiliaryExecutable:name];
+    retain(env, url)
+}
+
+macro_rules! bundle_directory_url {
+    ($function:ident, $selector:ident) => {
+        fn $function(env: &mut Environment, bundle: CFBundleRef) -> CFURLRef {
+            let url: id = msg![env; bundle $selector];
+            retain(env, url)
+        }
+    };
+}
+bundle_directory_url!(CFBundleCopyPrivateFrameworksURL, privateFrameworksURL);
+bundle_directory_url!(CFBundleCopySharedFrameworksURL, sharedFrameworksURL);
+bundle_directory_url!(CFBundleCopySharedSupportURL, sharedSupportURL);
+bundle_directory_url!(CFBundleCopyBuiltInPlugInsURL, builtInPlugInsURL);
+
 fn CFBundleCopyResourcesDirectoryURL(env: &mut Environment, bundle: CFBundleRef) -> CFURLRef {
     let url: CFURLRef = msg![env; bundle resourceURL];
     msg![env; url copy]
@@ -348,6 +370,11 @@ fn CFBundleCopyLocalizedString(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFBundleCopyAuxiliaryExecutableURL(_, _)),
+    export_c_func!(CFBundleCopyPrivateFrameworksURL(_)),
+    export_c_func!(CFBundleCopySharedFrameworksURL(_)),
+    export_c_func!(CFBundleCopySharedSupportURL(_)),
+    export_c_func!(CFBundleCopyBuiltInPlugInsURL(_)),
     export_c_func!(CFBundleGetMainBundle()),
     export_c_func!(CFBundleCreate(_, _)),
     export_c_func!(CFBundleGetIdentifier(_)),
