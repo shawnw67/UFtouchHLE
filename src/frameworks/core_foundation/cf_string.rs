@@ -554,11 +554,28 @@ fn find_in_range(
     if end > haystack.len() || target.is_empty() || target.len() > length {
         return None;
     }
+    let index = search_units(&haystack, &target, start, end, options)?;
+    Some(CFRange {
+        location: index as CFIndex,
+        length: target.len() as CFIndex,
+    })
+}
+
+fn search_units(
+    haystack: &[u16],
+    target: &[u16],
+    start: usize,
+    end: usize,
+    options: CFStringCompareFlags,
+) -> Option<usize> {
+    if target.is_empty() || end > haystack.len() || start > end || target.len() > end - start {
+        return None;
+    }
     let last = end - target.len();
     let matches = |index: usize| {
         haystack[index..index + target.len()]
             .iter()
-            .zip(&target)
+            .zip(target)
             .all(|(&a, &b)| {
                 a == b
                     || (options & 1 != 0
@@ -569,18 +586,118 @@ fn find_in_range(
             })
     };
     let backwards = options & 4 != 0;
-    let index = if options & 8 != 0 {
+    if options & 8 != 0 {
         let at = if backwards { last } else { start };
         matches(at).then_some(at)
     } else if backwards {
         (start..=last).rev().find(|&i| matches(i))
     } else {
         (start..=last).find(|&i| matches(i))
-    }?;
-    Some(CFRange {
-        location: index as CFIndex,
-        length: target.len() as CFIndex,
-    })
+    }
+}
+
+fn CFStringFindAndReplace(
+    env: &mut Environment,
+    string: CFMutableStringRef,
+    needle: CFStringRef,
+    replacement: CFStringRef,
+    range: CFRange,
+    options: CFStringCompareFlags,
+) -> CFIndex {
+    if string.is_null() || needle.is_null() || replacement.is_null() || options & !15 != 0 {
+        return 0;
+    }
+    let (Ok(mut start), Ok(length)) = (
+        usize::try_from(range.location),
+        usize::try_from(range.length),
+    ) else {
+        return 0;
+    };
+    let Some(mut end) = start.checked_add(length) else {
+        return 0;
+    };
+    let mut text = Vec::new();
+    let mut target = Vec::new();
+    let mut substitute = Vec::new();
+    ns_string::for_each_code_unit(env, string, |_, c| text.push(c));
+    ns_string::for_each_code_unit(env, needle, |_, c| target.push(c));
+    ns_string::for_each_code_unit(env, replacement, |_, c| substitute.push(c));
+    let mut positions = Vec::new();
+    while let Some(index) = search_units(&text, &target, start, end, options) {
+        positions.push(index);
+        if options & 4 != 0 {
+            end = index;
+        } else {
+            start = index + target.len();
+        }
+    }
+    if positions.is_empty() {
+        return 0;
+    }
+    positions.sort_unstable();
+    let count = positions.len();
+    let Some(size) = text.len().checked_sub(count * target.len()).and_then(|n| {
+        count
+            .checked_mul(substitute.len())
+            .and_then(|extra| n.checked_add(extra))
+    }) else {
+        return 0;
+    };
+    if size > i32::MAX as usize {
+        return 0;
+    }
+    let mut result = Vec::new();
+    if result.try_reserve_exact(size).is_err() {
+        return 0;
+    }
+    let mut cursor = 0;
+    for index in positions {
+        result.extend_from_slice(&text[cursor..index]);
+        result.extend_from_slice(&substitute);
+        cursor = index + target.len();
+    }
+    result.extend_from_slice(&text[cursor..]);
+    let result = ns_string::from_u16_vec(env, result);
+    let _: () = msg![env; string setString:result];
+    release(env, result);
+    count as CFIndex
+}
+
+fn CFStringPad(
+    env: &mut Environment,
+    string: CFMutableStringRef,
+    pad: CFStringRef,
+    length: CFIndex,
+    index: CFIndex,
+) {
+    if string.is_null() || length < 0 {
+        return;
+    }
+    let mut text = Vec::new();
+    ns_string::for_each_code_unit(env, string, |_, c| text.push(c));
+    let length = length as usize;
+    if length < text.len() {
+        text.truncate(length);
+    } else if length > text.len() {
+        if pad.is_null() || index < 0 {
+            return;
+        }
+        let mut padding = Vec::new();
+        ns_string::for_each_code_unit(env, pad, |_, c| padding.push(c));
+        let mut index = index as usize;
+        if index >= padding.len() || text.try_reserve_exact(length - text.len()).is_err() {
+            return;
+        }
+        while text.len() < length {
+            text.push(padding[index]);
+            index = (index + 1) % padding.len();
+        }
+    } else {
+        return;
+    }
+    let result = ns_string::from_u16_vec(env, text);
+    let _: () = msg![env; string setString:result];
+    release(env, result);
 }
 
 fn CFStringFindWithOptions(
@@ -820,6 +937,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringGetLength(_)),
     export_c_func!(CFStringFind(_, _, _)),
     export_c_func!(CFStringFindWithOptions(_, _, _, _, _)),
+    export_c_func!(CFStringFindAndReplace(_, _, _, _, _)),
+    export_c_func!(CFStringPad(_, _, _, _)),
     export_c_func!(CFStringLowercase(_, _)),
     export_c_func!(CFStringTrim(_, _)),
     export_c_func!(CFStringTrimWhitespace(_)),

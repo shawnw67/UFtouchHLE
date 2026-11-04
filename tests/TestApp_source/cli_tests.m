@@ -7185,6 +7185,58 @@ int test_CGImage_JPEG() {
   return 0;
 }
 
+int test_CFString_bulk_replace_and_pad(void) {
+  CFMutableStringRef string = CFStringCreateMutableCopy(
+      NULL, 0, (CFStringRef)[NSString stringWithUTF8String:"AAAAA"]);
+  int passed =
+      CFStringFindAndReplace(string,
+                             (CFStringRef)[NSString stringWithUTF8String:"AA"],
+                             (CFStringRef)[NSString stringWithUTF8String:"B"],
+                             CFRangeMake(0, 5), 0) == 2 &&
+      CFEqual(string, (CFStringRef)[NSString stringWithUTF8String:"BBA"]);
+  CFStringReplaceAll(string,
+                     (CFStringRef)[NSString stringWithUTF8String:"AAAAA"]);
+  passed = passed &&
+           CFStringFindAndReplace(
+               string, (CFStringRef)[NSString stringWithUTF8String:"AA"],
+               (CFStringRef)[NSString stringWithUTF8String:"B"],
+               CFRangeMake(0, 5), kCFCompareBackwards) == 2 &&
+           CFEqual(string, (CFStringRef)[NSString stringWithUTF8String:"ABB"]);
+  CFStringReplaceAll(string,
+                     (CFStringRef)[NSString stringWithUTF8String:"AAXAA"]);
+  passed =
+      passed &&
+      CFStringFindAndReplace(string,
+                             (CFStringRef)[NSString stringWithUTF8String:"A"],
+                             (CFStringRef)[NSString stringWithUTF8String:"B"],
+                             CFRangeMake(0, 5), kCFCompareAnchored) == 2 &&
+      CFEqual(string, (CFStringRef)[NSString stringWithUTF8String:"BBXAA"]);
+  CFStringReplaceAll(string, (CFStringRef)[NSString stringWithUTF8String:"AA"]);
+  passed = passed &&
+           CFStringFindAndReplace(
+               string, (CFStringRef)[NSString stringWithUTF8String:"A"], string,
+               CFRangeMake(0, 2), 0) == 2 &&
+           CFEqual(string, (CFStringRef)[NSString stringWithUTF8String:"AAAA"]);
+  CFStringReplaceAll(string,
+                     (CFStringRef)[NSString stringWithUTF8String:"abc"]);
+  CFStringPad(string, (CFStringRef)[NSString stringWithUTF8String:". "], 9, 1);
+  passed =
+      passed &&
+      CFEqual(string, (CFStringRef)[NSString stringWithUTF8String:"abc . . ."]);
+  CFStringPad(string, NULL, 2, 0);
+  passed = passed &&
+           CFEqual(string, (CFStringRef)[NSString stringWithUTF8String:"ab"]);
+  UniChar emoji[] = {0xd83d, 0xde00};
+  CFStringRef surrogate = CFStringCreateWithCharacters(NULL, emoji, 2);
+  CFStringReplaceAll(string, surrogate);
+  CFStringPad(string, NULL, 1, 0);
+  passed = passed && CFStringGetLength(string) == 1 &&
+           CFStringGetCharacterAtIndex(string, 0) == 0xd83d;
+  CFRelease(surrogate);
+  CFRelease(string);
+  return passed ? 0 : -1;
+}
+
 int test_CFString_external_bytes(void) {
   UniChar characters[] = {0x41, 0xe9, 0xd83d, 0xde00};
   CFStringRef string = CFStringCreateWithCharacters(NULL, characters, 4);
@@ -12104,6 +12156,7 @@ struct {
     FUNC_DEF(test_CFStringFind),
     FUNC_DEF(test_CFString_range_and_trim),
     FUNC_DEF(test_CFString_external_bytes),
+    FUNC_DEF(test_CFString_bulk_replace_and_pad),
     FUNC_DEF(test_strcspn),
     FUNC_DEF(test_mbstowcs),
     FUNC_DEF(test_CFMutableString),

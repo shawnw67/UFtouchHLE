@@ -1753,8 +1753,9 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (())setString:(id)a_string { // NSString*
     assert_ne!(a_string, nil);
-    let str = to_rust_string(env, a_string);
-    let host_object = StringHostObject::Utf8(str);
+    let mut units = Vec::new();
+    for_each_code_unit(env, a_string, |_, c| units.push(c));
+    let host_object = StringHostObject::Utf16(units);
     *env.objc.borrow_mut(this) = host_object;
 }
 
