@@ -2785,6 +2785,29 @@ extern CFDataRef CFDataRetain(CFDataRef data);
 extern void CFDataRelease(CFDataRef data);
 extern bool CFDataIsEqual(CFDataRef a, CFDataRef b);
 #endif
+int test_cfallocator_system_and_null(void) {
+  if (CFAllocatorGetDefault() != kCFAllocatorSystemDefault)
+    return -5;
+  unsigned char *bytes = CFAllocatorAllocate(kCFAllocatorDefault, 16, 0);
+  if (!bytes || CFAllocatorAllocate(kCFAllocatorNull, 16, 0) ||
+      CFAllocatorAllocate(kCFAllocatorDefault, -1, 0))
+    return -1;
+  memset(bytes, 0x5a, 16);
+  unsigned char *grown =
+      CFAllocatorReallocate(kCFAllocatorSystemDefault, bytes, 64, 0);
+  if (!grown || grown[0] != 0x5a || grown[15] != 0x5a)
+    return -2;
+  CFAllocatorDeallocate(kCFAllocatorNull, grown);
+  if (CFAllocatorReallocate(kCFAllocatorSystemDefault, grown, -1, 0) ||
+      grown[0] != 0x5a ||
+      CFAllocatorGetPreferredSizeForSize(kCFAllocatorDefault, 64, 0) < 64)
+    return -3;
+  if (CFAllocatorReallocate(kCFAllocatorDefault, grown, 0, 0))
+    return -4;
+  CFAllocatorDeallocate(kCFAllocatorDefault, NULL);
+  return 0;
+}
+
 int test_cfdata_mutable_copy_and_length() {
   unsigned char original[] = {1, 2, 3};
   CFDataRef source = CFDataCreate(NULL, original, 3);
@@ -11828,6 +11851,7 @@ struct {
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CFAttributedString_attribute_runs),
     FUNC_DEF(test_CFAttributedString_mutable),
+    FUNC_DEF(test_cfallocator_system_and_null),
     FUNC_DEF(test_attributed_string_enumeration),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),

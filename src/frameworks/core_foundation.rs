@@ -39,6 +39,7 @@ pub mod time;
 #[derive(Default)]
 pub struct State {
     cf_uuid: cf_uuid::State,
+    cf_allocator: cf_allocator::State,
 }
 
 pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
@@ -64,6 +65,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     ],
     function_exports: &[
         FUNCTIONS,
+        cf_allocator::FUNCTIONS,
         cf_array::FUNCTIONS,
         cf_attributed_string::FUNCTIONS,
         cf_dictionary::FUNCTIONS,
