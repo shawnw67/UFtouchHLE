@@ -545,7 +545,12 @@ pub fn is_supported_audio_format(format: &AudioStreamBasicDescription) -> bool {
                 && bytes_per_frame >= bits_per_channel / 8
                 && bytes_per_frame <= channels_per_frame * (bits_per_channel / 8)
                 && bytes_per_frame.is_multiple_of(bits_per_channel / 8)
-                && (channels_per_frame == 1 || format_flags & kAudioFormatFlagIsNonInterleaved == 0)
+                // Non-interleaved frames only hold one channel. Resident Evil
+                // 4 and Mercenaries VS. use such a format, but give all the
+                // channels to decode_buffer in one buffer.
+                && (channels_per_frame == 1
+                    || format_flags & kAudioFormatFlagIsNonInterleaved == 0
+                    || bytes_per_frame == bits_per_channel / 8)
                 && (bits_per_channel != 32
                     || format_flags & (kAudioFormatFlagIsFloat | kAudioFormatFlagIsSignedInteger)
                         != 0)
@@ -777,6 +782,9 @@ fn planar_stereo_is_not_misidentified_as_interleaved() {
     assert!(is_supported_audio_format(&format));
     format.format_flags |= kAudioFormatFlagIsNonInterleaved;
     assert!(!is_supported_audio_format(&format));
+    // Resident Evil: Mercenaries VS.
+    format.bytes_per_frame = 2;
+    assert!(is_supported_audio_format(&format));
     format.format_flags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
     format.bytes_per_frame = 0;
     assert!(!is_supported_audio_format(&format));

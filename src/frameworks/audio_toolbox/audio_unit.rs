@@ -1278,8 +1278,20 @@ pub fn render_audio_unit(env: &mut Environment, audio_unit: AudioUnit) {
     } else {
         sample_rate
     };
+    // An output-only format can leave its own sample rate unset: the rate used
+    // for playback is the one worked out above.
+    let stream_format = AudioStreamBasicDescription {
+        sample_rate,
+        ..stream_format
+    };
     if !planar_stereo_float && !is_supported_audio_format(&stream_format) {
-        log_once!("AudioUnit stream format is not supported");
+        static LOG_ONCE: std::sync::Once = std::sync::Once::new();
+        LOG_ONCE.call_once(|| {
+            log!(
+                "AudioUnit stream format is not supported: {:?}",
+                stream_format
+            );
+        });
         audio_unit_host_object.is_running_handler = false;
         return;
     }
