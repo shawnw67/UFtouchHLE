@@ -25,6 +25,7 @@ use std::time::Duration;
 #[allow(non_camel_case_types)]
 type useconds_t = u32;
 
+#[cfg(test)]
 const F_OK: i32 = 0; // file existence
 const X_OK: i32 = 1; // execute/search permission
 const W_OK: i32 = 2; // write permission
@@ -87,50 +88,43 @@ fn isatty(env: &mut Environment, fd: FileDescriptor) -> i32 {
     }
 }
 
+/// Whether `mode` is a valid `access()` mode: `F_OK`, or any combination of
+/// `R_OK`, `W_OK` and `X_OK`. Anything else fails with `EINVAL`.
+/// <https://pubs.opengroup.org/onlinepubs/9699919799/functions/access.html>
+fn access_mode_is_valid(mode: i32) -> bool {
+    mode & !(R_OK | W_OK | X_OK) == 0
+}
+
 fn access(env: &mut Environment, path: ConstPtr<u8>, mode: i32) -> i32 {
     // TODO: handle errno properly
     set_errno(env, 0);
 
+    if !access_mode_is_valid(mode) {
+        set_errno(env, EINVAL);
+        return -1;
+    }
+
     let binding = env.mem.cstr_at_utf8(path).unwrap();
     let guest_path = GuestPath::new(&binding);
     let (exists, read, write, execute) = env.fs.access(guest_path);
-    // TODO: support ORing
-    match mode {
-        F_OK => {
-            if exists {
-                0
-            } else {
-                set_errno(env, ENOENT);
-                -1
-            }
-        }
-        X_OK => {
-            if execute {
-                0
-            } else {
-                set_errno(env, EACCES);
-                -1
-            }
-        }
-        W_OK => {
-            if write {
-                0
-            } else {
-                set_errno(env, EROFS);
-                -1
-            }
-        }
-        R_OK => {
-            if read {
-                0
-            } else {
-                // TODO: is it the correct error?
-                set_errno(env, EACCES);
-                -1
-            }
-        }
-        _ => unimplemented!("{}", mode),
+    if !exists {
+        set_errno(env, ENOENT);
+        return -1;
     }
+    if mode & X_OK != 0 && !execute {
+        set_errno(env, EACCES);
+        return -1;
+    }
+    if mode & W_OK != 0 && !write {
+        set_errno(env, EROFS);
+        return -1;
+    }
+    if mode & R_OK != 0 && !read {
+        // TODO: is it the correct error?
+        set_errno(env, EACCES);
+        return -1;
+    }
+    0
 }
 
 pub(super) fn unlink(env: &mut Environment, path: ConstPtr<u8>) -> i32 {
@@ -558,3 +552,19 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(sync()),
     export_c_func!(syscall(_, _)),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn access_accepts_every_combination_of_permission_bits() {
+        // SQLite's unixTempFileDir() probes candidate directories with
+        // access(dir, 07).
+        for mode in [F_OK, R_OK, W_OK, X_OK, R_OK | W_OK, W_OK | X_OK, 7] {
+            assert!(access_mode_is_valid(mode), "mode {mode:#x}");
+        }
+        assert!(!access_mode_is_valid(8));
+        assert!(!access_mode_is_valid(R_OK | 8));
+    }
+}

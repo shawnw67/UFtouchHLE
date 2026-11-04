@@ -299,6 +299,15 @@ pub const CLASSES: ClassExports = objc_classes! {
     let _: () = msg_class![env; NSAutoreleasePool addObject:this];
     this
 }
+// `-[NSBlock invoke]` calls a block that takes no arguments, which lets code
+// run a block through `performSelector:@selector(invoke)` or NSInvocation
+// (Crashlytics does). The invoke pointer is the fourth word of the literal.
+// https://clang.llvm.org/docs/Block-ABI-Apple.html
+- (())invoke {
+    let invoke = block_word(env, this.cast_void().cast_const(), 3);
+    let invoke = GuestFunction::from_addr_with_thumb_bit(invoke);
+    let (): () = invoke.call_from_host(env, (this,));
+}
 @end
 };
 

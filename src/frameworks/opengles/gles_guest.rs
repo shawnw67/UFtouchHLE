@@ -7634,8 +7634,8 @@ fn glTexStorage2D(
         // When the host can't do PVRTC, skip immutable storage and instead
         // pre-record every mip level as a PVRTC level (dimensions halving per
         // level) whose RGBA storage is materialized lazily by the
-        // `glCompressedTexSubImage2D` / `glCompressedTexImage2D` software-decode
-        // paths below.
+        // `glCompressedTexSubImage2D` / `glCompressedTexImage2D`
+        // software-decode paths below.
         if crate::gles::util::pvrtc_format_properties(internalformat).is_some()
             && !gles.pvrtc_native()
         {

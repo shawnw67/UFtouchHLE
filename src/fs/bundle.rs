@@ -8,7 +8,7 @@
 use crate::fs::{FsNode, GuestPath};
 use crate::libc::time::{calendar_date_to_timestamp, time_t, tm};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -65,6 +65,28 @@ impl FsNodeBuilder {
     fn build(self) -> FsNode {
         self.root
     }
+}
+
+/// Warn once about IPA entries that can't be read. The damage is in the file
+/// itself (e.g. a truncated or corrupted download), so the app will see these
+/// files as missing; naming them makes that diagnosable from a log.
+fn log_damaged_entries(count: usize, names: &[&str], error: &str) {
+    const SHOWN: usize = 10;
+    let mut list = names
+        .iter()
+        .take(SHOWN)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(", ");
+    if names.len() > SHOWN {
+        list.push_str(&format!(", and {} more", names.len() - SHOWN));
+    }
+    log!(
+        "Warning: {} IPA archive entries are damaged ({}) and will be missing from the app bundle: [{}]. The IPA file is probably corrupt; try downloading it again.",
+        count,
+        error,
+        list
+    );
 }
 
 /// Represents an open app bundle, either a directory or a zip file.
@@ -152,9 +174,26 @@ impl BundleData {
                 let mut archive_guard = (*archive).borrow_mut();
 
                 let mut builder = FsNodeBuilder::new();
+                // Central-directory names of the entries that could be read,
+                // used to name the damaged ones afterwards.
+                let mut readable_names = HashSet::new();
+                let mut first_error = None;
+                let mut damaged_count = 0;
                 for i in 0..archive_guard.len() {
-                    let file = archive_guard.by_index(i).unwrap(); // TODO: report IO error?
+                    // Unreadable entries (e.g. with corrupt local file
+                    // headers) are skipped rather than causing a panic; the
+                    // rest of the bundle is still loaded, and the app sees
+                    // the skipped files as missing.
+                    let file = match archive_guard.by_index(i) {
+                        Ok(file) => file,
+                        Err(e) => {
+                            first_error.get_or_insert_with(|| e.to_string());
+                            damaged_count += 1;
+                            continue;
+                        }
+                    };
                     let name = file.name();
+                    readable_names.insert(name.to_string());
                     if let Some(path) = name.strip_prefix(&bundle_path) {
                         let path = GuestPath::new(path);
                         if file.is_dir() {
@@ -171,6 +210,17 @@ impl BundleData {
                             );
                         }
                     }
+                }
+                if damaged_count > 0 {
+                    let damaged: Vec<&str> = archive_guard
+                        .file_names()
+                        .filter(|name| !readable_names.contains(*name))
+                        .collect();
+                    log_damaged_entries(
+                        damaged_count,
+                        &damaged,
+                        first_error.as_deref().unwrap_or("unknown error"),
+                    );
                 }
                 builder.build()
             }
