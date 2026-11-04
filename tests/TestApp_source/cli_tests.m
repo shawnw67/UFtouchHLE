@@ -1431,8 +1431,11 @@ int test_CFBundle_explicit_localization(void) {
       !mkdtemp(root))
     return -1;
   const char *languages[] = {"en", "fr"};
-  const char *contents[] = {"\"greeting\" = \"Hello\";",
-                            "\"greeting\" = \"Salut\";"};
+  const char *contents[] = {
+      "\"greeting\" = \"Hello\"; \"empty\" = \"\"; \"quoted\" = \"say "
+      "\\\"hi\\\"\"; unicode = \"\\U00e9\";",
+      "\"greeting\" = \"Salut\"; \"empty\" = \"\"; \"quoted\" = \"say "
+      "\\\"hi\\\"\"; unicode = \"\\U00e9\";"};
   for (int i = 0; i < 2; ++i) {
     snprintf(path, sizeof(path), "%s/%s.lproj", root, languages[i]);
     if (mkdir(path, 0700))
@@ -1481,6 +1484,27 @@ int test_CFBundle_explicit_localization(void) {
              CFStringGetCString(result, actual, sizeof(actual),
                                 kCFStringEncodingUTF8) &&
              strcmp(actual, i == 0 ? "Hello" : "Salut") == 0;
+    CFRelease(result);
+    CFStringRef emptyKey = (CFStringRef)[NSString stringWithUTF8String:"empty"];
+    result = CFBundleCopyLocalizedStringForLocalization(bundle, emptyKey, NULL,
+                                                        NULL, language);
+    passed = passed && result && CFStringGetLength(result) == 0;
+    CFRelease(result);
+    CFStringRef quotedKey =
+        (CFStringRef)[NSString stringWithUTF8String:"quoted"];
+    result = CFBundleCopyLocalizedStringForLocalization(bundle, quotedKey, NULL,
+                                                        NULL, language);
+    passed = passed && result &&
+             CFStringGetCString(result, actual, sizeof(actual),
+                                kCFStringEncodingUTF8) &&
+             strcmp(actual, "say \"hi\"") == 0;
+    CFRelease(result);
+    CFStringRef unicodeKey =
+        (CFStringRef)[NSString stringWithUTF8String:"unicode"];
+    result = CFBundleCopyLocalizedStringForLocalization(bundle, unicodeKey,
+                                                        NULL, NULL, language);
+    passed = passed && result && CFStringGetLength(result) == 1 &&
+             CFStringGetCharacterAtIndex(result, 0) == 0xe9;
     CFRelease(result);
     CFStringRef extension =
         CFStringCreateWithCString(NULL, "strings", kCFStringEncodingUTF8);

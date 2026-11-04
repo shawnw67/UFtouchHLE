@@ -5,14 +5,16 @@
  */
 //! `NSBundle`.
 
-use super::{ns_string, NSNotFound, NSRange, NSUInteger};
+mod strings;
+
+use super::{ns_string, NSUInteger};
 use crate::bundle::Bundle;
 use crate::frameworks::core_foundation::cf_bundle::{
     CFBundleCopyBundleLocalizations, CFBundleCopyPreferredLocalizationsFromArray,
 };
 use crate::frameworks::foundation::ns_string::{from_rust_string, to_rust_string};
 use crate::fs::GuestPath;
-use crate::mem::{ConstVoidPtr, MutPtr, Ptr};
+use crate::mem::ConstVoidPtr;
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, Class, ClassExports,
     HostObject, NSZonePtr,
@@ -588,82 +590,21 @@ pub(crate) fn load_strings_as_standard_format(env: &mut Environment, dict_url: i
         return nil;
     }
 
-    let comment_start = ns_string::get_static_str(env, "/*");
-    let comment_end = ns_string::get_static_str(env, "*/");
-    let equal_sign = ns_string::get_static_str(env, "=");
-    let semicolon = ns_string::get_static_str(env, ";");
-
-    let null_ptr: MutPtr<id> = Ptr::null();
-
-    let scanner: id = msg_class![env; NSScanner scannerWithString:strings_str];
+    let mut units = Vec::new();
+    ns_string::for_each_code_unit(env, strings_str, |_, unit| units.push(unit));
     release(env, strings_str);
-    while !msg![env; scanner isAtEnd] {
-        while msg![env; scanner scanString:comment_start intoString:null_ptr] {
-            // Assume no nested comments!
-            let _: bool = msg![env; scanner scanUpToString:comment_end intoString:null_ptr];
-            let has_comment_end: bool =
-                msg![env; scanner scanString:comment_end intoString:null_ptr];
-            assert!(has_comment_end);
-            if msg![env; scanner isAtEnd] {
-                break;
-            }
-        }
-        if msg![env; scanner isAtEnd] {
-            break;
-        }
-        let key: id = scan_quoted_sanitized(env, scanner);
-
-        let _: bool = msg![env; scanner scanUpToString:equal_sign intoString:null_ptr];
-        let has_equal_sign: bool = msg![env; scanner scanString:equal_sign intoString:null_ptr];
-        assert!(has_equal_sign);
-
-        let val: id = scan_quoted_sanitized(env, scanner);
-
-        let has_semicolon: bool = msg![env; scanner scanString:semicolon intoString:null_ptr];
-        assert!(has_semicolon);
-
-        log_dbg!(
-            "Parsed strings: '{}' -> '{}'",
-            to_rust_string(env, key),
-            to_rust_string(env, val)
-        );
-        () = msg![env; res setObject:val forKey:key];
+    let Some(entries) = strings::parse(&units) else {
+        release(env, res);
+        return nil;
+    };
+    for (key, value) in entries {
+        let key = ns_string::from_u16_vec(env, key);
+        let value = ns_string::from_u16_vec(env, value);
+        let _: () = msg![env; res setObject:value forKey:key];
+        release(env, key);
+        release(env, value);
     }
-
-    let res_imm = msg![env; res copy];
+    let result: id = msg![env; res copy];
     release(env, res);
-    autorelease(env, res_imm)
-}
-
-fn scan_quoted_sanitized(env: &mut Environment, scanner: id) -> id {
-    let quote = ns_string::get_static_str(env, "\"");
-    let null_ptr: MutPtr<id> = Ptr::null();
-    let res_ptr: MutPtr<id> = env.mem.alloc_and_write(Ptr::null());
-
-    let orig_skip_set = msg![env; scanner charactersToBeSkipped];
-    retain(env, orig_skip_set);
-
-    let has_open_quote: bool = msg![env; scanner scanString:quote intoString:null_ptr];
-    assert!(has_open_quote);
-    // Should not skip chars at the beginning!
-    () = msg![env; scanner setCharactersToBeSkipped:nil];
-    let _: bool = msg![env; scanner scanUpToString:quote intoString:res_ptr];
-    () = msg![env; scanner setCharactersToBeSkipped:orig_skip_set];
-    release(env, orig_skip_set);
-    let has_end_quote: bool = msg![env; scanner scanString:quote intoString:null_ptr];
-    assert!(has_end_quote);
-
-    let res = env.mem.read(res_ptr);
-    env.mem.free(res_ptr.cast());
-    assert!(res != nil); // TODO
-
-    // TODO: implement generic parsing approach for unquoting
-    let quoted_newline: id = ns_string::get_static_str(env, "\\n");
-    let unquoted_newline: id = ns_string::get_static_str(env, "\n");
-    let res = msg![env; res stringByReplacingOccurrencesOfString:quoted_newline withString:unquoted_newline];
-
-    let backslash = ns_string::get_static_str(env, "\\");
-    let range: NSRange = msg![env; res rangeOfString:backslash];
-    assert!(range.location == NSNotFound as NSUInteger); // TODO
-    res
+    autorelease(env, result)
 }
