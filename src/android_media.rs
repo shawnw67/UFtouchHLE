@@ -20,6 +20,8 @@
 //! SDLThread stack: guest code later calls this bridge from a coroutine
 //! stack, where JNI *lookups* are not reliable (see that function).
 
+// The camera half of the bridge has no callers yet.
+#[allow(dead_code)]
 #[cfg(target_os = "android")]
 mod imp {
     use std::ffi::CString;

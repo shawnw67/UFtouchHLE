@@ -28,6 +28,7 @@
 #[macro_use]
 mod log;
 mod abi;
+mod android_jni;
 #[cfg(target_os = "android")]
 mod android_launcher;
 mod android_media;
