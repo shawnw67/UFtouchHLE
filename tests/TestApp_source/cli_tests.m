@@ -7185,6 +7185,32 @@ int test_CGImage_JPEG() {
   return 0;
 }
 
+int test_CFString_external_bytes(void) {
+  UniChar characters[] = {0x41, 0xe9, 0xd83d, 0xde00};
+  CFStringRef string = CFStringCreateWithCharacters(NULL, characters, 4);
+  unsigned char utf8[] = {0x41, 0xc3, 0xa9, 0xf0, 0x9f, 0x98, 0x80};
+  unsigned char utf16[] = {0xff, 0xfe, 0x41, 0, 0xe9, 0, 0x3d, 0xd8, 0, 0xde};
+  CFDataRef data = CFStringCreateExternalRepresentation(
+      NULL, string, kCFStringEncodingUTF8, 0);
+  int passed = data && CFDataGetLength(data) == sizeof(utf8) &&
+               memcmp(CFDataGetBytePtr(data), utf8, sizeof(utf8)) == 0;
+  CFRelease(data);
+  data = CFStringCreateExternalRepresentation(NULL, string,
+                                              kCFStringEncodingUnicode, 0);
+  passed = passed && data && CFDataGetLength(data) == sizeof(utf16) &&
+           memcmp(CFDataGetBytePtr(data), utf16, sizeof(utf16)) == 0;
+  CFRelease(data);
+  data = CFStringCreateExternalRepresentation(NULL, string,
+                                              kCFStringEncodingASCII, '?');
+  passed = passed && data && CFDataGetLength(data) == 3 &&
+           memcmp(CFDataGetBytePtr(data), "A??", 3) == 0 &&
+           !CFStringCreateExternalRepresentation(NULL, string,
+                                                 kCFStringEncodingASCII, 0);
+  CFRelease(data);
+  CFRelease(string);
+  return passed ? 0 : -1;
+}
+
 int test_CFString_range_and_trim(void) {
   CFStringRef text =
       CFStringCreateWithCString(NULL, "x AbC abc Y", kCFStringEncodingUTF8);
@@ -12077,6 +12103,7 @@ struct {
     FUNC_DEF(test_fscanf_new),
     FUNC_DEF(test_CFStringFind),
     FUNC_DEF(test_CFString_range_and_trim),
+    FUNC_DEF(test_CFString_external_bytes),
     FUNC_DEF(test_strcspn),
     FUNC_DEF(test_mbstowcs),
     FUNC_DEF(test_CFMutableString),

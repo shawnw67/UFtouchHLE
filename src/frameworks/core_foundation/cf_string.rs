@@ -637,6 +637,77 @@ fn CFStringTrimWhitespace(env: &mut Environment, string: CFMutableStringRef) {
     release(env, result);
 }
 
+fn CFStringCreateExternalRepresentation(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    string: CFStringRef,
+    encoding: CFStringEncoding,
+    loss_byte: u8,
+) -> super::cf_data::CFDataRef {
+    if string.is_null()
+        || !(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default())
+    {
+        return crate::objc::nil;
+    }
+    let mut units = Vec::new();
+    ns_string::for_each_code_unit(env, string, |_, c| units.push(c));
+    let mut bytes = Vec::new();
+    match encoding {
+        kCFStringEncodingUTF16 | kCFStringEncodingUTF16LE | kCFStringEncodingUTF16BE => {
+            if encoding == kCFStringEncodingUTF16 {
+                bytes.extend_from_slice(&[0xff, 0xfe]);
+            }
+            for unit in units {
+                bytes.extend_from_slice(&if encoding == kCFStringEncodingUTF16BE {
+                    unit.to_be_bytes()
+                } else {
+                    unit.to_le_bytes()
+                });
+            }
+        }
+        kCFStringEncodingUTF8 | kCFStringEncodingASCII | kCFStringEncodingISOLatin1 => {
+            for character in char::decode_utf16(units) {
+                let character = match character {
+                    Ok(character) => character,
+                    Err(_) if loss_byte != 0 => {
+                        bytes.push(loss_byte);
+                        continue;
+                    }
+                    Err(_) => return crate::objc::nil,
+                };
+                if encoding == kCFStringEncodingUTF8 {
+                    bytes.extend_from_slice(character.encode_utf8(&mut [0; 4]).as_bytes());
+                } else {
+                    let maximum = if encoding == kCFStringEncodingASCII {
+                        127
+                    } else {
+                        255
+                    };
+                    if character as u32 <= maximum {
+                        bytes.push(character as u8);
+                    } else if loss_byte != 0 {
+                        bytes.push(loss_byte);
+                    } else {
+                        return crate::objc::nil;
+                    }
+                }
+            }
+        }
+        _ => return crate::objc::nil,
+    }
+    let Ok(length) = u32::try_from(bytes.len()) else {
+        return crate::objc::nil;
+    };
+    let Some(buffer) = env.mem.try_alloc(length) else {
+        return crate::objc::nil;
+    };
+    env.mem
+        .bytes_at_mut(buffer.cast(), length)
+        .copy_from_slice(&bytes);
+    let data: id = msg_class![env; NSData alloc];
+    msg![env; data initWithBytesNoCopy:buffer length:length freeWhenDone:true]
+}
+
 fn CFStringHasSuffix(env: &mut Environment, the_string: CFStringRef, suffix: CFStringRef) -> bool {
     msg![env; the_string hasSuffix:suffix]
 }
@@ -752,6 +823,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringLowercase(_, _)),
     export_c_func!(CFStringTrim(_, _)),
     export_c_func!(CFStringTrimWhitespace(_)),
+    export_c_func!(CFStringCreateExternalRepresentation(_, _, _, _)),
     export_c_func!(CFStringHasSuffix(_, _)),
     export_c_func!(CFStringUppercase(_, _)),
     export_c_func!(CFStringCreateWithPascalString(_, _, _)),
