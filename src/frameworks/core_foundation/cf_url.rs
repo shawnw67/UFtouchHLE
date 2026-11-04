@@ -12,8 +12,7 @@ use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::CFIndex;
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::core_foundation::cf_string::{
-    kCFStringEncodingASCII, kCFStringEncodingUTF8, CFStringConvertEncodingToNSStringEncoding,
-    CFStringEncoding, CFStringRef,
+    kCFStringEncodingASCII, kCFStringEncodingUTF8, CFStringEncoding, CFStringRef,
 };
 use crate::frameworks::foundation::ns_string::{
     from_rust_string, get_static_str, to_rust_string, NSUTF8StringEncoding,
@@ -127,20 +126,17 @@ fn CFURLCreateWithBytes(
     base_url: CFURLRef,
 ) -> CFURLRef {
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
-    assert_eq!(encoding, kCFStringEncodingASCII); // TODO
-    assert!(base_url.is_null()); // TODO
+    if encoding != kCFStringEncodingASCII && encoding != kCFStringEncodingUTF8 {
+        return nil;
+    }
 
     // TODO: interpret percent escape sequences using encoding as well
-    let encoding = CFStringConvertEncodingToNSStringEncoding(env, encoding);
-    if length <= 0 || url_bytes.is_null() {
-        return Ptr::null();
+    if length < 0 || (length > 0 && url_bytes.is_null()) {
+        return nil;
     }
-    let length: NSUInteger = length.try_into().unwrap();
-
-    let string: id = msg_class![env; NSString alloc];
-    let string: id = msg![env; string initWithBytes:url_bytes
-                                             length:length
-                                           encoding:encoding];
+    let string = super::cf_string::CFStringCreateWithBytes(
+        env, allocator, url_bytes, length, encoding, false,
+    );
 
     if string.is_null() {
         return nil;
@@ -148,7 +144,7 @@ fn CFURLCreateWithBytes(
 
     // The bytes describe a URL, not necessarily a filesystem path.
     let url: id = msg_class![env; NSURL alloc];
-    let res = msg![env; url initWithString:string];
+    let res = msg![env; url initWithString:string relativeToURL:base_url];
     release(env, string);
     res
 }
@@ -173,9 +169,8 @@ fn CFURLCreateWithString(
     base_url: CFURLRef,
 ) -> CFURLRef {
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
-    assert!(base_url.is_null()); // TODO
     let url: id = msg_class![env; NSURL alloc];
-    msg![env; url initWithString:url_string]
+    msg![env; url initWithString:url_string relativeToURL:base_url]
 }
 
 pub fn CFURLCopyPathExtension(env: &mut Environment, url: CFURLRef) -> CFStringRef {
@@ -190,9 +185,8 @@ fn CFURLCopyLastPathComponent(env: &mut Environment, url: CFURLRef) -> CFStringR
     msg![env; component copy]
 }
 
-fn CFURLGetBaseURL(_env: &mut Environment, _url: CFURLRef) -> CFURLRef {
-    // Base URLs are not yet represented by NSURL.
-    nil
+fn CFURLGetBaseURL(env: &mut Environment, url: CFURLRef) -> CFURLRef {
+    msg![env; url baseURL]
 }
 
 fn CFURLCopyScheme(env: &mut Environment, url: CFURLRef) -> CFStringRef {

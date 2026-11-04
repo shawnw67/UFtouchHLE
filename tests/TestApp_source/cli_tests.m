@@ -2699,6 +2699,43 @@ static int uf_url_string_equals(CFStringRef string, const char *expected) {
          !strcmp(buffer, expected);
 }
 
+int test_cfurl_relative_base(void) {
+  CFStringRef baseText = CFStringCreateWithCString(
+      NULL, "http://example.com/a/b/index.html?old#z", kCFStringEncodingUTF8);
+  CFURLRef base = CFURLCreateWithString(NULL, baseText, NULL);
+  const UInt8 reference[] = "../data/a%20b?q#f";
+  CFURLRef relative = CFURLCreateWithBytes(
+      NULL, reference, sizeof(reference) - 1, kCFStringEncodingUTF8, base);
+  int passed =
+      relative && CFURLGetBaseURL(relative) == base &&
+      uf_url_string_equals(CFURLGetString(relative), (const char *)reference);
+  CFRelease(base);
+  CFURLRef absolute = CFURLCopyAbsoluteURL(relative);
+  passed = passed && absolute && !CFURLGetBaseURL(absolute) &&
+           uf_url_string_equals(CFURLGetString(absolute),
+                                "http://example.com/a/data/a%20b?q#f");
+  CFRelease(absolute);
+  CFRelease(relative);
+  CFRelease(baseText);
+  baseText =
+      CFStringCreateWithCString(NULL, "/tmp/Game.app", kCFStringEncodingUTF8);
+  base =
+      CFURLCreateWithFileSystemPath(NULL, baseText, kCFURLPOSIXPathStyle, true);
+  CFStringRef fileReference =
+      CFStringCreateWithCString(NULL, "../Data/a%20b", kCFStringEncodingUTF8);
+  relative = CFURLCreateWithString(NULL, fileReference, base);
+  char path[128];
+  passed = passed && relative && CFURLGetBaseURL(relative) == base &&
+           CFURLGetFileSystemRepresentation(relative, true, (UInt8 *)path,
+                                            sizeof(path)) &&
+           strcmp(path, "/tmp/Data/a b") == 0;
+  CFRelease(relative);
+  CFRelease(fileReference);
+  CFRelease(base);
+  CFRelease(baseText);
+  return passed ? 0 : -1;
+}
+
 int test_cfurl_absolute_string_and_bytes(void) {
   CFStringRef path =
       CFStringCreateWithCString(NULL, "/tmp/a b#c", kCFStringEncodingUTF8);
@@ -12422,6 +12459,7 @@ struct {
     FUNC_DEF(test_cfurl_escaped_path),
     FUNC_DEF(test_cfurl_query_and_fragment),
     FUNC_DEF(test_cfurl_absolute_string_and_bytes),
+    FUNC_DEF(test_cfurl_relative_base),
     FUNC_DEF(test_cfurl_legacy_percent_decode),
     FUNC_DEF(test_cfdata_no_copy_deallocator),
     FUNC_DEF(test_cfdata_equality_and_dictionary_keys),

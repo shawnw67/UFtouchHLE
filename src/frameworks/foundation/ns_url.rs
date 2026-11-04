@@ -7,6 +7,8 @@
 
 use super::ns_string::{from_rust_string, get_static_str, to_rust_string};
 use super::NSUInteger;
+mod resolve;
+
 use crate::fs::{GuestPath, GuestPathBuf};
 use crate::mem::MutPtr;
 use crate::objc::{
@@ -26,6 +28,7 @@ enum NSURLHostObject {
     FileURL {
         ns_string: id,
         cached_absolute: id,
+        base: Option<(id, id)>,
         port: Option<i32>,
         host: Option<String>,
         query: Option<String>,
@@ -39,9 +42,18 @@ enum NSURLHostObject {
         working_directory: GuestPathBuf,
     },
     /// Non-file URL.
-    OtherURL { ns_string: id },
+    OtherURL {
+        ns_string: id,
+        base: Option<(id, id)>,
+    },
 }
 impl HostObject for NSURLHostObject {}
+
+fn relative_base(env: &Environment, url: id) -> Option<(id, id)> {
+    match env.objc.borrow::<NSURLHostObject>(url) {
+        NSURLHostObject::FileURL { base, .. } | NSURLHostObject::OtherURL { base, .. } => *base,
+    }
+}
 
 fn absolute_file_string(env: &mut Environment, url: id) -> id {
     let (cached, working_directory, query, fragment, decomposable) =
@@ -113,7 +125,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @implementation NSURL: NSObject
 
 + (id)allocWithZone:(NSZonePtr)_zone {
-    let host_object = NSURLHostObject::FileURL { ns_string: nil, cached_absolute: nil, port: None, host: None, query: None, fragment: None, raw_path: None, raw_authority: None, decomposable: true, is_directory: false, working_directory: env.fs.working_directory().into() };
+    let host_object = NSURLHostObject::FileURL { ns_string: nil, cached_absolute: nil, base: None, port: None, host: None, query: None, fragment: None, raw_path: None, raw_authority: None, decomposable: true, is_directory: false, working_directory: env.fs.working_directory().into() };
     env.objc.alloc_object(this, Box::new(host_object), &mut env.mem)
 }
 
@@ -121,6 +133,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     let new: id = msg![env; this alloc];
     let new: id = msg![env; new initWithString:url];
     autorelease(env, new)
+}
++ (id)URLWithString:(id)url relativeToURL:(id)base {
+    let object: id = msg![env; this alloc];
+    let object: id = msg![env; object initWithString:url relativeToURL:base];
+    autorelease(env, object)
 }
 
 + (id)fileURLWithPath:(id)path { // NSString*
@@ -137,10 +154,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())dealloc {
+    let base = relative_base(env, this);
     match *env.objc.borrow(this) {
         NSURLHostObject::FileURL { ns_string, cached_absolute, .. } => { release(env, ns_string); release(env, cached_absolute); },
-        NSURLHostObject::OtherURL { ns_string } => release(env, ns_string),
+        NSURLHostObject::OtherURL { ns_string, .. } => release(env, ns_string),
     }
+    if let Some((base, relative)) = base { release(env, base); release(env, relative); }
     env.objc.dealloc_object(this, &mut env.mem)
 }
 
@@ -161,7 +180,7 @@ pub const CLASSES: ClassExports = objc_classes! {
     assert!(!to_rust_string(env, path).starts_with("file:"));
     let path = msg![env; path stringByExpandingTildeInPath];
     let path: id = msg![env; path copy];
-    *env.objc.borrow_mut(this) = NSURLHostObject::FileURL { ns_string: path, cached_absolute: nil, port: None, host: None, query: None, fragment: None, raw_path: None, raw_authority: None, decomposable: true, is_directory: is_dir, working_directory: env.fs.working_directory().into() };
+    *env.objc.borrow_mut(this) = NSURLHostObject::FileURL { ns_string: path, cached_absolute: nil, base: None, port: None, host: None, query: None, fragment: None, raw_path: None, raw_authority: None, decomposable: true, is_directory: is_dir, working_directory: env.fs.working_directory().into() };
     this
 }
 
@@ -196,8 +215,29 @@ pub const CLASSES: ClassExports = objc_classes! {
         return this;
     }
     let url: id = msg![env; url copy];
-    *env.objc.borrow_mut(this) = NSURLHostObject::OtherURL { ns_string: url };
+    *env.objc.borrow_mut(this) = NSURLHostObject::OtherURL { ns_string: url, base: None };
     this
+}
+
+- (id)initWithString:(id)string relativeToURL:(id)base {
+    if base == nil { return msg![env; this initWithString:string]; }
+    if string == nil || base == this { release(env, this); return nil; }
+    let reference = to_rust_string(env, string);
+    let base_string: id = msg![env; base absoluteString];
+    let base_string = to_rust_string(env, base_string);
+    let Some(resolved) = resolve::resolve(&base_string, &reference) else { release(env, this); return nil; };
+    let resolved = from_rust_string(env, resolved);
+    let object: id = msg![env; this initWithString:resolved];
+    release(env, resolved);
+    if object == nil { return nil; }
+    if split_url(&reference).scheme.is_none() {
+        let base = retain(env, base);
+        let relative: id = msg![env; string copy];
+        match env.objc.borrow_mut::<NSURLHostObject>(object) {
+            NSURLHostObject::FileURL { base: saved, .. } | NSURLHostObject::OtherURL { base: saved, .. } => *saved = Some((base, relative)),
+        }
+    }
+    object
 }
 
 - (bool)isFileURL {
@@ -231,14 +271,14 @@ pub const CLASSES: ClassExports = objc_classes! {
             let desc = from_rust_string(env, description);
             autorelease(env, desc)
         },
-        NSURLHostObject::OtherURL { ns_string } => *ns_string,
+        NSURLHostObject::OtherURL { ns_string, .. } => *ns_string,
     }
 }
 
 - (id)path {
     match *env.objc.borrow(this) {
         NSURLHostObject::FileURL { ns_string, .. } => ns_string,
-        NSURLHostObject::OtherURL { ns_string } => {
+        NSURLHostObject::OtherURL { ns_string, .. } => {
             let url = to_rust_string(env, ns_string);
             let path = percent_decode(split_url(&url).path);
             let path = from_rust_string(env, path);
@@ -255,7 +295,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)scheme {
     let ns_string = match *env.objc.borrow(this) {
         NSURLHostObject::FileURL { .. } => return get_static_str(env, "file"),
-        NSURLHostObject::OtherURL { ns_string } => ns_string,
+        NSURLHostObject::OtherURL { ns_string, .. } => ns_string,
     };
     let url = to_rust_string(env, ns_string);
     let scheme = split_url(&url).scheme.map(str::to_string);
@@ -265,7 +305,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)host {
     let ns_string = match env.objc.borrow(this) {
         NSURLHostObject::FileURL { host, .. } => return url_component(env, host.clone()),
-        NSURLHostObject::OtherURL { ns_string } => *ns_string,
+        NSURLHostObject::OtherURL { ns_string, .. } => *ns_string,
     };
     let url = to_rust_string(env, ns_string);
     let host = split_url(&url).host().filter(|host| !host.is_empty()).map(percent_decode);
@@ -275,7 +315,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)port {
     let port = match *env.objc.borrow(this) {
         NSURLHostObject::FileURL { port, .. } => port,
-        NSURLHostObject::OtherURL { ns_string } => split_url(&to_rust_string(env, ns_string)).port(),
+        NSURLHostObject::OtherURL { ns_string, .. } => split_url(&to_rust_string(env, ns_string)).port(),
     };
     match port {
         Some(port) => msg_class![env; NSNumber numberWithInt:port],
@@ -287,7 +327,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)query {
     let ns_string = match env.objc.borrow(this) {
         NSURLHostObject::FileURL { query, .. } => return url_component(env, query.clone()),
-        NSURLHostObject::OtherURL { ns_string } => *ns_string,
+        NSURLHostObject::OtherURL { ns_string, .. } => *ns_string,
     };
     let url = to_rust_string(env, ns_string);
     let query = split_url(&url).query.map(str::to_string);
@@ -297,7 +337,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)fragment {
     let ns_string = match env.objc.borrow(this) {
         NSURLHostObject::FileURL { fragment, .. } => return url_component(env, fragment.clone()),
-        NSURLHostObject::OtherURL { ns_string } => *ns_string,
+        NSURLHostObject::OtherURL { ns_string, .. } => *ns_string,
     };
     let url = to_rust_string(env, ns_string);
     let fragment = split_url(&url).fragment.map(str::to_string);
@@ -307,15 +347,23 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (id)absoluteString {
     match *env.objc.borrow(this) {
         NSURLHostObject::FileURL { .. } => absolute_file_string(env, this),
-        NSURLHostObject::OtherURL { ns_string } => ns_string,
+        NSURLHostObject::OtherURL { ns_string, .. } => ns_string,
     }
 }
 
 - (id)relativeString {
+    if let Some((_, relative)) = relative_base(env, this) { return relative; }
     msg![env; this absoluteString]
 }
+- (id)baseURL { relative_base(env, this).map_or(nil, |(base, _)| base) }
 
 - (id)absoluteURL {
+    if relative_base(env, this).is_some() {
+        let string: id = msg![env; this absoluteString];
+        let result: id = msg_class![env; NSURL alloc];
+        let result: id = msg![env; result initWithString:string];
+        return autorelease(env, result);
+    }
     if matches!(env.objc.borrow::<NSURLHostObject>(this), NSURLHostObject::OtherURL { .. }) { return this; }
     let path: id = msg![env; this path];
     if to_rust_string(env, path).starts_with('/') { return this; }
@@ -432,7 +480,7 @@ pub fn cf_escaped_path(env: &mut Environment, url: id) -> Option<String> {
             }
             Some(path)
         }
-        NSURLHostObject::OtherURL { ns_string } => {
+        NSURLHostObject::OtherURL { ns_string, .. } => {
             let string = *ns_string;
             let url = to_rust_string(env, string);
             let parts = split_url(&url);
@@ -449,7 +497,7 @@ pub fn cf_authority(env: &mut Environment, url: id) -> Option<String> {
         .as_any()
         .downcast_ref::<NSURLHostObject>()?;
     match object {
-        NSURLHostObject::OtherURL { ns_string } => {
+        NSURLHostObject::OtherURL { ns_string, .. } => {
             let string = *ns_string;
             let url = to_rust_string(env, string);
             let parts = split_url(&url);
@@ -492,7 +540,7 @@ pub fn cf_resource_components(env: &mut Environment, url: id) -> (Option<String>
         return (None, None);
     };
     let (path, query, fragment) = match object {
-        NSURLHostObject::OtherURL { ns_string } => {
+        NSURLHostObject::OtherURL { ns_string, .. } => {
             let string = *ns_string;
             let url = to_rust_string(env, string);
             let parts = split_url(&url);
