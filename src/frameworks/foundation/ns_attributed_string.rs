@@ -8,6 +8,7 @@
 //! Attributes are stored in ranges of UTF-16 code units.
 
 use super::{ns_dictionary, ns_string, NSRange, NSUInteger};
+use crate::abi::CallFromHost;
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::mem::MutPtr;
 use crate::objc::{
@@ -229,6 +230,56 @@ pub(crate) fn attribute_range(
     )
 }
 
+fn enumerate_attributes(
+    env: &mut crate::Environment,
+    this: id,
+    range: NSRange,
+    options: NSUInteger,
+    block: id,
+    key: Option<id>,
+) {
+    if block == nil {
+        return;
+    }
+    let length: NSUInteger = msg![env; this length];
+    let Some(end) = range.location.checked_add(range.length) else {
+        return;
+    };
+    if end > length {
+        return;
+    }
+    let mut position = range.location;
+    let mut segments = Vec::new();
+    while position < end {
+        let (mut value, effective) = attribute_range(env, this, position, range, key);
+        if effective.length == 0 {
+            break;
+        }
+        if key.is_none() && value == nil {
+            value = ns_dictionary::dict_from_keys_and_objects(env, &[]);
+        } else {
+            retain(env, value);
+        }
+        position = effective.location + effective.length;
+        segments.push((effective, value));
+    }
+    if options & 2 != 0 {
+        segments.reverse();
+    }
+    let invoke = crate::libc::dispatch::block_invoke_function(env, block.cast_const().cast());
+    let stop: MutPtr<bool> = env.mem.alloc_and_write(false);
+    for (effective, value) in &segments {
+        let _: () = invoke.call_from_host(env, (block, *value, *effective, stop));
+        if env.mem.read(stop) {
+            break;
+        }
+    }
+    env.mem.free(stop.cast());
+    for (_, value) in segments {
+        release(env, value);
+    }
+}
+
 fn set_attributes(env: &mut crate::Environment, this: id, attributes: id) {
     let copy: id = msg![env; attributes copy];
     let old = std::mem::replace(
@@ -375,6 +426,13 @@ pub const CLASSES: ClassExports = objc_classes! {
     let (value, effective) = attribute_range(env, this, index, NSRange { location: 0, length }, Some(name));
     if !range.is_null() { env.mem.write(range, effective); }
     value
+}
+
+- (())enumerateAttributesInRange:(NSRange)range options:(NSUInteger)options usingBlock:(id)block {
+    enumerate_attributes(env, this, range, options, block, None);
+}
+- (())enumerateAttribute:(id)name inRange:(NSRange)range options:(NSUInteger)options usingBlock:(id)block {
+    if name != nil { enumerate_attributes(env, this, range, options, block, Some(name)); }
 }
 
 // From UIKit's NSStringDrawing additions (iOS 7).

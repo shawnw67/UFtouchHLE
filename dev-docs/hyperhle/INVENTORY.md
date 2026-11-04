@@ -320,7 +320,7 @@ UF `d94c48f37bb5316aa2b87692b3aa6448f1fb20d6`; Hyper `ff8eb8274130560efbafc56704
 | `src/frameworks/foundation/chipmunk_space.rs` | hyper-added | class:ChipmunkHastySpace, class:ChipmunkSpace | pending |
 | `src/frameworks/foundation/ns_array.rs` | both-modified | — | pending |
 | `src/frameworks/foundation/ns_assertion_handler.rs` | hyper-added | class:NSAssertionHandler | pending |
-| `src/frameworks/foundation/ns_attributed_string.rs` | both-added | — | partial (per-range attributes, copying, substring and basic text edits; live mutable string and advanced enumeration remain) |
+| `src/frameworks/foundation/ns_attributed_string.rs` | both-added | — | partial (per-range attributes, copying, substring, text edits and block enumeration; live mutable string and some enumeration options remain) |
 | `src/frameworks/foundation/ns_autorelease_pool.rs` | both-modified | — | pending |
 | `src/frameworks/foundation/ns_bundle.rs` | both-modified | — | pending |
 | `src/frameworks/foundation/ns_calendar.rs` | both-added | — | pending |

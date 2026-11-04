@@ -763,6 +763,10 @@ int test_CFAttributedString_attributes(void) {
 - (void)removeAttribute:(id)name range:(NSRange)range;
 - (void)replaceCharactersInRange:(NSRange)range withString:(id)string;
 - (void)appendAttributedString:(id)other;
+- (void)enumerateAttribute:(id)name
+                   inRange:(NSRange)range
+                   options:(NSUInteger)options
+                usingBlock:(id)block;
 @end
 
 int test_CFAttributedString_attribute_runs(void) {
@@ -11019,6 +11023,42 @@ struct AccessBlock {
   const struct TestBlockDescriptor *descriptor;
   int *result;
 };
+struct AttributeBlock {
+  void *isa;
+  int flags, reserved;
+  void (*invoke)(struct AttributeBlock *, id, NSRange, bool *);
+  const struct TestBlockDescriptor *descriptor;
+  int *result;
+};
+static void test_attribute_block_invoke(struct AttributeBlock *block, id value,
+                                        NSRange range, bool *stop) {
+  int n = (*block->result)++;
+  if ((n == 0 && (value || range.location != 5 || range.length != 1)) ||
+      (n == 1 && (!value || range.location != 1 || range.length != 4)))
+    *block->result = -100;
+  if (n == 1)
+    *stop = true;
+}
+int test_attributed_string_enumeration(void) {
+  static const struct TestBlockDescriptor descriptor = {
+      0, sizeof(struct AttributeBlock), NULL, NULL};
+  int result = 0;
+  struct AttributeBlock block = {
+      _NSConcreteStackBlock,       0,           0,
+      test_attribute_block_invoke, &descriptor, &result};
+  NSString *key = [NSString stringWithUTF8String:"color"];
+  NSMutableAttributedString *text = [[NSMutableAttributedString alloc]
+      initWithString:[NSString stringWithUTF8String:"abcdef"]];
+  [text addAttribute:key
+               value:[NSString stringWithUTF8String:"red"]
+               range:NSMakeRange(1, 4)];
+  [text enumerateAttribute:key
+                   inRange:NSMakeRange(0, 6)
+                   options:2
+                usingBlock:(id)&block];
+  [text release];
+  return result == 2 ? 0 : -1;
+}
 static void test_access_block_invoke(struct AccessBlock *block, bool granted,
                                      void *error) {
   *block->result = granted && !error ? 1 : -1;
@@ -11715,6 +11755,7 @@ struct {
     FUNC_DEF(test_CFWriteStream_file),
     FUNC_DEF(test_CFAttributedString_attributes),
     FUNC_DEF(test_CFAttributedString_attribute_runs),
+    FUNC_DEF(test_attributed_string_enumeration),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),
     FUNC_DEF(test_CTLine_glyph_runs),
