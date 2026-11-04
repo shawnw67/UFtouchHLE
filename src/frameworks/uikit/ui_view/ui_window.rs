@@ -301,47 +301,10 @@ pub const UIKeyboardWillShowNotification: &str = "UIKeyboardWillShowNotification
 pub const UIKeyboardDidShowNotification: &str = "UIKeyboardDidShowNotification";
 pub const UIKeyboardWillHideNotification: &str = "UIKeyboardWillHideNotification";
 pub const UIKeyboardDidHideNotification: &str = "UIKeyboardDidHideNotification";
+#[allow(dead_code)]
 pub const UIKeyboardBoundsUserInfoKey: &str = "UIKeyboardBoundsUserInfoKey";
 
-pub const CONSTANTS: ConstantExports = &[
-    (
-        "_UIWindowDidBecomeKeyNotification",
-        HostConstant::NSString(UIWindowDidBecomeKeyNotification),
-    ),
-    (
-        "_UIKeyboardWillShowNotification",
-        HostConstant::NSString(UIKeyboardWillShowNotification),
-    ),
-    (
-        "_UIKeyboardDidShowNotification",
-        HostConstant::NSString(UIKeyboardDidShowNotification),
-    ),
-    (
-        "_UIKeyboardWillHideNotification",
-        HostConstant::NSString(UIKeyboardWillHideNotification),
-    ),
-    (
-        "_UIKeyboardDidHideNotification",
-        HostConstant::NSString(UIKeyboardDidHideNotification),
-    ),
-    (
-        "_UIKeyboardBoundsUserInfoKey",
-        HostConstant::NSString(UIKeyboardBoundsUserInfoKey),
-    ),
-    (
-        "_UIKeyboardFrameBeginUserInfoKey",
-        HostConstant::NSString("UIKeyboardFrameBeginUserInfoKey"),
-    ),
-    (
-        "_UIKeyboardFrameEndUserInfoKey",
-        HostConstant::NSString("UIKeyboardFrameEndUserInfoKey"),
-    ),
-    (
-        "_UIKeyboardWillChangeFrameNotification",
-        HostConstant::NSString("UIKeyboardWillChangeFrameNotification"),
-    ),
-    (
-        "_UIKeyboardDidChangeFrameNotification",
-        HostConstant::NSString("UIKeyboardDidChangeFrameNotification"),
-    ),
-];
+pub const CONSTANTS: ConstantExports = &[(
+    "_UIWindowDidBecomeKeyNotification",
+    HostConstant::NSString(UIWindowDidBecomeKeyNotification),
+)];

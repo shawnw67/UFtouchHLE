@@ -9,12 +9,16 @@
 //! - Apple's [View Programming Guide for iOS](https://developer.apple.com/library/archive/documentation/WindowsViews/Conceptual/ViewPG_iPhoneOS/Introduction/Introduction.html)
 
 pub mod ui_alert_view;
+pub mod ui_collection_view;
 pub mod ui_control;
 pub mod ui_image_view;
 pub mod ui_label;
 pub mod ui_page_control;
 pub mod ui_picker_view;
+pub mod ui_refresh_control;
 pub mod ui_scroll_view;
+pub mod ui_table_view;
+pub mod ui_text_selection_view;
 pub mod ui_toolbar;
 pub mod ui_web_view;
 pub mod ui_window;
@@ -81,6 +85,8 @@ pub struct UIViewHostObject {
     layer: id,
     /// Subviews in back-to-front order. These are strong references.
     subviews: Vec<id>,
+    /// `UIGestureRecognizer`s, in the order they were added. Strong references.
+    pub(super) gesture_recognizers: Vec<id>,
     /// The superview. This is a weak reference.
     superview: id,
     /// The view controller that controls this view. This is a weak reference
@@ -96,6 +102,7 @@ impl Default for UIViewHostObject {
         // The Default trait is implemented so subclasses will get the same
         // defaults.
         UIViewHostObject {
+            gesture_recognizers: Vec::new(),
             layer: nil,
             subviews: Vec::new(),
             superview: nil,
@@ -145,6 +152,14 @@ fn init_common(env: &mut Environment, this: id) -> id {
     env.framework_state.uikit.ui_view.views.push(this);
 
     this
+}
+
+#[allow(dead_code)]
+pub(super) fn gesture_recognizers(env: &Environment, view: id) -> Vec<id> {
+    env.objc
+        .borrow::<UIViewHostObject>(view)
+        .gesture_recognizers
+        .clone()
 }
 
 pub const CLASSES: ClassExports = objc_classes! {
@@ -654,6 +669,7 @@ pub const CLASSES: ClassExports = objc_classes! {
         layer,
         superview,
         subviews,
+        gesture_recognizers,
         view_controller,
         tag: _,
         clears_context_before_drawing: _,
@@ -661,6 +677,9 @@ pub const CLASSES: ClassExports = objc_classes! {
         multiple_touch_enabled: _,
     } = std::mem::take(env.objc.borrow_mut(this));
 
+    for recognizer in gesture_recognizers {
+        release(env, recognizer);
+    }
     release(env, layer);
     assert!(view_controller == nil);
     assert!(superview == nil);

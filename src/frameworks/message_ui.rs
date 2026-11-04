@@ -6,26 +6,11 @@
 //! The Message UI framework.
 
 use crate::dyld::HostDylib;
-use crate::objc::{objc_classes, ClassExports};
 
 pub const DYLIB: HostDylib = HostDylib {
     path: "/System/Library/Frameworks/MessageUI.framework/MessageUI",
     aliases: &[],
-    class_exports: &[CLASSES],
+    class_exports: &[],
     constant_exports: &[],
     function_exports: &[],
-};
-
-const CLASSES: ClassExports = objc_classes! {
-
-(env, this, _cmd);
-
-@implementation MFMailComposeViewController: UINavigationController
-
-+ (bool)canSendMail {
-    false
-}
-
-@end
-
 };

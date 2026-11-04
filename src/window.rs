@@ -35,6 +35,11 @@ pub enum DeviceFamily {
     iPhone,
     iPad,
 }
+impl DeviceFamily {
+    pub fn is_ipad(self) -> bool {
+        matches!(self, DeviceFamily::iPad)
+    }
+}
 impl std::fmt::Display for DeviceFamily {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Debug::fmt(self, f)
@@ -2335,6 +2340,24 @@ impl Window {
         }
     }
 
+    pub fn is_text_input_active(&self) -> bool {
+        if !self.on_main_stack {
+            log!("Warning: is_text_input_active called off main stack, returning false");
+            return false;
+        }
+        unsafe { sdl2_sys::SDL_IsTextInputActive() == sdl2_sys::SDL_bool::SDL_TRUE }
+    }
+
+    pub fn is_screen_keyboard_shown(&self) -> bool {
+        if !self.on_main_stack {
+            log!("Warning: is_screen_keyboard_shown called off main stack, returning false");
+            return false;
+        }
+        unsafe {
+            sdl2_sys::SDL_IsScreenKeyboardShown(self.window.raw()) == sdl2_sys::SDL_bool::SDL_TRUE
+        }
+    }
+
     pub fn start_text_input(&self) {
         assert!(self.on_main_stack);
         unsafe {
@@ -2730,4 +2753,42 @@ mod selected_screen_geometry_tests {
         }
         assert_eq!(p2g_input_viewport((0, 0, 640, 1388)), (0, 126, 640, 1136));
     }
+}
+/// Show a UIAlertView-style dialog using SDL2 message box.
+/// Returns the index of the clicked button, or 0 if closed.
+pub fn show_alert_dialog(
+    env: &mut Environment,
+    title: &str,
+    message: &str,
+    buttons: &[&str],
+) -> i32 {
+    let title = title.to_string();
+    let message = message.to_string();
+    let buttons: Vec<String> = buttons.iter().map(|s| s.to_string()).collect();
+
+    env.on_parent_stack_in_coroutine(move |window, _options| {
+        use sdl2::messagebox;
+
+        let button_data: Vec<messagebox::ButtonData> = buttons
+            .iter()
+            .enumerate()
+            .map(|(i, text)| messagebox::ButtonData {
+                flags: messagebox::MessageBoxButtonFlag::NOTHING,
+                button_id: i as i32,
+                text: text.as_str(),
+            })
+            .collect();
+
+        match messagebox::show_message_box(
+            messagebox::MessageBoxFlag::INFORMATION,
+            &button_data,
+            &title,
+            &message,
+            Some(&window.window),
+            None,
+        ) {
+            Ok(messagebox::ClickedButton::CustomButton(btn)) => btn.button_id,
+            _ => 0,
+        }
+    })
 }

@@ -9,6 +9,9 @@
 use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::carbon_core::{paramErr, OSStatus};
+use crate::frameworks::core_audio_types::kAudioFormatFlagIsBigEndian;
+use crate::frameworks::core_audio_types::kAudioFormatFlagIsFloat;
+use crate::frameworks::core_audio_types::kAudioFormatLinearPCM;
 use crate::frameworks::core_audio_types::{fourcc, AudioStreamBasicDescription};
 use crate::mem::{guest_size_of, ConstPtr, MutPtr, MutVoidPtr, SafeRead};
 use crate::Environment;
@@ -754,6 +757,260 @@ fn AudioConverterSetProperty(
         return PROPERTY;
     }
     0
+}
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
+pub struct AudioStreamPacketDescription {
+    pub mStartOffset: i64,
+    pub mVariableFramesInPacket: u32,
+    pub mDataByteSize: u32,
+}
+
+unsafe impl SafeRead for AudioStreamPacketDescription {}
+
+/// Extract a [PcmShape] from an ASBD. Returns [None] for non-LPCM formats or
+/// nonsensical ones.
+#[allow(dead_code)]
+pub fn pcm_shape_from_asbd(asbd: &AudioStreamBasicDescription) -> Option<PcmShape> {
+    if asbd.format_id != kAudioFormatLinearPCM {
+        return None;
+    }
+    let channels = asbd.channels_per_frame;
+    let bits = asbd.bits_per_channel;
+    if channels == 0 || channels > 8 || !matches!(bits, 8 | 16 | 24 | 32) {
+        return None;
+    }
+    let bytes_per_channel = bits / 8;
+    let bytes_per_frame = if asbd.bytes_per_frame > 0 {
+        asbd.bytes_per_frame
+    } else {
+        channels * bytes_per_channel
+    };
+    if bytes_per_frame < channels * bytes_per_channel {
+        return None;
+    }
+    Some(PcmShape {
+        sample_rate: asbd.sample_rate,
+        channels,
+        bits,
+        is_float: (asbd.format_flags & kAudioFormatFlagIsFloat) != 0,
+        is_big_endian: (asbd.format_flags & kAudioFormatFlagIsBigEndian) != 0,
+        bytes_per_frame,
+    })
+}
+
+/// Convert interleaved PCM bytes from one shape to another. Handles sample
+/// rate (linear interpolation), channel count (up/downmix) and sample
+/// encoding (bit depth / float / endian) conversion.
+#[allow(dead_code)]
+#[allow(clippy::manual_checked_ops)]
+pub fn convert_pcm(src: &[u8], src_shape: &PcmShape, dst_shape: &PcmShape) -> Vec<u8> {
+    let src_bytes_per_frame = src_shape.bytes_per_frame as usize;
+    let src_frames = if src_bytes_per_frame > 0 {
+        src.len() / src_bytes_per_frame
+    } else {
+        return Vec::new();
+    };
+
+    // 1. Decode to interleaved f32.
+    let mut samples: Vec<f32> = Vec::with_capacity(src_frames * src_shape.channels as usize);
+    for frame in 0..src_frames {
+        for ch in 0..src_shape.channels as usize {
+            samples.push(read_f32_sample(src, src_shape, frame, ch));
+        }
+    }
+
+    // 2. Sample-rate conversion (linear interpolation).
+    let src_rate = src_shape.sample_rate.max(1.0);
+    let dst_rate = dst_shape.sample_rate.max(1.0);
+    let resampled: Vec<f32> = if (src_rate - dst_rate).abs() < f64::EPSILON {
+        samples
+    } else {
+        let dst_frames = ((src_frames as f64) * dst_rate / src_rate).round() as usize;
+        let mut out = Vec::with_capacity(dst_frames * src_shape.channels as usize);
+        for i in 0..dst_frames {
+            let pos = (i as f64) * src_rate / dst_rate;
+            let idx = pos.floor() as usize;
+            let frac = (pos - idx as f64) as f32;
+            let idx1 = idx.min(src_frames.saturating_sub(1));
+            let idx2 = (idx + 1).min(src_frames.saturating_sub(1));
+            for ch in 0..src_shape.channels as usize {
+                let a = samples[idx1 * src_shape.channels as usize + ch];
+                let b = samples[idx2 * src_shape.channels as usize + ch];
+                out.push(a + (b - a) * frac);
+            }
+        }
+        out
+    };
+    let frames = resampled.len() / src_shape.channels as usize;
+
+    // 3. Channel conversion.
+    let src_ch = src_shape.channels as usize;
+    let dst_ch = dst_shape.channels as usize;
+    let mixed: Vec<f32> = if src_ch == dst_ch {
+        resampled
+    } else {
+        let mut out = Vec::with_capacity(frames * dst_ch);
+        for frame in 0..frames {
+            let frame_samples = &resampled[frame * src_ch..(frame + 1) * src_ch];
+            match (src_ch, dst_ch) {
+                (1, _) => {
+                    // Mono -> N: duplicate.
+                    for _ in 0..dst_ch {
+                        out.push(frame_samples[0]);
+                    }
+                }
+                (_, 1) => {
+                    // N -> Mono: average.
+                    let sum: f32 = frame_samples.iter().sum();
+                    out.push(sum / src_ch as f32);
+                }
+                _ => {
+                    // General N -> M: average when narrowing, duplicate the
+                    // last available channel when widening (keeps stereo
+                    // width for 5.1 -> stereo-style cases reasonable).
+                    for c in 0..dst_ch {
+                        if c < src_ch {
+                            out.push(frame_samples[c]);
+                        } else {
+                            out.push(frame_samples[src_ch - 1]);
+                        }
+                    }
+                }
+            }
+        }
+        out
+    };
+
+    // 4. Encode to destination sample format.
+    let mut out = Vec::with_capacity(frames * dst_shape.bytes_per_frame as usize);
+    for frame in 0..frames {
+        for ch in 0..dst_ch {
+            write_f32_sample(&mut out, dst_shape, mixed[frame * dst_ch + ch]);
+        }
+    }
+    out
+}
+
+/// The parts of an `AudioStreamBasicDescription` needed to interpret a
+/// byte buffer of interleaved linear PCM data.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(dead_code)]
+pub struct PcmShape {
+    pub sample_rate: f64,
+    pub channels: u32,
+    pub bits: u32,
+    pub is_float: bool,
+    pub is_big_endian: bool,
+    pub bytes_per_frame: u32,
+}
+
+/// Whether two shapes need no conversion at all.
+#[allow(dead_code)]
+pub fn pcm_shapes_equal(a: &PcmShape, b: &PcmShape) -> bool {
+    a.sample_rate == b.sample_rate
+        && a.channels == b.channels
+        && a.bits == b.bits
+        && a.is_float == b.is_float
+        && a.is_big_endian == b.is_big_endian
+        && a.bytes_per_frame == b.bytes_per_frame
+}
+
+#[allow(dead_code)]
+fn read_f32_sample(data: &[u8], shape: &PcmShape, frame: usize, channel: usize) -> f32 {
+    let bytes_per_channel = (shape.bits / 8) as usize;
+    let offset = frame * shape.bytes_per_frame as usize + channel * bytes_per_channel;
+    let bytes = &data[offset..offset + bytes_per_channel];
+    let sample = if shape.is_big_endian {
+        match shape.bits {
+            8 => ((bytes[0] as i32) - 128) as f64 / 128.0,
+            16 => i16::from_be_bytes(bytes.try_into().unwrap()) as f64 / 32768.0,
+            24 => {
+                let v = ((bytes[0] as i32) << 16) | ((bytes[1] as i32) << 8) | (bytes[2] as i32);
+                let v = (v << 8) >> 8; // sign-extend 24 -> 32
+                v as f64 / 8388608.0
+            }
+            32 => {
+                if shape.is_float {
+                    f32::from_be_bytes(bytes.try_into().unwrap()) as f64
+                } else {
+                    i32::from_be_bytes(bytes.try_into().unwrap()) as f64 / 2147483648.0
+                }
+            }
+            _ => 0.0,
+        }
+    } else {
+        match shape.bits {
+            8 => ((bytes[0] as i32) - 128) as f64 / 128.0,
+            16 => i16::from_le_bytes(bytes.try_into().unwrap()) as f64 / 32768.0,
+            24 => {
+                let v = ((bytes[0] as i32) << 16) | ((bytes[1] as i32) << 8) | (bytes[2] as i32);
+                let v = (v << 8) >> 8; // sign-extend 24 -> 32
+                v as f64 / 8388608.0
+            }
+            32 => {
+                if shape.is_float {
+                    f32::from_le_bytes(bytes.try_into().unwrap()) as f64
+                } else {
+                    i32::from_le_bytes(bytes.try_into().unwrap()) as f64 / 2147483648.0
+                }
+            }
+            _ => 0.0,
+        }
+    };
+    // 8-bit WAV PCM is unsigned, handled above; float samples can exceed
+    // [-1, 1] slightly — clamp at the end of conversion instead of here so
+    // intermediate math keeps headroom.
+    sample as f32
+}
+
+#[allow(dead_code)]
+fn write_f32_sample(out: &mut Vec<u8>, shape: &PcmShape, sample: f32) {
+    let sample = sample.clamp(-1.0, 1.0);
+    let bytes_per_channel = (shape.bits / 8) as usize;
+    let mut buf = [0u8; 4];
+    match shape.bits {
+        8 => {
+            buf[0] = ((sample * 127.0) as i32 + 128).clamp(0, 255) as u8;
+        }
+        16 => {
+            let v = (sample * 32767.0) as i16;
+            if shape.is_big_endian {
+                buf[..2].copy_from_slice(&v.to_be_bytes());
+            } else {
+                buf[..2].copy_from_slice(&v.to_le_bytes());
+            }
+        }
+        24 => {
+            let v = (sample * 8388607.0) as i32;
+            if shape.is_big_endian {
+                buf[..3].copy_from_slice(&[(v >> 16) as u8, (v >> 8) as u8, v as u8]);
+            } else {
+                buf[..3].copy_from_slice(&[v as u8, (v >> 8) as u8, (v >> 16) as u8]);
+            }
+        }
+        32 => {
+            if shape.is_float {
+                let v = sample;
+                if shape.is_big_endian {
+                    buf.copy_from_slice(&v.to_be_bytes());
+                } else {
+                    buf.copy_from_slice(&v.to_le_bytes());
+                }
+            } else {
+                let v = (sample * 2147483647.0) as i32;
+                if shape.is_big_endian {
+                    buf.copy_from_slice(&v.to_be_bytes());
+                } else {
+                    buf.copy_from_slice(&v.to_le_bytes());
+                }
+            }
+        }
+        _ => {}
+    }
+    out.extend_from_slice(&buf[..bytes_per_channel]);
 }
 
 pub const FUNCTIONS: FunctionExports = &[

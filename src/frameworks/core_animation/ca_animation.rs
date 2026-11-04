@@ -29,6 +29,18 @@ pub const kCAFillModeBoth: &str = "both";
 pub const kCAFillModeForwards: &str = "forwards";
 pub const kCAFillModeRemoved: &str = "removed";
 
+#[derive(Default)]
+struct CAAnimationGroupHostObject {
+    superclass: CAAnimationHostObject,
+    animations: id, // NSArray*
+    key_path: id,
+    from_value: id,
+    to_value: id,
+    by_value: id,
+}
+
+impl_HostObject_with_superclass!(CAAnimationGroupHostObject);
+
 pub const CONSTANTS: ConstantExports = &[
     // `CATransitionType` values.
     (
@@ -357,6 +369,73 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (())setPath:(id)path { // CGPathRef
     todo_objc_setter!(this, path);
+}
+
+@end
+
+@implementation CAAnimationGroup: CAAnimation
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let host_object = Box::<CAAnimationGroupHostObject>::default();
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
+
+- (())setAnimations:(id)animations { // NSArray*
+    log_dbg!("[(CAAnimationGroup*){:?} setAnimations:{:?}]", this, animations);
+    env.objc.borrow_mut::<CAAnimationGroupHostObject>(this).animations = animations;
+    retain(env, animations);
+}
+
+- (id)animations {
+    env.objc.borrow::<CAAnimationGroupHostObject>(this).animations
+}
+
+
+- (())setKeyPath:(id)path {
+    let path_copy: id = if path == nil { nil } else { msg![env; path copy] };
+    let old = env.objc.borrow::<CAAnimationGroupHostObject>(this).key_path;
+    env.objc.borrow_mut::<CAAnimationGroupHostObject>(this).key_path = path_copy;
+    if old != nil {
+        release(env, old);
+    }
+}
+- (id)keyPath { env.objc.borrow::<CAAnimationGroupHostObject>(this).key_path }
+
+- (())setFromValue:(id)value {
+    let old = env.objc.borrow::<CAAnimationGroupHostObject>(this).from_value;
+    retain(env, value);
+    env.objc.borrow_mut::<CAAnimationGroupHostObject>(this).from_value = value;
+    if old != nil { release(env, old); }
+}
+- (id)fromValue { env.objc.borrow::<CAAnimationGroupHostObject>(this).from_value }
+
+- (())setToValue:(id)value {
+    let old = env.objc.borrow::<CAAnimationGroupHostObject>(this).to_value;
+    retain(env, value);
+    env.objc.borrow_mut::<CAAnimationGroupHostObject>(this).to_value = value;
+    if old != nil { release(env, old); }
+}
+- (id)toValue { env.objc.borrow::<CAAnimationGroupHostObject>(this).to_value }
+
+- (())setByValue:(id)value {
+    let old = env.objc.borrow::<CAAnimationGroupHostObject>(this).by_value;
+    retain(env, value);
+    env.objc.borrow_mut::<CAAnimationGroupHostObject>(this).by_value = value;
+    if old != nil { release(env, old); }
+}
+- (id)byValue { env.objc.borrow::<CAAnimationGroupHostObject>(this).by_value }
+
+- (())dealloc {
+    let &CAAnimationGroupHostObject {
+        animations, key_path, from_value, to_value, by_value, ..
+    } = env.objc.borrow(this);
+    if animations != nil { release(env, animations); }
+    if key_path != nil { release(env, key_path); }
+    if from_value != nil { release(env, from_value); }
+    if to_value != nil { release(env, to_value); }
+    if by_value != nil { release(env, by_value); }
+
+    msg_super![env; this dealloc]
 }
 
 @end

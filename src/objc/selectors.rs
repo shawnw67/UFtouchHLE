@@ -39,6 +39,7 @@ pub use crate::selector; // #[macro_export] is weird...
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 #[repr(transparent)]
 #[allow(clippy::upper_case_acronyms)] // silly clippit, this isn't an acronym!
+#[derive(Default)]
 pub struct SEL(ConstPtr<u8>);
 
 impl SEL {

@@ -38,25 +38,45 @@ const CONSTANTS: ConstantExports = &[
     ("_NSFontAttributeName", HostConstant::NSString("NSFont")),
 ];
 
+pub mod ns_paragraph_style;
 pub mod ui_accelerometer;
+pub mod ui_action_sheet;
+pub mod ui_activity;
 pub mod ui_activity_indicator_view;
+pub mod ui_alert_controller;
 pub mod ui_application;
 pub mod ui_bar_button_item;
 pub mod ui_bezier_path;
 pub mod ui_color;
+pub mod ui_custom_object;
 pub mod ui_device;
+pub mod ui_document;
 pub mod ui_event;
 pub mod ui_font;
 pub mod ui_geometry;
+pub mod ui_gesture_recognizer;
 pub mod ui_graphics;
 pub mod ui_image;
 pub mod ui_image_picker_controller;
+pub mod ui_keyboard;
+pub mod ui_launch_delegate;
+pub mod ui_layout_placeholders;
 pub mod ui_local_notification;
-pub mod ui_navigation_item;
+pub mod ui_navigation_bar;
 pub mod ui_nib;
+pub mod ui_page_view_controller;
 pub mod ui_pasteboard;
+pub mod ui_pinch_gesture_recognizer;
+pub mod ui_popover_controller;
 pub mod ui_responder;
+pub mod ui_rotation_gesture_recognizer;
 pub mod ui_screen;
+pub mod ui_search_bar;
+pub mod ui_split_view_controller;
+pub mod ui_storyboard;
+pub mod ui_tab_bar_controller;
+pub mod ui_tab_bar_item;
+pub mod ui_text_input;
 pub mod ui_touch;
 pub mod ui_view;
 pub mod ui_view_controller;
@@ -65,6 +85,31 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     path: "/System/Library/Frameworks/UIKit.framework/UIKit",
     aliases: &[],
     class_exports: &[
+        ui_view::ui_text_selection_view::CLASSES,
+        ui_view::ui_table_view::CLASSES,
+        ui_view::ui_refresh_control::CLASSES,
+        ui_view::ui_collection_view::CLASSES,
+        ui_text_input::CLASSES,
+        ui_tab_bar_item::CLASSES,
+        ui_tab_bar_controller::CLASSES,
+        ui_storyboard::CLASSES,
+        ui_split_view_controller::CLASSES,
+        ui_search_bar::CLASSES,
+        ui_rotation_gesture_recognizer::CLASSES,
+        ui_popover_controller::CLASSES,
+        ui_pinch_gesture_recognizer::CLASSES,
+        ui_page_view_controller::CLASSES,
+        ui_navigation_bar::CLASSES,
+        ui_layout_placeholders::CLASSES,
+        ui_launch_delegate::CLASSES,
+        ui_keyboard::CLASSES,
+        ui_gesture_recognizer::CLASSES,
+        ui_document::CLASSES,
+        ui_custom_object::CLASSES,
+        ui_alert_controller::CLASSES,
+        ui_activity::CLASSES,
+        ui_action_sheet::CLASSES,
+        ns_paragraph_style::CLASSES,
         ui_accelerometer::CLASSES,
         ui_activity_indicator_view::CLASSES,
         ui_application::CLASSES,
@@ -77,7 +122,6 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         ui_image::CLASSES,
         ui_image_picker_controller::CLASSES,
         ui_local_notification::CLASSES,
-        ui_navigation_item::CLASSES,
         ui_nib::CLASSES,
         ui_pasteboard::CLASSES,
         ui_responder::CLASSES,
@@ -104,6 +148,8 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         ui_view_controller::ui_navigation_controller::CLASSES,
     ],
     constant_exports: &[
+        ui_storyboard::CONSTANTS,
+        ui_keyboard::CONSTANTS,
         CONSTANTS,
         ui_application::CONSTANTS,
         ui_device::CONSTANTS,
@@ -120,6 +166,9 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
 #[derive(Default)]
 pub struct State {
     ui_accelerometer: ui_accelerometer::State,
+    ui_geometry: ui_geometry::State,
+    ui_keyboard: ui_keyboard::State,
+    ui_launch_delegate: ui_launch_delegate::State,
     ui_application: ui_application::State,
     ui_color: ui_color::State,
     ui_device: ui_device::State,

@@ -47,6 +47,15 @@ struct UIRuntimeEventConnectionHostObject {
 }
 impl_HostObject_with_superclass!(UIRuntimeEventConnectionHostObject);
 
+// Per Apple's UINib loading documentation, the `options` dictionary passed to
+// `-[UINib instantiateWithOwner:options:]` recognises a single documented key:
+// `UINibExternalObjects`. Older binaries (FaceFighter and a handful of other
+// iPhone OS 3.x apps) instead import the private `UINibProxiedObjectsKey`
+// constant; if it's missing the dyld stub silently resolves to NULL and the
+// app crashes when looking up its proxied objects. Expose the constant as a
+// host NSString so dyld can fix up the non-lazy import.
+pub const UINibProxiedObjectsKey: &str = "UINibProxiedObjectsKey";
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
@@ -324,6 +333,51 @@ pub const CLASSES: ClassExports = objc_classes! {
     } = env.objc.borrow(this);
 
     () = msg![env; source setValue:destination forKey:label];
+}
+
+@end
+
+@implementation UIRuntimeOutletCollectionConnection: UIRuntimeConnection
+
++ (id)alloc {
+    let host_object = Box::<UIRuntimeConnectionHostObject>::default();
+    env.objc.alloc_object(this, host_object, &mut env.mem)
+}
+
+- (())connect {
+    let &UIRuntimeConnectionHostObject { destination, label, source } = env.objc.borrow(this);
+
+    if source == nil || destination == nil || label == nil {
+        return;
+    }
+
+    let label_str = to_rust_string(env, label);
+    log_dbg!(
+        "UIRuntimeOutletCollectionConnection: connecting outlet collection '{}' on {:?} -> {:?}",
+        label_str, source, destination
+    );
+
+    // Try to get the existing array for this key
+    let existing_array: id = msg![env; source valueForKey:label];
+
+    if existing_array != nil {
+        // Array already exists, just add the destination to it
+        () = msg![env; existing_array addObject:destination];
+    } else {
+        // Create a new NSMutableArray, add the destination, and set it
+        let new_array: id = msg_class![env; NSMutableArray new];
+        () = msg![env; new_array addObject:destination];
+        () = msg![env; source setValue:new_array forKey:label];
+        release(env, new_array);
+    }
+}
+
+- (())dealloc {
+    let &UIRuntimeConnectionHostObject { destination, label, source } = env.objc.borrow(this);
+    release(env, destination);
+    release(env, label);
+    release(env, source);
+    env.objc.dealloc_object(this, &mut env.mem)
 }
 
 @end

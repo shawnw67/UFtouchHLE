@@ -18,6 +18,7 @@ pub mod ca_transaction;
 pub mod ca_transform3d;
 
 mod animation;
+pub mod ca_keyframe_animation;
 mod composition;
 mod scale2x;
 
@@ -37,6 +38,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     path: "/System/Library/Frameworks/QuartzCore.framework/QuartzCore",
     aliases: &[],
     class_exports: &[
+        ca_keyframe_animation::CLASSES,
         ca_animation::CLASSES,
         ca_display_link::CLASSES,
         ca_eagl_layer::CLASSES,

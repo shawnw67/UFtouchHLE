@@ -36,6 +36,11 @@ const kAudioSessionCategory_SoloAmbientSound: u32 = fourcc(b"solo");
 const kAudioSessionProperty_CurrentHardwareIOBufferDuration: u32 = fourcc(b"chbd");
 
 pub struct State {
+    pub property_listeners: Vec<(
+        AudioSessionPropertyID,
+        AudioSessionPropertyListener,
+        ConstVoidPtr,
+    )>,
     audio_session_category: u32,
     pub current_hardware_sample_rate: f64,
     pub current_hardware_output_number_channels: u32,
@@ -46,6 +51,7 @@ impl Default for State {
     fn default() -> Self {
         // TODO: Check values from a real device
         State {
+            property_listeners: Vec::new(),
             // This is the default value.
             audio_session_category: kAudioSessionCategory_SoloAmbientSound,
             // Values taken from an iOS 2 simulator
@@ -253,6 +259,59 @@ fn get_audio_session_property_size(in_ID: AudioSessionPropertyID) -> Option<Gues
     })
 }
 
+// Recommended replacement for AudioSessionAddPropertyListener /
+// -RemovePropertyListener,
+// see Apple's `Audio Session Support` (`AudioToolbox/AudioServices.h`).
+pub fn AudioSessionAddPropertyListenerWithUserData(
+    env: &mut Environment,
+    in_id: AudioSessionPropertyID,
+    in_proc: AudioSessionPropertyListener,
+    in_user_data: ConstVoidPtr,
+) -> OSStatus {
+    log_dbg!(
+        "AudioSessionAddPropertyListenerWithUserData({})",
+        debug_fourcc(in_id)
+    );
+    env.framework_state
+        .audio_toolbox
+        .audio_session
+        .property_listeners
+        .push((in_id, in_proc, in_user_data));
+    kAudioSessionNoErr
+}
+
+pub fn AudioSessionRemovePropertyListener(
+    env: &mut Environment,
+    in_id: AudioSessionPropertyID,
+) -> OSStatus {
+    log_dbg!(
+        "AudioSessionRemovePropertyListener({})",
+        debug_fourcc(in_id)
+    );
+    env.framework_state
+        .audio_toolbox
+        .audio_session
+        .property_listeners
+        .retain(|(id, _, _)| *id != in_id);
+    kAudioSessionNoErr
+}
+
+pub fn current_output_volume(env: &Environment) -> f32 {
+    env.framework_state
+        .audio_toolbox
+        .audio_session
+        .current_hardware_output_volume
+}
+
+pub fn set_current_output_volume(env: &mut Environment, volume: f32) {
+    env.framework_state
+        .audio_toolbox
+        .audio_session
+        .current_hardware_output_volume = volume.clamp(0.0, 1.0);
+}
+
+const kAudioSessionNoErr: OSStatus = 0;
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioSessionInitialize(_, _, _, _)),
     export_c_func!(AudioSessionGetProperty(_, _, _)),
@@ -261,4 +320,6 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioSessionSetActive(_)),
     export_c_func!(AudioSessionAddPropertyListener(_, _, _)),
     export_c_func!(AudioSessionRemovePropertyListenerWithUserData(_, _, _)),
+    export_c_func!(AudioSessionAddPropertyListenerWithUserData(_, _, _)),
+    export_c_func!(AudioSessionRemovePropertyListener(_)),
 ];

@@ -8,6 +8,7 @@
 use super::ui_event;
 use crate::frameworks::core_graphics::{CGPoint, CGRect};
 use crate::frameworks::foundation::{NSInteger, NSTimeInterval, NSUInteger};
+use crate::mem::GuestUSize;
 use crate::mem::MutVoidPtr;
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
@@ -27,6 +28,8 @@ pub const UITouchPhaseEnded: UITouchPhase = 3;
 #[derive(Default)]
 pub struct State {
     current_touches: HashMap<FingerId, id>,
+    /// Touches a gesture recognizer has cancelled for their view.
+    cancelled_by_gesture: std::collections::HashSet<id>,
 }
 
 pub(super) struct UITouchHostObject {
@@ -43,6 +46,95 @@ pub(super) struct UITouchHostObject {
     phase: UITouchPhase,
 }
 impl HostObject for UITouchHostObject {}
+
+/// Cancel view delivery once a recognizer begins, while continuing to feed
+/// the recognizer itself with movement/end events from these touches.
+pub(super) fn cancel_for_gesture(env: &mut Environment, touches: &[id]) {
+    let mut groups: HashMap<id, Vec<id>> = HashMap::new();
+    for &touch in touches {
+        if !env
+            .framework_state
+            .uikit
+            .ui_touch
+            .cancelled_by_gesture
+            .insert(touch)
+        {
+            continue;
+        }
+        let view: id = msg![env; touch view];
+        if view != nil {
+            groups.entry(view).or_default().push(touch);
+        }
+    }
+    for (view, touches) in groups {
+        let set: id = msg_class![env; NSMutableSet new];
+        let mut phases = Vec::new();
+        for touch in touches {
+            () = msg![env; set addObject:touch];
+            let old_phase = touch_ivars(env, touch, |v| {
+                let old = v.phase;
+                v.phase = 4;
+                old
+            });
+            phases.push((touch, old_phase));
+        }
+        let event = ui_event::new_event(env, set);
+        () = msg![env; view touchesCancelled:set withEvent:event];
+        for (touch, phase) in phases {
+            touch_ivars(env, touch, |v| v.phase = phase);
+        }
+        release(env, event);
+        release(env, set);
+    }
+}
+
+/// Run `f` with the guest-memory ivars of the (possibly unregistered —
+/// i.e. a guest-made bit-copy) UITouch at `this`. The borrow is not held
+/// across message sends: copy fields out first, then act on them.
+fn touch_ivars<R>(env: &mut Environment, this: id, f: impl FnOnce(&mut UITouchIvars) -> R) -> R {
+    let size = std::mem::size_of::<UITouchIvars>();
+    let bytes = env.mem.bytes_at_mut(this.cast(), size as GuestUSize);
+    let ptr = bytes.as_mut_ptr() as *mut UITouchIvars;
+    // `this` is a guest address and may not be 8-byte aligned, but
+    // `UITouchIvars` contains f64 fields (timestamp/CGPoint) that need
+    // 8-byte alignment. Forming a `&mut UITouchIvars` from a misaligned host
+    // pointer is undefined behaviour and aborts in debug builds ("misaligned
+    // pointer dereference") — which crashed Where's My Water on the first
+    // touch. Round-trip the struct through unaligned reads/writes instead so
+    // alignment of the backing guest allocation doesn't matter.
+    let mut ivars = unsafe { ptr.read_unaligned() };
+    let r = f(&mut ivars);
+    unsafe { ptr.write_unaligned(ivars) };
+    r
+}
+
+/// Guest-memory ivars for `UITouch`.
+///
+/// Some engines (Gameloft's Cross engine in Scarface, etc.) do a raw
+/// `memcpy` of the whole 0x40-byte `UITouch` object into their own
+/// structures and later send messages to that *copy*. On real iOS this
+/// works because instance methods read their ivars from the object's own
+/// guest memory. To emulate that, ALL public state lives in guest memory
+/// at self-consistent offsets within the first 0x40 bytes; methods must
+/// never read it from the host object (a copy is not registered in the
+/// object map, so a host-side lookup would fail and return garbage).
+/// The layout is 0x40 bytes to match the stride guest engines use when they
+/// bit-copy a UITouch.
+#[repr(C)]
+struct UITouchIvars {
+    /// Written by the runtime in `alloc_object_inner`; never touched by us.
+    _isa: u32,
+    window: id,                 // 0x04
+    view: id,                   // 0x08
+    phase: UITouchPhase,        // 0x0C
+    timestamp: NSTimeInterval,  // 0x10
+    location: CGPoint,          // 0x18
+    previous_location: CGPoint, // 0x28
+    tap_count: u32,             // 0x38
+    touch_type: UITouchType,    // 0x3C
+}
+
+pub type UITouchType = NSInteger;
 
 pub const CLASSES: ClassExports = objc_classes! {
 

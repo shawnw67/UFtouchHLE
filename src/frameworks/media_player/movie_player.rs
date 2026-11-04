@@ -27,6 +27,9 @@ use crate::objc::{
 };
 use crate::Environment;
 use std::collections::{HashMap, VecDeque};
+use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::time::{Duration, Instant};
 
 /// A movie that's being played.
@@ -97,6 +100,77 @@ const MPMoviePlayerPlaybackDidFinishReasonUserInfoKey: &str =
     "MPMoviePlayerPlaybackDidFinishReasonUserInfoKey";
 
 /// `NSNotificationName` values and other constants.
+/// Read the duration (in seconds) of an MPEG-4/QuickTime file from the `mvhd`
+/// box inside its top-level `moov` box. Returns `None` if the file can't be
+/// parsed. See ISO/IEC 14496-12, "Movie Header Box".
+#[allow(dead_code)]
+pub(super) fn read_mp4_duration<F: Read + Seek>(file: &mut F) -> Option<f64> {
+    /// Reads a box header, returning (box start, box type, box size).
+    fn box_header<F: Read + Seek>(file: &mut F) -> Option<(u64, [u8; 4], u64)> {
+        let start = file.stream_position().ok()?;
+        let mut header = [0u8; 8];
+        file.read_exact(&mut header).ok()?;
+        let mut size = u32::from_be_bytes(header[0..4].try_into().unwrap()) as u64;
+        let kind: [u8; 4] = header[4..8].try_into().unwrap();
+        let mut header_len = 8;
+        if size == 1 {
+            let mut large = [0u8; 8];
+            file.read_exact(&mut large).ok()?;
+            size = u64::from_be_bytes(large);
+            header_len = 16;
+        } else if size == 0 {
+            // Box extends to the end of the file.
+            let end = file.seek(SeekFrom::End(0)).ok()?;
+            file.seek(SeekFrom::Start(start + header_len)).ok()?;
+            size = end - start;
+        }
+        if size < header_len {
+            return None;
+        }
+        Some((start, kind, size))
+    }
+
+    file.seek(SeekFrom::Start(0)).ok()?;
+    let (moov_start, moov_size) = loop {
+        let (start, kind, size) = box_header(file)?;
+        if &kind == b"moov" {
+            break (start, size);
+        }
+        file.seek(SeekFrom::Start(start + size)).ok()?;
+    };
+    loop {
+        let (start, kind, size) = box_header(file)?;
+        if start >= moov_start + moov_size {
+            return None;
+        }
+        if &kind == b"mvhd" {
+            let mut version_flags = [0u8; 4];
+            file.read_exact(&mut version_flags).ok()?;
+            let (timescale, duration) = if version_flags[0] == 1 {
+                // creation/modification time are 64-bit in version 1
+                let mut b = [0u8; 28];
+                file.read_exact(&mut b).ok()?;
+                (
+                    u32::from_be_bytes(b[16..20].try_into().unwrap()),
+                    u64::from_be_bytes(b[20..28].try_into().unwrap()),
+                )
+            } else {
+                let mut b = [0u8; 16];
+                file.read_exact(&mut b).ok()?;
+                (
+                    u32::from_be_bytes(b[8..12].try_into().unwrap()),
+                    u32::from_be_bytes(b[12..16].try_into().unwrap()) as u64,
+                )
+            };
+            if timescale == 0 || duration == 0 {
+                return None;
+            }
+            return Some(duration as f64 / timescale as f64);
+        }
+        file.seek(SeekFrom::Start(start + size)).ok()?;
+    }
+}
+
 pub const CONSTANTS: ConstantExports = &[
     (
         "_MPMoviePlayerPlaybackDidFinishNotification",

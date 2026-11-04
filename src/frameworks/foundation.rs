@@ -16,6 +16,9 @@ use crate::objc::id;
 use crate::Environment;
 
 pub mod _nib_archive_decoder;
+pub mod ab_people_picker_navigation_controller;
+pub mod asidentifier_manager;
+pub mod chipmunk_space;
 pub mod ns_array;
 pub mod ns_attributed_string;
 pub mod ns_autorelease_pool;
@@ -23,9 +26,11 @@ pub mod ns_bundle;
 pub mod ns_calendar;
 pub mod ns_character_set;
 pub mod ns_coder;
+pub mod ns_condition;
 pub mod ns_data;
 pub mod ns_date;
 pub mod ns_date_formatter;
+pub mod ns_decimal_number;
 pub mod ns_dictionary;
 pub mod ns_enumerator;
 pub mod ns_error;
@@ -33,7 +38,12 @@ pub mod ns_exception;
 pub mod ns_file_handle;
 pub mod ns_file_manager;
 pub mod ns_garbage_collector;
+pub mod ns_hash_table;
+pub mod ns_host;
+pub mod ns_http_cookie_storage;
 pub mod ns_index_path;
+pub mod ns_index_set;
+pub mod ns_input_stream;
 pub mod ns_invocation;
 pub mod ns_json_serialization;
 pub mod ns_keyed_archiver;
@@ -41,7 +51,10 @@ pub mod ns_keyed_unarchiver;
 pub mod ns_locale;
 pub mod ns_lock;
 pub mod ns_log;
+pub mod ns_map_table;
+pub mod ns_metadata_query;
 pub mod ns_method_signature;
+pub mod ns_net_service;
 pub mod ns_notification;
 pub mod ns_notification_center;
 pub mod ns_null;
@@ -49,27 +62,69 @@ pub mod ns_number_formatter;
 pub mod ns_objc_runtime;
 pub mod ns_object;
 pub mod ns_operation;
+pub mod ns_ordered_set;
+pub mod ns_persistent_store_coordinator;
+pub mod ns_pointer_array;
+pub mod ns_port;
+pub mod ns_predicate;
 pub mod ns_process_info;
+pub mod ns_progress;
 pub mod ns_property_list_serialization;
+pub mod ns_regular_expression;
 pub mod ns_run_loop;
 pub mod ns_scanner;
 pub mod ns_set;
+pub mod ns_sort_descriptor;
 pub mod ns_string;
+pub mod ns_text_checking_result;
 pub mod ns_thread;
 pub mod ns_time_zone;
 pub mod ns_timer;
+pub mod ns_ubiquitous_key_value_store;
+pub mod ns_undo_manager;
 pub mod ns_url;
 pub mod ns_url_connection;
 pub mod ns_url_request;
+pub mod ns_url_response;
+pub mod ns_url_session;
 pub mod ns_user_defaults;
 pub mod ns_uuid;
 pub mod ns_value;
 pub mod ns_xml_parser;
+pub mod url_loading;
+pub mod url_protocol;
 
 pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     path: "/System/Library/Frameworks/Foundation.framework/Foundation",
     aliases: &[],
     class_exports: &[
+        url_protocol::CLASSES,
+        ns_url_session::CLASSES,
+        ns_url_response::CLASSES,
+        ns_undo_manager::CLASSES,
+        ns_ubiquitous_key_value_store::CLASSES,
+        ns_text_checking_result::CLASSES,
+        ns_sort_descriptor::CLASSES,
+        ns_regular_expression::CLASSES,
+        ns_progress::CLASSES,
+        ns_predicate::CLASSES,
+        ns_port::CLASSES,
+        ns_pointer_array::CLASSES,
+        ns_persistent_store_coordinator::CLASSES,
+        ns_ordered_set::CLASSES,
+        ns_net_service::CLASSES,
+        ns_metadata_query::CLASSES,
+        ns_map_table::CLASSES,
+        ns_input_stream::CLASSES,
+        ns_index_set::CLASSES,
+        ns_http_cookie_storage::CLASSES,
+        ns_host::CLASSES,
+        ns_hash_table::CLASSES,
+        ns_decimal_number::CLASSES,
+        ns_condition::CLASSES,
+        chipmunk_space::CLASSES,
+        asidentifier_manager::CLASSES,
+        ab_people_picker_navigation_controller::CLASSES,
         // Block literals use NSObject methods; keep the private class in a
         // framework linked after libobjc, including in legacy SDK test stubs.
         crate::libc::dispatch::CLASSES,
@@ -123,6 +178,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         ns_xml_parser::CLASSES,
     ],
     constant_exports: &[
+        ns_persistent_store_coordinator::CONSTANTS,
         ns_calendar::CONSTANTS,
         ns_error::CONSTANTS,
         ns_exception::CONSTANTS,
@@ -144,6 +200,11 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
 #[derive(Default)]
 pub struct State {
     ns_bundle: ns_bundle::State,
+    ns_http_cookie_storage: ns_http_cookie_storage::State,
+    pub ns_ubiquitous_key_value_store: ns_ubiquitous_key_value_store::State,
+    pub ns_undo_manager: ns_undo_manager::State,
+    ns_url_session: ns_url_session::State,
+    url_protocol: url_protocol::State,
     ns_file_manager: ns_file_manager::State,
     ns_locale: ns_locale::State,
     ns_notification_center: ns_notification_center::State,
@@ -205,6 +266,22 @@ pub const NSOrderedDescending: NSComparisonResult = 1;
 
 /// Number of seconds.
 pub type NSTimeInterval = f64;
+
+/// Convert an `NSTimeInterval` to a [`std::time::Duration`], or [`None`] if it
+/// is NaN, infinite, negative or too large. Apple's implementation silently
+/// clamps these cases instead of aborting.
+pub fn ns_time_interval_to_duration(ti: NSTimeInterval) -> Option<std::time::Duration> {
+    if !ti.is_finite() || ti < 0.0 {
+        return None;
+    }
+    std::time::Duration::try_from_secs_f64(ti).ok()
+}
+
+/// Same as [`ns_time_interval_to_duration`] but returns
+/// [`std::time::Duration::ZERO`] when the input would otherwise be rejected.
+pub fn ns_time_interval_to_duration_or_zero(ti: NSTimeInterval) -> std::time::Duration {
+    ns_time_interval_to_duration(ti).unwrap_or(std::time::Duration::ZERO)
+}
 
 /// UTF-16 code unit.
 #[allow(non_camel_case_types)]

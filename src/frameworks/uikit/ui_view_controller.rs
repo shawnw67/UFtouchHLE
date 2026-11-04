@@ -17,6 +17,7 @@ use crate::frameworks::uikit::ui_application::{
     UIInterfaceOrientation, UIInterfaceOrientationPortrait,
 };
 use crate::frameworks::uikit::ui_view::set_view_controller;
+use crate::objc::msg_super;
 use crate::objc::{
     id, msg, msg_class, nil, objc_classes, release, retain, todo_objc_setter, Class, ClassExports,
     HostObject, NSZonePtr,
@@ -27,6 +28,11 @@ pub mod ui_navigation_controller;
 
 #[derive(Default)]
 pub struct UIViewControllerHostObject {
+    /// The `UIStoryboard` this came from, retained, or nil.
+    pub(crate) storyboard: id,
+    /// Bundle-relative directory of the storyboardc whose view nib `-loadView`
+    /// uses, or empty.
+    pub(crate) storyboard_view_nib_dir: String,
     /// The root view.
     /// `UIView*`
     view: id,
@@ -58,6 +64,36 @@ pub(super) fn size_nib_view(env: &mut Environment, controller: id) {
 impl HostObject for UIViewControllerHostObject {}
 
 type UIModalTransitionStyle = NSInteger;
+
+/// Set the `UIStoryboard*` back-pointer on the view controller. The
+/// storyboard is retained so the view controller can be returned without
+/// the user having to keep a reference to it themselves.
+pub(crate) fn set_storyboard(env: &mut Environment, vc: id, storyboard: id) {
+    if storyboard != nil {
+        retain(env, storyboard);
+    }
+    let host = env.objc.borrow_mut::<UIViewControllerHostObject>(vc);
+    let old = host.storyboard;
+    host.storyboard = storyboard;
+    if old != nil {
+        release(env, old);
+    }
+}
+
+/// Attach the storyboardc directory (bundle-relative) that should be
+/// consulted when the view controller's `-loadView` looks up its view
+/// nib. Promoted from a `UIStoryboardPlaceholder` that was set as the
+/// view via the scene nib's outlet connection.
+pub(crate) fn promote_storyboard_placeholder(
+    env: &mut Environment,
+    vc: id,
+    storyboardc_relative_dir: &str,
+) {
+    let host = env.objc.borrow_mut::<UIViewControllerHostObject>(vc);
+    if host.storyboard_view_nib_dir.is_empty() {
+        host.storyboard_view_nib_dir = storyboardc_relative_dir.to_string();
+    }
+}
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -100,7 +136,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())dealloc {
-    let &UIViewControllerHostObject { view, nib_name, bundle, navigation_item } = env.objc.borrow(this);
+    let &UIViewControllerHostObject { view, nib_name, bundle, navigation_item, storyboard, .. } = env.objc.borrow(this);
 
     if view != nil {
         set_view_controller(env, view, nil);
@@ -109,6 +145,9 @@ pub const CLASSES: ClassExports = objc_classes! {
     release(env, nib_name);
     release(env, bundle);
     release(env, navigation_item);
+    if storyboard != nil {
+        release(env, storyboard);
+    }
 
     env.objc.dealloc_object(this, &mut env.mem);
 }
@@ -287,6 +326,36 @@ pub const CLASSES: ClassExports = objc_classes! {
     let next_responder = msg![env; view superview];
     log_dbg!("[(UIView*){:?} nextResponder] => {:?}", this, next_responder);
     next_responder
+}
+
+@end
+
+@implementation BarcodeReaderViewController: UIViewController
+
+- (())viewDidAppear:(bool)animated {
+    () = msg_super![env; this viewDidAppear:animated];
+    log!("[HACK] BarcodeReaderViewController auto-closing!");
+
+    () = msg![env; this dismissModalViewControllerAnimated:false];
+    let view: id = msg![env; this view];
+    if view != nil {
+        () = msg![env; view removeFromSuperview];
+    }
+}
+
+@end
+
+@implementation VideoViewController: UIViewController
+
+- (())viewDidAppear:(bool)animated {
+    () = msg_super![env; this viewDidAppear:animated];
+    log!("[HACK] VideoViewController auto-closing!");
+
+    () = msg![env; this dismissModalViewControllerAnimated:false];
+    let view: id = msg![env; this view];
+    if view != nil {
+        () = msg![env; view removeFromSuperview];
+    }
 }
 
 @end

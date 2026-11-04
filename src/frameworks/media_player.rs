@@ -11,11 +11,18 @@ mod media_library;
 mod media_picker_controller;
 mod media_playlist;
 mod media_query;
+pub mod mf_mail_compose_view_controller;
 pub(crate) mod movie_decoder;
 mod movie_player;
+mod mp_volume_view;
 mod music_player;
 
 use crate::dyld::{ConstantExports, HostConstant};
+
+#[allow(dead_code)]
+pub(crate) fn mp4_duration(bytes: &[u8]) -> Option<f64> {
+    movie_player::read_mp4_duration(&mut std::io::Cursor::new(bytes))
+}
 
 pub const CONSTANTS: ConstantExports = &[
     (
@@ -44,6 +51,8 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     path: "/System/Library/Frameworks/MediaPlayer.framework/MediaPlayer",
     aliases: &[],
     class_exports: &[
+        mp_volume_view::CLASSES,
+        mf_mail_compose_view_controller::CLASSES,
         movie_player::CLASSES,
         music_player::CLASSES,
         media_entity::CLASSES,

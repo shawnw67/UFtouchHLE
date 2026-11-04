@@ -5,6 +5,8 @@
  */
 //! `AudioServices.h` (Audio Services)
 
+use crate::frameworks::core_audio_types::debug_fourcc;
+use crate::mem::ConstVoidPtr;
 use std::collections::HashMap;
 
 use crate::abi::{CallFromHost, GuestFunction};
@@ -364,6 +366,21 @@ pub(crate) fn tick_system_sound_completions(env: &mut Environment, run_loop: id)
     }
 }
 
+fn AudioServicesSetProperty(
+    _env: &mut Environment,
+    in_property_id: AudioServicesPropertyID,
+    _in_specifier_size: u32,
+    _in_specifier: ConstVoidPtr,
+    _in_property_data_size: u32,
+    _in_property_data: ConstVoidPtr,
+) -> OSStatus {
+    log!(
+        "AudioServicesSetProperty: property {} is unimplemented",
+        debug_fourcc(in_property_id)
+    );
+    0
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioServicesCreateSystemSoundID(_, _)),
     export_c_func!(AudioServicesGetProperty(_, _, _, _, _)),
@@ -372,4 +389,5 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioServicesAddSystemSoundCompletion(_, _, _, _, _)),
     export_c_func!(AudioServicesRemoveSystemSoundCompletion(_)),
     export_c_func!(AudioServicesDisposeSystemSoundID(_)),
+    export_c_func!(AudioServicesSetProperty(_, _, _, _, _)),
 ];

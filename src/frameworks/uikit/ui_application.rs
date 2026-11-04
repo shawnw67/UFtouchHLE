@@ -50,6 +50,14 @@ type UIRemoteNotificationType = NSUInteger;
 type UIStatusBarAnimation = NSInteger;
 type UIStatusBarStyle = NSInteger;
 
+#[derive(Default)]
+struct UIUserNotificationSettingsHostObject {
+    types: NSUInteger,
+    categories: id,
+}
+
+impl HostObject for UIUserNotificationSettingsHostObject {}
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
@@ -272,6 +280,62 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (())scheduleLocalNotification:(id)local_notif { // UILocalNotification *
     log!("TODO: [(UIApplication*){:?} scheduleLocalNotification:{:?}", this, local_notif);
+}
+
+@end
+
+@implementation UIUserNotificationSettings: NSObject
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    env.objc.alloc_object(
+        this,
+        Box::new(UIUserNotificationSettingsHostObject {
+            types: 0,
+            categories: nil,
+        }),
+        &mut env.mem,
+    )
+}
+
++ (id)settingsForTypes:(NSUInteger)types categories:(id)categories {
+    let settings: id = msg![env; this alloc];
+    let host = env.objc.borrow_mut::<UIUserNotificationSettingsHostObject>(settings);
+    host.types = types;
+    host.categories = categories;
+    retain(env, categories);
+    autorelease(env, settings)
+}
+
+- (id)init {
+    this
+}
+
+- (())dealloc {
+    let categories = env
+        .objc
+        .borrow::<UIUserNotificationSettingsHostObject>(this)
+        .categories;
+    release(env, categories);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+
+- (NSUInteger)types {
+    env.objc
+        .borrow::<UIUserNotificationSettingsHostObject>(this)
+        .types
+}
+
+- (id)categories {
+    let categories = env
+        .objc
+        .borrow::<UIUserNotificationSettingsHostObject>(this)
+        .categories;
+    if categories == nil {
+        nil
+    } else {
+        retain(env, categories);
+        autorelease(env, categories)
+    }
 }
 
 @end

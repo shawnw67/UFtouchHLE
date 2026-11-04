@@ -166,4 +166,12 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
+@implementation GKPeerPickerController: NSObject
+// TODO
+@end
+
+@implementation GKSessionDelegate: NSObject
+// TODO
+@end
+
 };

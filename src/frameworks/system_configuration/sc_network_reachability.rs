@@ -8,6 +8,8 @@
 use crate::abi::GuestFunction;
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::core_foundation::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
+use crate::frameworks::core_foundation::CFRelease;
+use crate::frameworks::core_foundation::CFRetain;
 use crate::frameworks::core_foundation::CFTypeRef;
 use crate::libc::sys::socket::sockaddr;
 use crate::mem::{ConstPtr, MutPtr, MutVoidPtr, Ptr};
@@ -31,6 +33,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 };
 
+#[derive(Default)]
 struct SCNetworkReachabilityHostObject {
     address: Option<SocketAddrV4>,
     /// Created from a host name rather than an address.
@@ -277,6 +280,47 @@ fn SCNetworkReachabilityUnscheduleFromRunLoop(
     false
 }
 
+fn SCNetworkReachabilityCreateWithAddressPair(
+    env: &mut Environment,
+    _allocator: CFAllocatorRef,
+    _local: ConstPtr<u8>,
+    _remote: ConstPtr<u8>,
+) -> SCNetworkReachabilityRef {
+    let isa = env
+        .objc
+        .get_known_class("_Podroid_SCNetworkReachability", &mut env.mem);
+    env.objc.alloc_object(
+        isa,
+        Box::new(SCNetworkReachabilityHostObject::default()),
+        &mut env.mem,
+    )
+}
+
+pub fn SCNetworkReachabilityRelease(env: &mut Environment, target: SCNetworkReachabilityRef) {
+    if !target.is_null() {
+        CFRelease(env, target);
+    }
+}
+
+pub fn SCNetworkReachabilityRetain(
+    env: &mut Environment,
+    target: SCNetworkReachabilityRef,
+) -> SCNetworkReachabilityRef {
+    if !target.is_null() {
+        CFRetain(env, target)
+    } else {
+        target
+    }
+}
+
+fn SCNetworkReachabilitySetDispatchQueue(
+    _env: &mut Environment,
+    _target: SCNetworkReachabilityRef,
+    _queue: MutVoidPtr,
+) -> bool {
+    false
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(SCNetworkReachabilityCreateWithName(_, _)),
     export_c_func!(SCNetworkReachabilityCreateWithAddress(_, _)),
@@ -284,4 +328,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(SCNetworkReachabilitySetCallback(_, _, _)),
     export_c_func!(SCNetworkReachabilityScheduleWithRunLoop(_, _, _)),
     export_c_func!(SCNetworkReachabilityUnscheduleFromRunLoop(_, _, _)),
+    export_c_func!(SCNetworkReachabilityCreateWithAddressPair(_, _, _)),
+    export_c_func!(SCNetworkReachabilityRelease(_)),
+    export_c_func!(SCNetworkReachabilityRetain(_)),
+    export_c_func!(SCNetworkReachabilitySetDispatchQueue(_, _)),
 ];

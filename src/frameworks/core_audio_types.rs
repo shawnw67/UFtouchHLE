@@ -172,3 +172,12 @@ pub const kAudioFormatFlagIsBigEndian: AudioFormatFlags = 1 << 1;
 pub const kAudioFormatFlagIsSignedInteger: AudioFormatFlags = 1 << 2;
 pub const kAudioFormatFlagIsPacked: AudioFormatFlags = 1 << 3;
 pub const kAudioFormatFlagIsAlignedHigh: AudioFormatFlags = 1 << 4;
+/// MPEG-4 AAC: FourCC `'aac '` (0x61616320)
+#[allow(dead_code)]
+pub const kAudioFormatMPEG4AAC: AudioFormatID = fourcc(b"aac ");
+
+/// MPEG-1 / MPEG-2 Layer III audio. Apple's `<CoreAudio/CoreAudioTypes.h>`
+/// defines `kAudioFormatMPEGLayer3` as FourCC `'.mp3'`
+/// (<https://developer.apple.com/documentation/coreaudiotypes/kaudioformatmpeglayer3>).
+#[allow(dead_code)]
+pub const kAudioFormatMPEGLayer3: AudioFormatID = fourcc(b".mp3");

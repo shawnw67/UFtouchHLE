@@ -397,3 +397,122 @@ mod metadata_tests {
         assert!(caf_user_data(b"caff\0\x01\0\0mar").is_empty());
     }
 }
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct CompressedPackets {
+    pub sample_rate: f64,
+    pub channels_per_frame: u32,
+    pub frames_per_packet: u32,
+    pub packet_bytes: Vec<u8>,
+    pub packet_offsets: Vec<usize>,
+    pub magic_cookie: Vec<u8>,
+}
+
+impl CompressedPackets {
+    #[allow(dead_code)]
+    pub fn packet_count(&self) -> u64 {
+        self.packet_offsets.len().saturating_sub(1) as u64
+    }
+
+    #[allow(dead_code)]
+    pub fn byte_count(&self) -> u64 {
+        self.packet_bytes.len() as u64
+    }
+
+    #[allow(dead_code)]
+    pub fn packet_size_upper_bound(&self) -> u32 {
+        self.packet_offsets
+            .windows(2)
+            .map(|w| (w[1] - w[0]) as u32)
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Byte offset and size of the packet with the given index, or [None] if
+    /// the index is out of range.
+    #[allow(dead_code)]
+    pub fn packet_info(&self, index: u64) -> Option<(u64, u32)> {
+        let index: usize = index.try_into().ok()?;
+        if index + 1 >= self.packet_offsets.len() {
+            return None;
+        }
+        let start = self.packet_offsets[index];
+        let end = self.packet_offsets[index + 1];
+        Some((start as u64, (end - start) as u32))
+    }
+
+    #[allow(dead_code)]
+    pub fn read_bytes(&self, offset: u64, buffer: &mut [u8]) -> Result<usize, ()> {
+        let start = offset as usize;
+        let src = self.packet_bytes.get(start..).ok_or(())?;
+        let n = buffer.len().min(src.len());
+        buffer[..n].copy_from_slice(&src[..n]);
+        Ok(n)
+    }
+}
+
+/// Parses the MPEG-1/2/2.5 Layer III frame header at the start of `bytes`.
+/// See ISO/IEC 11172-3 section 2.4.2.3 (and 13818-3 for the lower rates).
+#[allow(dead_code)]
+pub fn parse_mp3_frame_header(bytes: &[u8]) -> Option<Mp3FrameHeader> {
+    let &[b0, b1, b2, b3, ..] = bytes else {
+        return None;
+    };
+    // 11-bit sync word, then version (2 bits) and layer (2 bits).
+    if b0 != 0xFF || (b1 & 0xE0) != 0xE0 {
+        return None;
+    }
+    let version = (b1 >> 3) & 0x3; // 0: MPEG-2.5, 2: MPEG-2, 3: MPEG-1
+    let layer = (b1 >> 1) & 0x3; // 1: Layer III
+    if version == 1 || layer != 1 {
+        return None;
+    }
+    let bitrate_index = usize::from(b2 >> 4);
+    let sample_rate_index = usize::from((b2 >> 2) & 0x3);
+    // Free-format (0) frames have no length in the header.
+    if bitrate_index == 0 || bitrate_index == 15 || sample_rate_index == 3 {
+        return None;
+    }
+    const MPEG1_KBPS: [u32; 15] = [
+        0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,
+    ];
+    const MPEG2_KBPS: [u32; 15] = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+    let (bitrate, sample_rate, frames_per_packet) = match version {
+        3 => (
+            MPEG1_KBPS[bitrate_index],
+            [44100, 48000, 32000][sample_rate_index],
+            1152,
+        ),
+        2 => (
+            MPEG2_KBPS[bitrate_index],
+            [22050, 24000, 16000][sample_rate_index],
+            576,
+        ),
+        _ => (
+            MPEG2_KBPS[bitrate_index],
+            [11025, 12000, 8000][sample_rate_index],
+            576,
+        ),
+    };
+    let padding = u32::from((b2 >> 1) & 0x1);
+    let frame_len = (frames_per_packet / 8) * bitrate * 1000 / sample_rate + padding;
+    let channels = if (b3 >> 6) == 3 { 1 } else { 2 };
+    Some(Mp3FrameHeader {
+        frame_len: frame_len as usize,
+        sample_rate,
+        channels,
+        frames_per_packet,
+    })
+}
+
+/// The fields of an MPEG audio Layer III frame header that we need.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
+pub struct Mp3FrameHeader {
+    /// Length of the whole frame in bytes, header included.
+    pub frame_len: usize,
+    pub sample_rate: u32,
+    pub channels: u32,
+    /// 1152 for MPEG-1, 576 for MPEG-2 and MPEG-2.5.
+    pub frames_per_packet: u32,
+}

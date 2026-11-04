@@ -59,7 +59,7 @@ use classes::objc_disposeClassPair;
 use classes::objc_end_catch;
 use classes::objc_getClassList;
 use classes::objc_getMetaClass;
-use classes::objc_getProtocol;
+pub use classes::objc_getProtocol;
 use classes::objc_getRequiredClass;
 use classes::objc_lookUpClass;
 use classes::objc_readClassPair;
@@ -69,14 +69,14 @@ use classes::objc_retain;
 use classes::objc_retainAutorelease;
 use classes::objc_retainAutoreleaseReturnValue;
 use classes::objc_retainAutoreleasedReturnValue;
-use classes::objc_retainBlock;
+pub use classes::objc_retainBlock;
 use classes::objc_storeStrong;
 use classes::objc_unsafeClaimAutoreleasedReturnValue;
 use classes::object_getClassName;
 use classes::object_getIndexedIvars;
 use classes::protocol_conformsToProtocol;
 use classes::protocol_getMethodDescription;
-use classes::protocol_getName;
+pub use classes::protocol_getName;
 use classes::swift_getInitializedObjCClass;
 use messages::objc_msgSendSuper2_stret;
 use properties::class_getInstanceVariable;
@@ -176,6 +176,15 @@ pub struct ObjC {
 }
 
 impl ObjC {
+    /// Returns the name of a selector, panicking if it is unknown.
+    pub fn get_selector_name(&self, sel: SEL) -> &str {
+        self.selectors
+            .iter()
+            .find(|(_k, v)| **v == sel)
+            .map(|(k, _v)| k.as_str())
+            .expect("get_selector_name: unknown selector")
+    }
+
     pub fn new() -> ObjC {
         ObjC {
             selectors: Default::default(),

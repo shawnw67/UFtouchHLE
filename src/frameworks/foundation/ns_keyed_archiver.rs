@@ -34,6 +34,33 @@ struct NSKeyedArchiverHostObject {
 }
 impl HostObject for NSKeyedArchiverHostObject {}
 
+/// Encode a list of objects as an *inline* plist array of UID references stored
+/// under `key` in the archiver's current encoding scope.
+///
+/// This is the on-disk layout Apple's `NSKeyedArchiver` uses for the contents
+/// of container classes (e.g. `NSArray`'s `NS.objects`, `NSDictionary`'s
+/// `NS.keys`/`NS.objects`), and it's exactly what the decode side
+/// (`ns_keyed_unarchiver::keys_for_key`, used by `decode_current_array` and
+/// `decode_current_dict`) expects. `NSArray`/`NSDictionary`'s
+/// `encodeWithCoder:` use this so that touchHLE-produced archives round-trip
+/// correctly; the previous bespoke layouts (`NS.objects.0`, `NS.objects.1`, …
+/// for arrays and a single object reference for dictionaries) could not be read
+/// back by the decoder, which produced empty collections on unarchive.
+pub fn encode_objects_as_uid_array(env: &mut Environment, archiver: id, key: &str, objects: &[id]) {
+    let uids: Vec<Value> = objects
+        .iter()
+        .map(|&object| Value::Uid(encode_object(env, archiver, object)))
+        .collect();
+    let scope = get_value_to_encode_for_current_key(env, archiver);
+    if scope.contains_key(key) {
+        log!(
+            "Warning: NSKeyedArchiver overwriting existing value for key '{}'",
+            key
+        );
+    }
+    scope.insert(key.to_string(), Value::Array(uids));
+}
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);

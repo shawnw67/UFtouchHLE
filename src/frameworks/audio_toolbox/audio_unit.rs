@@ -1641,6 +1641,40 @@ fn mixer_frame_count_tracks_playback_rate_and_caps() {
     assert_eq!(render_frame_count(1.0, 44100.0, 1024), 1024);
 }
 
+fn AudioUnitProcess(
+    env: &mut Environment,
+    in_unit: AudioUnit,
+    _f: MutPtr<u32>,
+    _t: ConstVoidPtr,
+    _n: u32,
+    _d: MutVoidPtr,
+) -> OSStatus {
+    render_audio_unit(env, in_unit);
+    0
+}
+
+fn AudioUnitProcessMultiple(
+    _e: &mut Environment,
+    _u: AudioUnit,
+    _f: MutPtr<u32>,
+    _t: ConstVoidPtr,
+    _n: u32,
+    _in_b: u32,
+    _in_bl: ConstVoidPtr,
+    _out_bl: MutVoidPtr,
+) -> OSStatus {
+    0
+}
+
+fn AudioUnitScheduleParameters(
+    _e: &mut Environment,
+    _u: AudioUnit,
+    _p: ConstVoidPtr,
+    _n: u32,
+) -> OSStatus {
+    0
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitInitialize(_)),
     export_c_func!(AudioUnitUninitialize(_)),
@@ -1658,4 +1692,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioUnitReset(_, _, _)),
     export_c_func!(AudioOutputUnitStart(_)),
     export_c_func!(AudioOutputUnitStop(_)),
+    export_c_func!(AudioUnitProcess(_, _, _, _, _)),
+    export_c_func!(AudioUnitProcessMultiple(_, _, _, _, _, _, _)),
+    export_c_func!(AudioUnitScheduleParameters(_, _, _)),
 ];

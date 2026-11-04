@@ -40,7 +40,7 @@ const UIControlContentVerticalAlignmentCenter: UIControlContentVerticalAlignment
 pub type UIControlContentHorizontalAlignment = NSInteger;
 const UIControlContentHorizontalAlignmentCenter: UIControlContentHorizontalAlignment = 0;
 
-struct UIControlHostObject {
+pub struct UIControlHostObject {
     superclass: super::UIViewHostObject,
     enabled: bool,
     selected: bool,

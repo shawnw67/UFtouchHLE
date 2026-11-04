@@ -246,6 +246,9 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @end
 
+@implementation UICachedDeviceWhiteColor: UIColor
+@end
+
 };
 
 /// Shortcut for use in Core Animation's compositor: get the RGBA triple for a

@@ -150,6 +150,62 @@ pub struct TrivialHostObject;
 impl HostObject for TrivialHostObject {}
 
 impl super::ObjC {
+    /// Look up the instance size (in bytes, including the `isa` pointer) for
+    /// a class. Falls back to the size of a bare `objc_object` (just the isa)
+    /// when the class has no registered [ClassHostObject] — matching the
+    /// minimum size the runtime would allocate.
+    #[allow(dead_code)]
+    pub fn class_instance_size(&self, class: Class) -> GuestUSize {
+        self.get_host_object(class)
+            .and_then(|h| h.as_any().downcast_ref::<ClassHostObject>())
+            .map(|c| c.instance_size)
+            .unwrap_or(guest_size_of::<objc_object>())
+    }
+
+    /// The runtime primitive behind Apple's (deprecated) `NSCopyObject`:
+    /// create an exact, shallow, byte-for-byte copy of `object`.
+    ///
+    /// Per Apple's documentation, `NSCopyObject` "Creates an exact copy of an
+    /// object." It allocates a new instance of the same class as `object`
+    /// (plus `extra_bytes` of trailing storage) and copies the bytes of the
+    /// original instance into it. This is a *shallow* copy: object-pointer
+    /// ivars are duplicated as raw pointers without any extra retain, exactly
+    /// like the real implementation (classes that adopt `NSCopying` via
+    /// `NSCopyObject` are responsible for fixing up retained ivars
+    /// themselves). The new object starts with a reference count of 1.
+    ///
+    /// Returns `nil` if `object` is `nil`.
+    pub fn object_copy(&mut self, object: id, extra_bytes: GuestUSize, mem: &mut Mem) -> id {
+        if object == nil {
+            return nil;
+        }
+        let isa = Self::read_isa(object, mem);
+        let instance_size = self.class_instance_size(isa);
+        let total_size = instance_size.saturating_add(extra_bytes);
+
+        let new_object: id = mem.alloc(total_size).cast();
+        // Copy the original instance's bytes verbatim (this includes the isa
+        // pointer, all ivars, and — if requested — leaves the trailing
+        // `extra_bytes` zero-initialised, which `mem.alloc` guarantees).
+        let src_bytes: Vec<u8> = mem.bytes_at(object.cast(), instance_size).to_vec();
+        mem.bytes_at_mut(new_object.cast(), instance_size)
+            .copy_from_slice(&src_bytes);
+
+        // Register a host-side record so the copy is a first-class object
+        // with its own reference count. A bitwise NSCopyObject copy does not
+        // duplicate host-side state, so we attach a TrivialHostObject — this
+        // matches the real runtime, where NSCopyObject is only used by classes
+        // that keep all of their state in guest-memory ivars.
+        self.objects.insert(
+            new_object,
+            HostObjectEntry {
+                host_object: Box::new(TrivialHostObject),
+                refcount: Some(NonZeroU32::new(1).unwrap()),
+            },
+        );
+        new_object
+    }
+
     /// Read the all-important `isa`.
     pub fn read_isa(object: id, mem: &Mem) -> Class {
         mem.read(object).isa

@@ -11,6 +11,7 @@ use crate::frameworks::foundation::ns_error::{NSCocoaErrorDomain, NSFileReadNoSu
 use crate::frameworks::foundation::ns_string::get_static_str;
 use crate::fs::{FsError, GuestPath, GuestPathBuf};
 use crate::mem::{ConstPtr, MutPtr, Ptr};
+use crate::objc::NSZonePtr;
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, ClassExports, HostObject,
 };
@@ -105,10 +106,54 @@ fn NSTemporaryDirectory(env: &mut Environment) -> id {
     autorelease(env, dir)
 }
 
+fn NSAllocateObject(
+    env: &mut Environment,
+    class: id,
+    extra_bytes: NSUInteger,
+    _zone: NSZonePtr,
+) -> id {
+    if extra_bytes > 0 {
+        log!(
+            "Warning: NSAllocateObject called with extra_bytes={}, which is currently unhandled!",
+            extra_bytes
+        );
+    }
+
+    msg![env; class alloc]
+}
+
+fn NSDeallocateObject(env: &mut Environment, object: id) {
+    if !object.is_null() {
+        release(env, object);
+    }
+}
+
+fn NSFullUserName(_env: &mut Environment) -> id {
+    // Return a default full user name
+    let full_name = ns_string::from_rust_string(_env, String::from("touchHLE User"));
+    autorelease(_env, full_name)
+}
+
+fn NSOpenStepRootDirectory(_env: &mut Environment) -> id {
+    // Return root directory
+    nil // Not typically used on iOS
+}
+
+fn NSUserName(_env: &mut Environment) -> id {
+    // Return a default username
+    let username = ns_string::from_rust_string(_env, String::from("touchHLE_user"));
+    autorelease(_env, username)
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(NSHomeDirectory()),
     export_c_func!(NSTemporaryDirectory()),
     export_c_func!(NSSearchPathForDirectoriesInDomains(_, _, _)),
+    export_c_func!(NSAllocateObject(_, _, _)),
+    export_c_func!(NSDeallocateObject(_)),
+    export_c_func!(NSFullUserName()),
+    export_c_func!(NSOpenStepRootDirectory()),
+    export_c_func!(NSUserName()),
 ];
 
 #[derive(Default)]
