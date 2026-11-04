@@ -56,6 +56,8 @@ pub struct MachO {
     /// This is used by get_end() to return the first address after the last
     /// segment in the executable.
     pub last_segment_end: u32,
+    /// Address of the `__TEXT` segment (with any slide applied).
+    pub text_base: u32,
 }
 
 #[derive(Debug)]
@@ -997,6 +999,7 @@ impl MachO {
             external_relocations,
             entry_point_pc,
             last_segment_end,
+            text_base: text_segment_base.unwrap_or(first_segment_base.unwrap_or(0)),
         })
     }
 

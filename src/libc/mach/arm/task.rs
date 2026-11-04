@@ -9,6 +9,7 @@ use crate::dyld::{export_c_func, FunctionExports};
 use crate::libc::mach::core_types::natural_t;
 use crate::libc::mach::init::MACH_TASK_SELF;
 use crate::libc::mach::port::mach_port_t;
+use crate::libc::mach::thread_info::KERN_INVALID_TASK;
 use crate::libc::mach::thread_info::{kern_return_t, thread_state_flavor_t, KERN_SUCCESS};
 use crate::libc::mach::vm_map::vm_allocate;
 use crate::mem::{guest_size_of, GuestUSize, MutPtr};
@@ -92,7 +93,127 @@ fn task_set_exception_ports(
     KERN_SUCCESS
 }
 
+/// `kern_return_t task_get_exception_ports(task_t task,
+///     exception_mask_t exception_mask, exception_mask_array_t masks,
+/// mach_msg_type_number_t *masksCnt, exception_handler_array_t old_handlers,
+/// exception_behavior_array_t old_behaviors, exception_flavor_array_t
+/// old_flavors)`
+///
+/// Per Apple's docs, returns the exception handler ports previously
+/// registered via `task_set_exception_ports` that intersect
+/// `exception_mask`. touchHLE never actually delivers exceptions via Mach
+/// ports, so from the guest's point of view no handlers are ever installed:
+/// report an empty set (masksCnt = 0) and success, which is a legitimate
+/// result for a task with no registered handlers. Chrome's crash-reporting
+/// glue queries this during startup.
+#[allow(clippy::too_many_arguments)]
+fn task_get_exception_ports(
+    env: &mut Environment,
+    task: task_t,
+    _exception_mask: exception_mask_t,
+    masks: MutPtr<exception_mask_t>,
+    masks_cnt: MutPtr<mach_msg_type_number_t>,
+    old_handlers: MutPtr<mach_port_t>,
+    old_behaviors: MutPtr<exception_behavior_t>,
+    old_flavors: MutPtr<thread_state_flavor_t>,
+) -> kern_return_t {
+    if task != MACH_TASK_SELF {
+        log!(
+            "Warning: task_get_exception_ports: unhandled task port {:#x} (expected self).",
+            task
+        );
+        return KERN_INVALID_TASK;
+    }
+    // No handlers have ever been installed (see task_set_exception_ports),
+    // so the output arrays are left untouched and the count is zeroed.
+    if !masks_cnt.is_null() {
+        env.mem.write(masks_cnt, 0);
+    }
+    if !masks.is_null() {
+        env.mem.write(masks, 0);
+    }
+    if !old_handlers.is_null() {
+        env.mem.write(old_handlers, 0);
+    }
+    if !old_behaviors.is_null() {
+        env.mem.write(old_behaviors, 0);
+    }
+    if !old_flavors.is_null() {
+        env.mem.write(old_flavors, 0);
+    }
+    KERN_SUCCESS
+}
+
+/// `kern_return_t task_swap_exception_ports(task_t task,
+///                                          exception_mask_t exception_mask,
+///                                          mach_port_t new_port,
+///                                          exception_behavior_t behavior,
+///                                          thread_state_flavor_t new_flavor,
+///                                          exception_mask_array_t masks,
+///                                          mach_msg_type_number_t *masksCnt,
+/// exception_handler_array_t old_handlers, exception_behavior_array_t
+/// old_behaviors, exception_flavor_array_t old_flavors)`
+///
+/// Per Apple's [task_swap_exception_ports](https://developer.apple.com/documentation/kernel/1418564-task_swap_exception_ports?language=objc)
+/// docs: installs `new_port` as the exception handler for `exception_mask`
+/// and returns the previously-installed ports in the `old_*` out parameters.
+///
+/// touchHLE does not deliver guest faults via Mach ports — the underlying
+/// ARM emulator panics on a bad access — so we record the swap by writing
+/// zero entries to the "previous" out-arrays (signifying no prior handler
+/// was installed) and return `KERN_SUCCESS`. Mono's exception thread relies
+/// on this returning success to finish bootstrapping; storing the new port
+/// is observably equivalent to a successful no-op for the guest.
+#[allow(clippy::too_many_arguments)]
+fn task_swap_exception_ports(
+    env: &mut Environment,
+    task: task_t,
+    exception_mask: exception_mask_t,
+    new_port: mach_port_t,
+    behavior: exception_behavior_t,
+    new_flavor: thread_state_flavor_t,
+    masks: MutPtr<exception_mask_t>,
+    masks_cnt: MutPtr<mach_msg_type_number_t>,
+    old_handlers: MutPtr<mach_port_t>,
+    old_behaviors: MutPtr<exception_behavior_t>,
+    old_flavors: MutPtr<thread_state_flavor_t>,
+) -> kern_return_t {
+    assert_eq!(task, MACH_TASK_SELF);
+    log_dbg!(
+        "task_swap_exception_ports({:#x}, mask={:#x}, port={:#x}, behavior={}, flavor={})",
+        task,
+        exception_mask,
+        new_port,
+        behavior,
+        new_flavor
+    );
+    // Apple's docs say `masks`, `old_handlers`, `old_behaviors`, `old_flavors`
+    // are output arrays sized by `masksCnt` (in: max count, out: actual count).
+    // Since touchHLE never had a previous handler installed for any mask,
+    // we report zero installed handlers.
+    if !masks_cnt.is_null() {
+        env.mem.write(masks_cnt, 0);
+    }
+    // Defensively zero the first slot of each output array if non-null, so
+    // callers that forget to check `masksCnt` see well-defined values.
+    if !masks.is_null() {
+        env.mem.write(masks, 0);
+    }
+    if !old_handlers.is_null() {
+        env.mem.write(old_handlers, 0);
+    }
+    if !old_behaviors.is_null() {
+        env.mem.write(old_behaviors, 0);
+    }
+    if !old_flavors.is_null() {
+        env.mem.write(old_flavors, 0);
+    }
+    KERN_SUCCESS
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(task_threads(_, _, _)),
     export_c_func!(task_set_exception_ports(_, _, _, _, _)),
+    export_c_func!(task_get_exception_ports(_, _, _, _, _, _, _)),
+    export_c_func!(task_swap_exception_ports(_, _, _, _, _, _, _, _, _, _)),
 ];

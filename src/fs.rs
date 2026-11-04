@@ -376,6 +376,74 @@ fn handle_open_err<T, E: std::fmt::Display, P: std::fmt::Debug>(
 }
 
 /// Like [File] but for the guest filesystem.
+/// The data in a pipe created with `pipe()`.
+#[derive(Debug, Default)]
+pub struct PipeBuffer {
+    bytes: std::collections::VecDeque<u8>,
+    read_handles: usize,
+    write_handles: usize,
+}
+
+impl PipeBuffer {
+    pub(crate) fn new() -> Rc<RefCell<Self>> {
+        Default::default()
+    }
+
+    /// Whether there are unread bytes (for `poll()` on the read end).
+    pub(crate) fn poll_has_data(&self) -> bool {
+        !self.bytes.is_empty()
+    }
+
+    /// Whether any read end is open (for `poll()` on the write end).
+    pub(crate) fn poll_has_readers(&self) -> bool {
+        self.read_handles > 0
+    }
+
+    /// Whether any write end is open (for `poll()` on the read end).
+    pub(crate) fn poll_has_writers(&self) -> bool {
+        self.write_handles > 0
+    }
+}
+
+/// One end of a pipe. The pipe's handle counts follow the lifetime of these,
+/// so a reader sees EOF, and a writer `EPIPE`, once the other end is closed.
+#[derive(Debug)]
+pub struct PipeEnd {
+    buffer: Rc<RefCell<PipeBuffer>>,
+    reading: bool,
+}
+
+impl PipeEnd {
+    pub(crate) fn new(buffer: Rc<RefCell<PipeBuffer>>, reading: bool) -> Self {
+        let mut pipe = buffer.borrow_mut();
+        if reading {
+            pipe.read_handles += 1;
+        } else {
+            pipe.write_handles += 1;
+        }
+        drop(pipe);
+        Self { buffer, reading }
+    }
+}
+
+impl std::ops::Deref for PipeEnd {
+    type Target = RefCell<PipeBuffer>;
+    fn deref(&self) -> &Self::Target {
+        &self.buffer
+    }
+}
+
+impl Drop for PipeEnd {
+    fn drop(&mut self) {
+        let mut pipe = self.buffer.borrow_mut();
+        if self.reading {
+            pipe.read_handles -= 1;
+        } else {
+            pipe.write_handles -= 1;
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum GuestFile {
     Directory,
@@ -383,6 +451,8 @@ pub enum GuestFile {
     IpaBundleFile(IpaFile),
     ResourceFile(paths::ResourceFile),
     Socket,
+    PipeRead(PipeEnd),
+    PipeWrite(PipeEnd),
     Shared(Rc<RefCell<GuestFile>>),
 }
 
@@ -426,6 +496,7 @@ impl GuestFile {
                 log!("Warning: syncing directory as a guest file.");
                 Ok(())
             }
+            GuestFile::PipeRead(_) | GuestFile::PipeWrite(_) => Ok(()),
             GuestFile::Socket => Err(std::io::Error::new(
                 std::io::ErrorKind::Unsupported,
                 "Sync operation not supported on socket",
@@ -460,7 +531,7 @@ impl GuestFile {
         // https://stackoverflow.com/questions/65911066/what-does-lseek-mean-for-a-directory-file-descriptor
         match self {
             GuestFile::Shared(file) => file.borrow().is_seekable(),
-            GuestFile::Socket => false,
+            GuestFile::Socket | GuestFile::PipeRead(_) | GuestFile::PipeWrite(_) => false,
             _ => true,
         }
     }
@@ -481,6 +552,30 @@ impl Read for GuestFile {
             GuestFile::File(file) => file.read(buf),
             GuestFile::IpaBundleFile(file) => file.read(buf),
             GuestFile::ResourceFile(file) => file.get().read(buf),
+            GuestFile::PipeRead(pipe) => {
+                let mut pipe = pipe.borrow_mut();
+                if buf.is_empty() {
+                    return Ok(0);
+                }
+                if pipe.bytes.is_empty() {
+                    if pipe.write_handles == 0 {
+                        return Ok(0);
+                    }
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::WouldBlock,
+                        "pipe has no data yet",
+                    ));
+                }
+                let count = buf.len().min(pipe.bytes.len());
+                for slot in &mut buf[..count] {
+                    *slot = pipe.bytes.pop_front().unwrap();
+                }
+                Ok(count)
+            }
+            GuestFile::PipeWrite(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "attempt to read from the write end of a pipe",
+            )),
             GuestFile::Directory => Err(std::io::Error::new(
                 std::io::ErrorKind::IsADirectory,
                 "Attempt to read from a directory as a guest file",
@@ -501,6 +596,21 @@ impl Write for GuestFile {
             GuestFile::ResourceFile(file) => {
                 panic!("Attempt to write to a read-only file: {file:?}")
             }
+            GuestFile::PipeRead(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "attempt to write to the read end of a pipe",
+            )),
+            GuestFile::PipeWrite(pipe) => {
+                let mut pipe = pipe.borrow_mut();
+                if pipe.read_handles == 0 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::BrokenPipe,
+                        "pipe has no readers",
+                    ));
+                }
+                pipe.bytes.extend(buf);
+                Ok(buf.len())
+            }
             GuestFile::Directory => panic!("Attempt to write to a directory as a guest file"),
             _ => unimplemented!(),
         }
@@ -517,6 +627,7 @@ impl Write for GuestFile {
             GuestFile::ResourceFile(file) => {
                 panic!("Attempt to flush a read-only file: {file:?}")
             }
+            GuestFile::PipeRead(_) | GuestFile::PipeWrite(_) => Ok(()),
             GuestFile::Directory => panic!("Attempt to flush a directory as a guest file"),
             _ => unimplemented!(),
         }
@@ -541,6 +652,10 @@ impl Seek for GuestFile {
                     "Attempt to seek a directory as a guest file",
                 ))
             }
+            GuestFile::PipeRead(_) | GuestFile::PipeWrite(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "attempt to seek a pipe",
+            )),
             _ => unimplemented!(),
         }
     }

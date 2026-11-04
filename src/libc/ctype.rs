@@ -171,6 +171,54 @@ mod tests {
     }
 }
 
+// The exported ctype functions receive either EOF or an unsigned char value.
+// Use the same classification bits as Darwin's inlined ctype macros.
+fn ctype_mask(c: i32, mask: u32) -> i32 {
+    u8::try_from(c)
+        .map(|c| (rune_type(c) & mask) as i32)
+        .unwrap_or(0)
+}
+
+fn rune_type(c: u8) -> u32 {
+    let mut bits = 0;
+    if c.is_ascii_alphabetic() {
+        bits |= 0x100;
+    }
+    if c.is_ascii_control() {
+        bits |= 0x200;
+    }
+    if c.is_ascii_digit() {
+        bits |= 0x400;
+    }
+    if c.is_ascii_graphic() {
+        bits |= 0x800;
+    }
+    if c.is_ascii_lowercase() {
+        bits |= 0x1000;
+    }
+    if c.is_ascii_punctuation() {
+        bits |= 0x2000;
+    }
+    // Rust's ASCII whitespace predicate excludes vertical tab.
+    if c.is_ascii_whitespace() || c == b'\x0b' {
+        bits |= 0x4000;
+    }
+    if c.is_ascii_uppercase() {
+        bits |= 0x8000;
+    }
+    if c.is_ascii_hexdigit() {
+        bits |= 0x10000;
+    }
+    if c == b' ' || c == b'\t' {
+        bits |= 0x20000; // isblank
+    }
+    if c.is_ascii_graphic() || c == b' ' {
+        bits |= 0x40000; // isprint
+    }
+    // Other Darwin bits (ideogram, special, phonogram, width) remain unset.
+    bits
+}
+
 pub const CONSTANTS: ConstantExports = &[
     (
         "__DefaultRuneLocale",
@@ -183,8 +231,78 @@ pub const CONSTANTS: ConstantExports = &[
     ),
 ];
 
+fn isalnum(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x100 | 0x400)
+}
+
+fn isalpha(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x100)
+}
+
+fn isblank(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x20000)
+}
+
+fn iscntrl(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x200)
+}
+
+fn isdigit(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x400)
+}
+
+fn isgraph(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x800)
+}
+
+fn islower(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x1000)
+}
+
+fn isprint(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x40000)
+}
+
+fn ispunct(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x2000)
+}
+
+fn isspace(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x4000)
+}
+
+fn isupper(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x8000)
+}
+
+fn isxdigit(_env: &mut Environment, c: i32) -> i32 {
+    ctype_mask(c, 0x10000)
+}
+
+fn tolower(env: &mut Environment, c: i32) -> i32 {
+    __tolower(env, c)
+}
+
+fn toupper(env: &mut Environment, c: i32) -> i32 {
+    __toupper(env, c)
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(__tolower(_)),
     export_c_func!(__toupper(_)),
     export_c_func!(__maskrune(_, _)),
+    export_c_func!(isalnum(_)),
+    export_c_func!(isalpha(_)),
+    export_c_func!(isblank(_)),
+    export_c_func!(iscntrl(_)),
+    export_c_func!(isdigit(_)),
+    export_c_func!(isgraph(_)),
+    export_c_func!(islower(_)),
+    export_c_func!(isprint(_)),
+    export_c_func!(ispunct(_)),
+    export_c_func!(isspace(_)),
+    export_c_func!(isupper(_)),
+    export_c_func!(isxdigit(_)),
+    export_c_func!(tolower(_)),
+    export_c_func!(toupper(_)),
 ];

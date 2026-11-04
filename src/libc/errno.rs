@@ -5,6 +5,9 @@
  */
 //! `errno.h`
 
+// Not every error code is used yet.
+#![allow(dead_code)]
+
 use crate::dyld::FunctionExports;
 use crate::export_c_func;
 use crate::mem::{ConstPtr, GuestUSize, Mem, MutPtr};
@@ -38,6 +41,86 @@ pub const ECONNRESET: i32 = 54;
 pub const ETIMEDOUT: i32 = 60;
 pub const ENAMETOOLONG: i32 = 63;
 pub const EOVERFLOW: i32 = 84;
+pub const ENXIO: i32 = 6;
+pub const E2BIG: i32 = 7;
+pub const ENOEXEC: i32 = 8;
+pub const ENOTBLK: i32 = 15;
+pub const EXDEV: i32 = 18;
+pub const ENODEV: i32 = 19;
+pub const ENFILE: i32 = 23;
+pub const EMFILE: i32 = 24;
+pub const ENOTTY: i32 = 25;
+pub const ETXTBSY: i32 = 26;
+pub const EFBIG: i32 = 27;
+pub const ENOSPC: i32 = 28;
+pub const EMLINK: i32 = 31;
+pub const EPIPE: i32 = 32;
+pub const EINPROGRESS: i32 = 36;
+pub const EALREADY: i32 = 37;
+pub const ENOTSOCK: i32 = 38;
+pub const EDESTADDRREQ: i32 = 39;
+pub const EMSGSIZE: i32 = 40;
+pub const EPROTOTYPE: i32 = 41;
+pub const ENOPROTOOPT: i32 = 42;
+pub const ESOCKTNOSUPPORT: i32 = 44;
+pub const EPFNOSUPPORT: i32 = 46;
+pub const EAFNOSUPPORT: i32 = 47;
+pub const EADDRINUSE: i32 = 48;
+pub const EADDRNOTAVAIL: i32 = 49;
+pub const ENETDOWN: i32 = 50;
+pub const ENETUNREACH: i32 = 51;
+pub const ENETRESET: i32 = 52;
+pub const ECONNABORTED: i32 = 53;
+pub const ENOBUFS: i32 = 55;
+pub const EISCONN: i32 = 56;
+pub const ENOTCONN: i32 = 57;
+pub const ESHUTDOWN: i32 = 58;
+pub const ETOOMANYREFS: i32 = 59;
+pub const ECONNREFUSED: i32 = 61;
+pub const ELOOP: i32 = 62;
+pub const EHOSTDOWN: i32 = 64;
+pub const EHOSTUNREACH: i32 = 65;
+pub const ENOTEMPTY: i32 = 66;
+pub const EPROCLIM: i32 = 67;
+pub const EUSERS: i32 = 68;
+pub const EDQUOT: i32 = 69;
+pub const ESTALE: i32 = 70;
+pub const EREMOTE: i32 = 71;
+pub const EBADRPC: i32 = 72;
+pub const ERPCMISMATCH: i32 = 73;
+pub const EPROGUNAVAIL: i32 = 74;
+pub const EPROGMISMATCH: i32 = 75;
+pub const EPROCUNAVAIL: i32 = 76;
+pub const ENOLCK: i32 = 77;
+pub const ENOSYS: i32 = 78;
+pub const EFTYPE: i32 = 79;
+pub const EAUTH: i32 = 80;
+pub const ENEEDAUTH: i32 = 81;
+pub const EPWROFF: i32 = 82;
+pub const EDEVERR: i32 = 83;
+pub const EBADEXEC: i32 = 85;
+pub const EBADARCH: i32 = 86;
+pub const ESHLIBVERS: i32 = 87;
+pub const EBADMACHO: i32 = 88;
+pub const ECANCELED: i32 = 89;
+pub const EIDRM: i32 = 90;
+pub const ENOMSG: i32 = 91;
+pub const EILSEQ: i32 = 92;
+pub const ENOATTR: i32 = 93;
+pub const EBADMSG: i32 = 94;
+pub const EMULTIHOP: i32 = 95;
+pub const ENODATA: i32 = 96;
+pub const ENOLINK: i32 = 97;
+pub const ENOSR: i32 = 98;
+pub const ENOSTR: i32 = 99;
+pub const EPROTO: i32 = 100;
+pub const ETIME: i32 = 101;
+pub const EOPNOTSUPP: i32 = 102;
+pub const ENOPOLICY: i32 = 103;
+pub const ENOTRECOVERABLE: i32 = 104;
+pub const EOWNERDEAD: i32 = 105;
+pub const EQFULL: i32 = 106;
+pub const ELAST: i32 = 106;
 
 #[derive(Default)]
 pub struct State {

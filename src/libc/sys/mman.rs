@@ -126,10 +126,76 @@ fn mprotect(env: &mut Environment, addr: MutVoidPtr, len: GuestUSize, prot: i32)
     -1
 }
 
+/// `int mlock(const void *addr, size_t len)` — lock a region of memory
+/// so it stays resident in physical RAM. touchHLE keeps the entire
+/// guest address space resident in the host process at all times, so
+/// there is nothing to pin: the memory is already non-pageable from the
+/// guest's perspective. Real Darwin returns 0 on success, so we report
+/// success as a no-op (returning -1 here would make guest code that
+/// relies on mlock — e.g. crypto/keychain libraries protecting secrets,
+/// or audio engines pinning buffers — treat initialization as failed).
+///
+/// Reference: POSIX/Darwin mlock(2) — returns 0 on success, -1 with
+/// errno on failure.
+fn mlock(env: &mut Environment, addr: ConstPtr<u8>, len: GuestUSize) -> i32 {
+    log_dbg!(
+        "mlock({:?}, {}) -> 0 (no-op; guest memory is always resident)",
+        addr,
+        len
+    );
+    set_errno(env, 0);
+    0
+}
+
+/// `int msync(void *addr, size_t len, int flags)` — synchronize a mapped
+/// region with the file that backs it. touchHLE's `mmap` copies file
+/// content into a guest allocation and never writes it back, and guest
+/// memory is not paged, so there is nothing to flush: report success as
+/// a no-op (Darwin returns 0 on success; returning -1 would make guests
+/// that treat msync failures as fatal — e.g. engines persisting save
+/// data through mmap — abort their write path).
+///
+/// Reference: POSIX msync(2) — returns 0 on success, -1 with errno on
+/// failure.
+fn msync(env: &mut Environment, addr: MutVoidPtr, len: GuestUSize, flags: i32) -> i32 {
+    log_dbg!("msync({:?}, {}, {:#x}) -> 0 (no-op)", addr, len, flags);
+    set_errno(env, 0);
+    0
+}
+
+/// `int munlock(const void *addr, size_t len)` — unlock a region
+/// previously locked with `mlock`. Mirrors [mlock]: a no-op that
+/// succeeds.
+///
+/// Reference: POSIX/Darwin munlock(2) — returns 0 on success.
+fn munlock(env: &mut Environment, addr: ConstPtr<u8>, len: GuestUSize) -> i32 {
+    log_dbg!(
+        "munlock({:?}, {}) -> 0 (no-op; guest memory is always resident)",
+        addr,
+        len
+    );
+    set_errno(env, 0);
+    0
+}
+
+/// `int shm_unlink(const char *name)`
+///
+/// POSIX shared-memory unlink: removes the named shared-memory object.
+/// Regions opened via `shm_open` are backed by our fs layer, where `unlink`
+/// already implements remove-on-last-close semantics. Missing regions return
+/// -1/ENOENT per POSIX.
+fn shm_unlink(env: &mut Environment, name: ConstPtr<u8>) -> i32 {
+    crate::libc::unistd::unlink(env, name)
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(mmap(_, _, _, _, _, _)),
     export_c_func!(munmap(_, _)),
     export_c_func!(madvise(_, _, _)),
     export_c_func!(shm_open(_, _, _)),
     export_c_func!(mprotect(_, _, _)),
+    export_c_func!(mlock(_, _)),
+    export_c_func!(msync(_, _, _)),
+    export_c_func!(munlock(_, _)),
+    export_c_func!(shm_unlink(_)),
 ];

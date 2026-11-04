@@ -22,13 +22,25 @@
 //! - [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/html/index-wide.html)
 
 use crate::dyld::{export_c_func, FunctionExports};
+use crate::libc::errno::EAFNOSUPPORT;
+use crate::libc::errno::ENOTCONN;
 use crate::libc::errno::{set_errno, EBADF, ECONNRESET, EINVAL, EPROTONOSUPPORT};
+use crate::libc::posix_io::POLLERR;
+use crate::libc::posix_io::POLLHUP;
+use crate::libc::posix_io::POLLIN;
+use crate::libc::posix_io::POLLOUT;
+use crate::libc::posix_io::POLLPRI;
+use crate::libc::posix_io::POLLRDNORM;
+use crate::libc::posix_io::POLLWRNORM;
 use crate::libc::posix_io::{close, find_or_create_socket, is_socket, FileDescriptor};
 use crate::libc::time::timeval;
 use crate::mem::{
     guest_size_of, ConstPtr, ConstVoidPtr, GuestUSize, MutPtr, MutVoidPtr, Ptr, SafeRead,
 };
 use crate::Environment;
+use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
+use std::net::SocketAddrV6;
 
 use crate::abi::DotDotDot;
 use crate::libc::netdb::{socklen_t, IPPROTO_TCP, IPPROTO_UDP};
@@ -39,6 +51,7 @@ use std::net::{SocketAddr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 use std::time::Duration;
 
 pub const AF_INET: i32 = 2;
+pub const AF_INET6: i32 = 30;
 pub const SOCK_STREAM: i32 = 1;
 pub const SOCK_DGRAM: i32 = 2;
 
@@ -1131,6 +1144,278 @@ fn shutdown(env: &mut Environment, socket: i32, how: i32) -> i32 {
     close(env, socket)
 }
 
+fn getpeername(
+    env: &mut Environment,
+    socket: i32,
+    address: MutPtr<sockaddr>,
+    address_len: MutPtr<socklen_t>,
+) -> i32 {
+    set_errno(env, 0);
+    let Some(sock) = State::get(env).sockets.get(&socket) else {
+        set_errno(env, EBADF);
+        return -1;
+    };
+    let peer_addr: SocketAddr = match &sock.tcp_stream {
+        Some(stream) => match stream.peer_addr() {
+            Ok(addr) => addr,
+            Err(e) => {
+                log!("getpeername: peer_addr failed: {}", e);
+                set_errno(env, EINVAL);
+                return -1;
+            }
+        },
+        None => {
+            set_errno(env, ENOTCONN);
+            return -1;
+        }
+    };
+
+    if !address.is_null() {
+        write_sockaddr_bounded(
+            env,
+            address,
+            address_len,
+            sockaddr::from_sockaddr_v4(&peer_addr),
+        );
+    }
+    0
+}
+
+/// Write a guest sockaddr to `address`, truncating the copy to the buffer
+/// size the caller provided via `address_len` (BSD semantics), so a short
+/// guest buffer is never overrun. The full size is stored through
+/// `address_len` when it is non-null.
+fn write_sockaddr_bounded(
+    env: &mut Environment,
+    address: MutPtr<sockaddr>,
+    address_len: MutPtr<socklen_t>,
+    value: sockaddr,
+) {
+    let full_len = guest_size_of::<sockaddr>();
+    let provided = if address_len.is_null() {
+        full_len
+    } else {
+        env.mem.read(address_len)
+    };
+    if provided >= full_len {
+        env.mem.write(address, value);
+    } else if provided > 0 {
+        // Copy only as many bytes as the caller's buffer can hold.
+        let bytes = sockaddr_bytes(value);
+        let slice = env.mem.bytes_at_mut(address.cast(), provided);
+        let n = slice.len().min(full_len as usize);
+        slice.copy_from_slice(&bytes[..n]);
+    }
+    if !address_len.is_null() {
+        env.mem.write(address_len, full_len);
+    }
+}
+
+pub fn read_socket_addr(
+    env: &mut Environment,
+    address: ConstPtr<sockaddr>,
+    address_len: socklen_t,
+) -> Result<SocketAddr, i32> {
+    if address.is_null() || address_len < 2 {
+        return Err(EINVAL);
+    }
+    let address_bytes = address.cast::<u8>();
+    let family = env.mem.read(address_bytes + 1) as i32;
+    let required_len = match family {
+        AF_INET => 16,
+        AF_INET6 => 28,
+        _ => return Err(EAFNOSUPPORT),
+    };
+    if address_len < required_len {
+        return Err(EINVAL);
+    }
+    let bytes = env.mem.bytes_at(address_bytes, required_len).to_vec();
+    socket_addr_from_sockaddr_bytes(&bytes)
+}
+
+pub fn socket_addr_from_sockaddr_bytes(bytes: &[u8]) -> Result<SocketAddr, i32> {
+    if bytes.len() < 2 {
+        return Err(EINVAL);
+    }
+    match bytes[1] as i32 {
+        AF_INET => {
+            if bytes.len() < 16 || (bytes[0] != 0 && bytes[0] < 16) {
+                return Err(EINVAL);
+            }
+            let port = u16::from_be_bytes([bytes[2], bytes[3]]);
+            let ip = Ipv4Addr::new(bytes[4], bytes[5], bytes[6], bytes[7]);
+            Ok(SocketAddr::V4(SocketAddrV4::new(ip, port)))
+        }
+        AF_INET6 => {
+            if bytes.len() < 28 || (bytes[0] != 0 && bytes[0] < 28) {
+                return Err(EINVAL);
+            }
+            let port = u16::from_be_bytes([bytes[2], bytes[3]]);
+            let flowinfo = u32::from_be_bytes(bytes[4..8].try_into().unwrap());
+            let ip = Ipv6Addr::from(<[u8; 16]>::try_from(&bytes[8..24]).unwrap());
+            let scope_id = u32::from_ne_bytes(bytes[24..28].try_into().unwrap());
+            Ok(SocketAddr::V6(SocketAddrV6::new(
+                ip, port, flowinfo, scope_id,
+            )))
+        }
+        _ => Err(EAFNOSUPPORT),
+    }
+}
+
+/// Readiness одного сокета для poll(2): логика
+/// зеркальна select(), включая неблокирующий
+/// accept-пробник для слушателя (готовое
+/// соединение откладывается в `pending_tcp_stream` до
+/// гостевого `accept()`). Возвращает `revents`:
+/// нормальные биты отфильтрованы по `events`,
+/// POLLERR/POLLHUP — безусловно (POSIX).
+pub(crate) fn socket_poll_events(env: &mut Environment, fd: FileDescriptor, events: i16) -> i16 {
+    let want_read = events & (POLLIN | POLLPRI) != 0;
+    let want_write = events & POLLOUT != 0;
+
+    // Фаза 0: копии флагов — чтобы не держать
+    // заимствование state, пока в фазах 1–2
+    // делаются новые обращения к env.
+    let (type_, has_stream, has_listener, has_udp) = {
+        let Some(sock) = State::get(env).sockets.get(&fd) else {
+            // Записи в сокет-таблице нет — как в
+            // select(): не готов.
+            return 0;
+        };
+        (
+            sock.type_,
+            sock.tcp_stream.is_some(),
+            sock.tcp_listener.is_some(),
+            sock.udp_socket.is_some(),
+        )
+    };
+
+    let mut ready = 0i16;
+    let mut hangup = false;
+
+    // Фаза 1: опрос ошибок TCP (POLLERR безусловный).
+    if type_ == SOCK_STREAM && has_stream {
+        if let Some(sock) = State::get(env).sockets.get(&fd) {
+            if let Some(stream) = sock.tcp_stream.as_ref() {
+                match stream.take_error() {
+                    Ok(Some(_)) => ready |= POLLERR,
+                    Ok(None) => {}
+                    Err(e) => log_dbg!("poll: take_error for socket {} failed: {}", fd, e),
+                }
+            }
+        }
+    }
+
+    // Фаза 2: чтение.
+    if want_read {
+        if type_ == SOCK_STREAM && has_stream {
+            if let Some(sock) = State::get(env).sockets.get(&fd) {
+                if let Some(stream) = sock.tcp_stream.as_ref() {
+                    let mut buf = [0u8; 1];
+                    match stream.peek(&mut buf) {
+                        // EOF: remote закрыл соединение →
+                        // читаемо + HUP.
+                        Ok(0) => {
+                            ready |= POLLIN | POLLRDNORM;
+                            hangup = true;
+                        }
+                        Ok(_) => ready |= POLLIN | POLLRDNORM,
+                        // On Windows, if we receive more bytes than we peek,
+                        // it will error, but it means that there is some data.
+                        Err(ref e)
+                            if cfg!(target_os = "windows") && e.raw_os_error() == Some(10040) =>
+                        {
+                            ready |= POLLIN | POLLRDNORM;
+                        }
+                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                        Err(e) => log_dbg!("poll: peek for socket {} failed: {}", fd, e),
+                    }
+                }
+            }
+        } else if type_ == SOCK_STREAM && has_listener {
+            // Пробник accept() — только по POLLIN
+            // (побочный эффект: новое соединение
+            // сразу принимается на хосте, как в
+            // select()).
+            let accepted = if let Some(sock) = State::get(env).sockets.get(&fd) {
+                match sock.tcp_listener.as_ref() {
+                    Some(listener) => match listener.accept() {
+                        Ok((stream, addr)) => {
+                            log!("poll: New client: {}", addr);
+                            if let Err(e) = stream.set_nonblocking(true) {
+                                log!("poll: set_nonblocking failed: {}", e);
+                                None
+                            } else {
+                                Some(stream)
+                            }
+                        }
+                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => None,
+                        Err(e) => {
+                            log!("poll: accept for socket {} failed: {}", fd, e);
+                            None
+                        }
+                    },
+                    None => None,
+                }
+            } else {
+                None
+            };
+            if let Some(stream) = accepted {
+                if let Some(sock) = State::get_mut(env).sockets.get_mut(&fd) {
+                    if sock.pending_tcp_stream.is_some() {
+                        log!(
+                            "poll: socket {} already has a pending stream; dropping new one",
+                            fd
+                        );
+                    } else {
+                        sock.pending_tcp_stream = Some(stream);
+                    }
+                }
+                ready |= POLLIN | POLLRDNORM;
+            }
+        } else if type_ == SOCK_DGRAM && has_udp {
+            if let Some(sock) = State::get(env).sockets.get(&fd) {
+                if let Some(udp) = sock.udp_socket.as_ref() {
+                    let mut buf = [0u8; 1];
+                    match udp.peek(&mut buf) {
+                        Ok(_) => ready |= POLLIN | POLLRDNORM,
+                        Err(ref e)
+                            if cfg!(target_os = "windows") && e.raw_os_error() == Some(10040) =>
+                        {
+                            ready |= POLLIN | POLLRDNORM;
+                        }
+                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                        Err(e) => log_dbg!("poll: peek for UDP socket {} failed: {}", fd, e),
+                    }
+                }
+            }
+        }
+    }
+
+    // Фаза 3: запись (по флагам, без
+    // заимствований).
+    if want_write
+        && ((type_ == SOCK_STREAM && (has_stream || has_listener))
+            || (type_ == SOCK_DGRAM && has_udp))
+    {
+        ready |= POLLOUT | POLLWRNORM;
+    }
+
+    if hangup {
+        ready |= POLLHUP;
+    }
+    ready
+}
+
+/// Byte representation of a guest sockaddr (packed layout).
+fn sockaddr_bytes(addr: sockaddr) -> [u8; 16] {
+    let mut out = [0u8; 16];
+    out[0] = addr.sa_len;
+    out[1] = addr.sa_family;
+    out[2..].copy_from_slice(&addr.sa_data);
+    out
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(socket(_, _, _)),
     export_c_func!(ioctl(_, _, _)),
@@ -1147,6 +1432,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(send(_, _, _, _)),
     export_c_func!(sendto(_, _, _, _, _, _)),
     export_c_func!(shutdown(_, _)),
+    export_c_func!(getpeername(_, _, _)),
 ];
 
 /// A helper to close a socket, not a part of API

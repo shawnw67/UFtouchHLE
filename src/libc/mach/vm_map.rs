@@ -9,6 +9,8 @@ use crate::dyld::{export_c_func, FunctionExports};
 use crate::libc::mach::init::MACH_TASK_SELF;
 use crate::libc::mach::port::mach_port_t;
 use crate::libc::mach::thread_info::{kern_return_t, KERN_SUCCESS};
+use crate::mem::ConstPtr;
+use crate::mem::SafeRead;
 use crate::mem::{MutPtr, Ptr, PAGE_SIZE, PAGE_SIZE_ALIGN_MASK};
 use crate::Environment;
 use std::collections::HashMap;
@@ -170,9 +172,203 @@ fn vm_purgable_control(
     KERN_SUCCESS
 }
 
+/// `kern_return_t vm_protect(vm_map_t target_task, vm_address_t address,
+/// vm_size_t size, boolean_t set_maximum, vm_prot_t new_protection)`
+///
+/// Guest memory has no per-page protection enforcement, so this is a no-op
+/// that reports success (a real kernel would return KERN_INVALID_ADDRESS for
+/// unmapped ranges; callers like Chrome's sandbox setup ignore the result).
+fn vm_protect(
+    _env: &mut Environment,
+    target_task: vm_map_t,
+    address: mach_vm_address_t,
+    size: mach_vm_size_t,
+    set_maximum: i32,
+    new_protection: vm_prot_t,
+) -> kern_return_t {
+    if target_task != MACH_TASK_SELF {
+        return KERN_INVALID_ADDRESS;
+    }
+    log_dbg!(
+        "vm_protect({:#x}, {:#x}, set_max={}, prot={:#x}) accepted (no-op)",
+        address,
+        size,
+        set_maximum != 0,
+        new_protection
+    );
+    KERN_SUCCESS
+}
+
+/// `kern_return_t vm_region_recurse(vm_map_t target_task,
+/// vm_address_t *address, vm_size_t *size, uint32_t *nesting_depth,
+/// vm_region_recurse_info_t info, mach_msg_type_number_t *info_count)`
+///
+/// Reports tracked heap regions. Apps like Chrome use this to probe mappings
+/// and tolerate failure, but returning success for tracked regions is closer
+/// to a real kernel.
+fn vm_region_recurse(
+    env: &mut Environment,
+    target_task: vm_map_t,
+    address_ptr: MutPtr<mach_vm_address_t>,
+    size_ptr: MutPtr<mach_vm_size_t>,
+    nesting_depth_ptr: MutPtr<u32>,
+    info_ptr: MutPtr<u8>,
+    info_count_ptr: MutPtr<u32>,
+) -> kern_return_t {
+    if target_task != MACH_TASK_SELF || address_ptr.is_null() || size_ptr.is_null() {
+        return KERN_INVALID_ADDRESS;
+    }
+    let address = env.mem.read(address_ptr);
+    let Some(tracked) = env.libc_state.mach_vm.allocations.get(&address) else {
+        log_dbg!(
+            "vm_region_recurse({:#x}): untracked region; returning KERN_INVALID_ADDRESS",
+            address
+        );
+        return KERN_INVALID_ADDRESS;
+    };
+    env.mem.write(size_ptr, *tracked);
+    if !nesting_depth_ptr.is_null() {
+        env.mem.write(nesting_depth_ptr, 0);
+    }
+    if !info_ptr.is_null() && !info_count_ptr.is_null() {
+        let info_count = env.mem.read(info_count_ptr);
+        if info_count >= 9 {
+            // vm_region_basic_info_data_t: five u32 fields in our layout
+            let info: MutPtr<vm_region_basic_info_data_t> = Ptr::from_bits(info_ptr.to_bits());
+            env.mem.write(
+                info,
+                vm_region_basic_info_data_t {
+                    protection: VM_PROT_READ | VM_PROT_WRITE,
+                    max_protection: VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE,
+                    inheritance: 1, // VM_INHERIT_COPY
+                    reserved: 0,
+                    offset: 0,
+                },
+            );
+        }
+    }
+    KERN_SUCCESS
+}
+
+/// `kern_return_t vm_remap(vm_map_t target_task, vm_address_t *target_address,
+/// vm_size_t size, vm_address_t mask, int flags, vm_map_t src_task,
+/// vm_address_t src_address, boolean_t copy, vm_prot_t *cur_protection,
+/// vm_prot_t *max_protection, vm_inherit_t inheritance)`
+///
+/// Real Mach `vm_remap` maps the physical pages backing a region of one task's
+/// address space into another (or the same) task, optionally sharing them.
+/// touchHLE has a single flat guest address space and no notion of shared
+/// physical pages, so we approximate it: allocate a fresh page-aligned region
+/// and copy the source bytes into it. This is what callers like the Mono/Boehm
+/// GC actually need to keep running — a valid, readable mapping of the same
+/// contents — even though writes won't be reflected back into the source.
+#[allow(clippy::too_many_arguments)]
+fn vm_remap(
+    env: &mut Environment,
+    target_task: vm_map_t,
+    target_address: MutPtr<mach_vm_address_t>,
+    size: mach_vm_size_t,
+    _mask: mach_vm_address_t,
+    _flags: i32,
+    _src_task: vm_map_t,
+    src_address: mach_vm_address_t,
+    copy: i32,
+    cur_protection: MutPtr<vm_prot_t>,
+    max_protection: MutPtr<vm_prot_t>,
+    _inheritance: vm_inherit_t,
+) -> kern_return_t {
+    assert_eq!(target_task, MACH_TASK_SELF);
+
+    if size == 0 || src_address == 0 {
+        log!(
+            "Warning: vm_remap(src={:#x}, size={:#x}): invalid argument; returning KERN_INVALID_ADDRESS.",
+            src_address,
+            size
+        );
+        return KERN_INVALID_ADDRESS;
+    }
+
+    // `size` is always rounded up to an integral number of pages.
+    let new_size = round_up_to_page(size);
+
+    log_dbg!(
+        "vm_remap(src={:#x}, size={:#x}, copy={}) approximated by allocate + copy",
+        src_address,
+        size,
+        copy
+    );
+
+    let allocated = env.mem.alloc(new_size);
+    let address = allocated.to_bits();
+    assert!(address & PAGE_SIZE_ALIGN_MASK == 0);
+
+    // Copy the source region's bytes so the new mapping reads back the same
+    // data. We copy the page-rounded length so the trailing partial page is
+    // also valid.
+    let copy_len = new_size;
+    let src: ConstPtr<u8> = Ptr::from_bits(src_address);
+    let dst: MutPtr<u8> = Ptr::from_bits(address);
+    let bytes: Vec<u8> = env.mem.bytes_at(src, copy_len).to_vec();
+    env.mem.bytes_at_mut(dst, copy_len).copy_from_slice(&bytes);
+
+    env.mem.write(target_address, address);
+    if !cur_protection.is_null() {
+        env.mem.write(
+            cur_protection,
+            VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE,
+        );
+    }
+    if !max_protection.is_null() {
+        env.mem.write(
+            max_protection,
+            VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE,
+        );
+    }
+
+    assert!(!env.libc_state.mach_vm.allocations.contains_key(&address));
+    env.libc_state.mach_vm.allocations.insert(address, new_size);
+
+    KERN_SUCCESS
+}
+
+const VM_PROT_EXECUTE: vm_prot_t = 4;
+
+const VM_PROT_READ: vm_prot_t = 1;
+
+const VM_PROT_WRITE: vm_prot_t = 2;
+
+/// Round a byte count up to a whole number of pages, as Mach does for every
+/// region size it hands out or accepts.
+fn round_up_to_page(size: mach_vm_size_t) -> mach_vm_size_t {
+    if !size.is_multiple_of(PAGE_SIZE) {
+        size + PAGE_SIZE - (size % PAGE_SIZE)
+    } else {
+        size
+    }
+}
+
+type vm_inherit_t = u32;
+
+type vm_prot_t = i32;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct vm_region_basic_info_data_t {
+    protection: vm_prot_t,
+    max_protection: vm_prot_t,
+    inheritance: vm_inherit_t,
+    reserved: u32,
+    offset: u32,
+}
+
+unsafe impl SafeRead for vm_region_basic_info_data_t {}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(vm_allocate(_, _, _, _)),
     export_c_func!(vm_deallocate(_, _, _)),
     export_c_func!(vm_read_overwrite(_, _, _, _, _)),
     export_c_func!(vm_purgable_control(_, _, _, _)),
+    export_c_func!(vm_protect(_, _, _, _, _)),
+    export_c_func!(vm_region_recurse(_, _, _, _, _, _)),
+    export_c_func!(vm_remap(_, _, _, _, _, _, _, _, _, _, _)),
 ];

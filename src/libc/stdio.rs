@@ -752,6 +752,110 @@ pub const CONSTANTS: ConstantExports = &[
     ),
 ];
 
+fn freopen(
+    env: &mut Environment,
+    filename: ConstPtr<u8>,
+    mode: ConstPtr<u8>,
+    stream: MutPtr<FILE>,
+) -> MutPtr<FILE> {
+    set_errno(env, 0);
+
+    if stream.is_null() {
+        return Ptr::null();
+    }
+
+    // 1. Сбрасываем буфер и закрываем старый
+    //    дескриптор
+    let FILE { fd: old_fd } = env.mem.read(stream);
+    let _ = posix_io::fflush(env, old_fd);
+    let _ = posix_io::close(env, old_fd);
+
+    // Forget characters from ungetc
+    let host_obj = env
+        .libc_state
+        .stdio
+        .get_file_host_obj_mut(&mut env.mem, stream);
+    host_obj.pushbacks.clear();
+
+    if filename.is_null() {
+        log!("Warning: freopen() with NULL filename (changing mode) is not fully supported, returning NULL.");
+        return Ptr::null();
+    }
+
+    // 2. Парсим режим открытия (точно так же,
+    //    как в fopen)
+    let mode_str = env.mem.cstr_at(mode);
+    let [basic_mode @ (b'r' | b'w' | b'a'), flags @ ..] = mode_str else {
+        log!(
+            "freopen(): Unexpected or missing mode first character: {:?}",
+            mode_str.first()
+        );
+        return Ptr::null();
+    };
+
+    let mut plus = false;
+    for &flag in flags {
+        match flag {
+            b'b' => (), // бинарный флаг ничего не делает в UNIX
+            b'+' => plus = true,
+            other => {
+                log!("Tolerating unrecognized freopen() mode flag: {:?}", other);
+            }
+        }
+    }
+
+    let open_flags = match (basic_mode, plus) {
+        (b'r', false) => O_RDONLY,
+        (b'r', true) => O_RDWR,
+        (b'w', false) => O_WRONLY | O_CREAT | O_TRUNC,
+        (b'w', true) => O_RDWR | O_CREAT | O_TRUNC,
+        (b'a', false) => O_WRONLY | O_APPEND | O_CREAT,
+        (b'a', true) => O_RDWR | O_APPEND | O_CREAT,
+        _ => {
+            log!(
+                "Warning: freopen() basic_mode {:?} fell through; defaulting to O_RDONLY.",
+                basic_mode
+            );
+            O_RDONLY
+        }
+    };
+
+    // 3. Открываем новый файл
+    let new_fd = posix_io::open_direct(env, filename, open_flags);
+
+    if new_fd == -1 {
+        // Ошибка открытия, возвращаем NULL
+        return Ptr::null();
+    }
+
+    // 4. Связываем новый дескриптор со старым
+    //    потоком
+    // В памяти гостя перезаписываем
+    // структуру FILE
+    env.mem.write(stream, FILE { fd: new_fd });
+
+    log_dbg!(
+        "freopen() successfully reopened fd {} as new fd {} for stream {:?}",
+        old_fd,
+        new_fd,
+        stream
+    );
+
+    stream
+}
+
+fn setvbuf(
+    _env: &mut Environment,
+    _stream: MutVoidPtr, // FILE*
+    _buf: MutVoidPtr,    // char*
+    mode: i32,
+    _size: GuestUSize,
+) -> i32 {
+    // _IONBF = 2, _IOLBF = 1, _IOFBF = 0
+    log_dbg!("setvbuf(mode={}) — ignored, returning 0", mode);
+    0
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     // Standard C functions
     export_c_func!(fopen(_, _)),
@@ -787,4 +891,6 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(flockfile(_)),
     export_c_func!(ftrylockfile(_)),
     export_c_func!(funlockfile(_)),
+    export_c_func!(freopen(_, _, _)),
+    export_c_func!(setvbuf(_, _, _, _)),
 ];

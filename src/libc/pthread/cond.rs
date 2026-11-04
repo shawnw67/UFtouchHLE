@@ -13,12 +13,15 @@ use crate::mem::{ConstPtr, MutPtr, Ptr, SafeRead};
 use crate::{export_c_func, Environment};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;
+use std::time::SystemTime;
 
 use crate::environment::{MutexId, ThreadBlock, ThreadId};
 use crate::libc::time::timespec;
 
 #[repr(C, packed)]
-pub struct pthread_condattr_t {}
+pub struct pthread_condattr_t {
+    _pad: [u8; 4],
+}
 unsafe impl SafeRead for pthread_condattr_t {}
 
 /// Arbitrarily-chosen magic number for `pthread_cond_t` (not Apple's).
@@ -261,6 +264,93 @@ pub fn pthread_cond_destroy(env: &mut Environment, cond: MutPtr<pthread_cond_t>)
     0 // success
 }
 
+/// pthread_cond_timedwait_relative_np — Apple extension with a relative
+//timeout.
+/// Same stub approach as timedwait in the fork, effectively acting as wait.
+pub fn pthread_cond_timedwait_relative_np(
+    env: &mut Environment,
+    cond: MutPtr<pthread_cond_t>,
+    mutex: MutPtr<pthread_mutex_t>,
+    reltime: ConstPtr<timespec>,
+) -> i32 {
+    let duration = if reltime.is_null() {
+        Duration::ZERO
+    } else {
+        let ts = env.mem.read(reltime);
+        Duration::from_secs(ts.tv_sec.max(0) as u64)
+            .saturating_add(Duration::from_nanos(ts.tv_nsec.max(0) as u64))
+    };
+    let abs_time = env.mem.alloc_and_write(timespec {
+        tv_sec: (SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .saturating_add(duration)
+            .as_secs()) as _,
+        tv_nsec: 0,
+    });
+    let result = pthread_cond_timedwait(env, cond, mutex, abs_time.cast_const());
+    env.mem.free(abs_time.cast());
+    result
+}
+
+/// pthread_condattr_destroy — destroy a cond attr object (no-op).
+pub fn pthread_condattr_destroy(_env: &mut Environment, _attr: MutPtr<pthread_condattr_t>) -> i32 {
+    0
+}
+
+/// pthread_condattr_getclock — get clock attribute (always CLOCK_REALTIME =
+/// 0).
+pub fn pthread_condattr_getclock(
+    env: &mut Environment,
+    _attr: ConstPtr<pthread_condattr_t>,
+    clock_id: MutPtr<i32>,
+) -> i32 {
+    if !clock_id.is_null() {
+        env.mem.write(clock_id, 0); // CLOCK_REALTIME
+    }
+    0
+}
+
+/// pthread_condattr_getpshared — get process-shared attribute (always
+/// private).
+pub fn pthread_condattr_getpshared(
+    env: &mut Environment,
+    _attr: ConstPtr<pthread_condattr_t>,
+    pshared: MutPtr<i32>,
+) -> i32 {
+    if !pshared.is_null() {
+        env.mem.write(pshared, 0); // PTHREAD_PROCESS_PRIVATE
+    }
+    0
+}
+
+/// pthread_condattr_init — initialise a cond attr object (always default).
+pub fn pthread_condattr_init(env: &mut Environment, attr: MutPtr<pthread_condattr_t>) -> i32 {
+    if !attr.is_null() {
+        env.mem.write(attr, pthread_condattr_t { _pad: [0; 4] });
+    }
+    0
+}
+
+/// pthread_condattr_setclock — set clock attribute (stub, always
+//CLOCK_REALTIME).
+pub fn pthread_condattr_setclock(
+    _env: &mut Environment,
+    _attr: MutPtr<pthread_condattr_t>,
+    _clock_id: i32,
+) -> i32 {
+    0
+}
+
+/// pthread_condattr_setpshared — set process-shared attribute (stub).
+pub fn pthread_condattr_setpshared(
+    _env: &mut Environment,
+    _attr: MutPtr<pthread_condattr_t>,
+    _pshared: i32,
+) -> i32 {
+    0
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(pthread_cond_init(_, _)),
     export_c_func!(pthread_cond_wait(_, _)),
@@ -268,4 +358,11 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(pthread_cond_signal(_)),
     export_c_func!(pthread_cond_broadcast(_)),
     export_c_func!(pthread_cond_destroy(_)),
+    export_c_func!(pthread_cond_timedwait_relative_np(_, _, _)),
+    export_c_func!(pthread_condattr_destroy(_)),
+    export_c_func!(pthread_condattr_getclock(_, _)),
+    export_c_func!(pthread_condattr_getpshared(_, _)),
+    export_c_func!(pthread_condattr_init(_)),
+    export_c_func!(pthread_condattr_setclock(_, _)),
+    export_c_func!(pthread_condattr_setpshared(_, _)),
 ];

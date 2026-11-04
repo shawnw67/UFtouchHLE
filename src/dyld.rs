@@ -40,6 +40,7 @@ mod symbol_visibility_tests {
             external_relocations: Vec::new(),
             entry_point_pc: None,
             last_segment_end: 0,
+            text_base: 0,
         }
     }
 

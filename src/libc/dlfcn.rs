@@ -54,8 +54,25 @@ fn dlclose(env: &mut Environment, handle: MutVoidPtr) -> i32 {
     0 // success
 }
 
+/// Реализация функции `dlerror` стандарта POSIX (man
+/// 3 dlerror на Darwin).
+///
+/// Apple: "If no errors have occurred since initialization or since
+/// `dlerror()` was last called, `dlerror()` returns NULL." Because our
+/// `dlopen` / `dlsym` / `dlclose` never publish a per-thread error message
+/// (they log internally and return NULL/-1 to the guest), the correct
+/// POSIX-conforming reply is always `NULL`. Without this entry point the
+/// dynamic linker installed a generic return-0 stub, which a few guests
+/// (notably the iPhone OS port of `libstdc++`'s exception handling) treat
+/// as "no error" but others (Bionic-style helpers) tried to call
+/// `strlen()` on. Returning a real `NULL` pointer is unambiguous.
+fn dlerror(_env: &mut Environment) -> ConstPtr<u8> {
+    Ptr::null()
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(dlopen(_, _)),
     export_c_func!(dlsym(_, _)),
     export_c_func!(dlclose(_)),
+    export_c_func!(dlerror()),
 ];

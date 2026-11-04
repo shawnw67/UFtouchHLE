@@ -7,6 +7,7 @@
 pub mod mman;
 pub mod mount;
 pub mod ptrace;
+pub mod resource;
 pub mod socket;
 pub mod timeb;
 pub mod uio;

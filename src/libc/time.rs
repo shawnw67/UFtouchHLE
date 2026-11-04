@@ -19,6 +19,11 @@ pub struct State {
     /// Temporary static storage for the return value of `gmtime` or
     /// `localtime`. The standard allows calls to either to overwrite it.
     gmtime_tmp: Option<MutPtr<tm>>,
+    /// Temporary static storage for the string returned by `ctime` or
+    /// `asctime`. The standard allows calls to either to overwrite it.
+    asctime_buf: Option<MutPtr<u8>>,
+    /// Seconds west of UTC.
+    timezone_offset_seconds: i32,
 }
 
 // time.h (C)
@@ -781,6 +786,210 @@ pub fn strftime(
     res.len().try_into().unwrap()
 }
 
+/// `char *asctime(const struct tm *timeptr)`
+fn asctime(env: &mut Environment, timeptr: ConstPtr<tm>) -> MutPtr<u8> {
+    if timeptr.is_null() {
+        return Ptr::null();
+    }
+    let calendar_date = env.mem.read(timeptr);
+    let s = format_asctime(&calendar_date);
+    let buf = asctime_buf(env);
+    write_cstr_to_buffer(env, buf, &s, ASCTIME_BUF_SIZE);
+    buf
+}
+
+/// `char *ctime(const time_t *timep)`
+///
+/// Equivalent to `asctime(localtime(timep))`: converts the timestamp to local
+/// calendar time, then formats it into the shared static buffer.
+fn ctime(env: &mut Environment, timep: ConstPtr<time_t>) -> MutPtr<u8> {
+    if timep.is_null() {
+        return Ptr::null();
+    }
+    let timestamp = env.mem.read(timep);
+    let offset = env.libc_state.time.timezone_offset_seconds;
+    let calendar_date = timestamp_to_calendar_date(timestamp.saturating_sub(offset));
+    let s = format_asctime(&calendar_date);
+    let buf = asctime_buf(env);
+    write_cstr_to_buffer(env, buf, &s, ASCTIME_BUF_SIZE);
+    buf
+}
+
+/// `int getrusage(int who, struct rusage *usage)` (Darwin)
+///
+/// Reports the host process CPU time as the guest's user/system time. Apps
+/// like Chrome call this for performance counters and tolerate zeros, but
+/// returning real elapsed CPU time is more faithful.
+fn getrusage(env: &mut Environment, who: i32, usage_ptr: MutPtr<rusage>) -> i32 {
+    if who != RUSAGE_SELF {
+        log!(
+            "Warning: getrusage(who: {}) for non-self usage is unimplemented; returning zeros",
+            who
+        );
+        grusage_zero(env, usage_ptr);
+        return 0;
+    }
+    if usage_ptr.is_null() {
+        set_errno(env, 14); // EFAULT
+        return -1;
+    }
+    let elapsed = env.startup_time.elapsed();
+    let usage = rusage {
+        ru_utime: timeval {
+            tv_sec: elapsed.as_secs() as crate::libc::time::time_t,
+            tv_usec: (elapsed.subsec_micros()) as suseconds_t,
+        },
+        ru_stime: timeval {
+            tv_sec: 0,
+            tv_usec: 0,
+        },
+        ru_maxrss: 0,
+        ru_ixrss: 0,
+        ru_idrss: 0,
+        ru_isrss: 0,
+        ru_minflt: 0,
+        ru_majflt: 0,
+        ru_nswap: 0,
+        ru_inblock: 0,
+        ru_oublock: 0,
+        ru_msgsnd: 0,
+        ru_msgrcv: 0,
+        ru_nsignals: 0,
+        ru_nvcsw: 0,
+        ru_nivcsw: 0,
+    };
+    // time_t is i64 on Darwin; our packed struct above uses the right widths
+    // via the timeval fields. Write it out.
+    env.mem.write(usage_ptr, usage);
+    0
+}
+
+/// `size_t strftime_l(char *restrict s, size_t maxsize,
+/// const char *restrict format, const struct tm *restrict timeptr,
+/// locale_t loc)`
+///
+/// Per Apple's `strftime_l(3)` man page (iPhoneOS man pages), this behaves
+/// exactly like `strftime()` except it formats using the supplied extended
+/// locale instead of the global locale. touchHLE only models the "C"
+/// locale, so the locale argument is ignored and we forward to `strftime`.
+/// This symbol is imported by libstdc++/libc++ iostreams (`std::time_put`),
+/// which guest C++ code hits when formatting dates.
+fn strftime_l(
+    env: &mut Environment,
+    s: MutPtr<u8>,
+    max_size: GuestUSize,
+    format: ConstPtr<u8>,
+    time_ptr: ConstPtr<tm>,
+    _locale: crate::libc::clocale::locale_t,
+) -> GuestUSize {
+    strftime(env, s, max_size, format, time_ptr)
+}
+
+/// Size of the buffer returned by `asctime`/`ctime`. The C standard output is
+/// 26 bytes ("Www Mmm dd hh:mm:ss yyyy\n\0"); we allocate extra slack so that
+/// out-of-range years (which produce a longer year field) still fit.
+const ASCTIME_BUF_SIZE: GuestUSize = 64;
+
+const RUSAGE_SELF: i32 = 0;
+
+/// Lazily allocate (and return) the shared static buffer used by both
+/// `asctime` and `ctime`.
+fn asctime_buf(env: &mut Environment) -> MutPtr<u8> {
+    *env.libc_state.time.asctime_buf.get_or_insert_with(|| {
+        let ptr = env.mem.alloc(ASCTIME_BUF_SIZE).cast::<u8>();
+        env.mem.bytes_at_mut(ptr, ASCTIME_BUF_SIZE).fill(0);
+        ptr
+    })
+}
+
+/// Format a `tm` exactly like the C standard `asctime`:
+/// `"%.3s %.3s%3d %.2d:%.2d:%.2d %d\n"`, e.g. `"Thu Nov 24 18:22:48 1986\n"`.
+fn format_asctime(tm: &tm) -> String {
+    let wday = ASCTIME_WDAY[tm.tm_wday.rem_euclid(7) as usize];
+    let mon = ASCTIME_MON[tm.tm_mon.rem_euclid(12) as usize];
+    // `format!` takes references to its arguments, but references to fields of
+    // a `#[repr(packed)]` struct are not allowed (they may be unaligned), so
+    // copy each field into a local first.
+    let mday = tm.tm_mday;
+    let hour = tm.tm_hour;
+    let min = tm.tm_min;
+    let sec = tm.tm_sec;
+    let year = tm.tm_year + 1900;
+    format!(
+        "{} {}{:3} {:02}:{:02}:{:02} {}\n",
+        wday, mon, mday, hour, min, sec, year,
+    )
+}
+
+fn grusage_zero(env: &mut Environment, usage_ptr: MutPtr<rusage>) {
+    if usage_ptr.is_null() {
+        return;
+    }
+    let zero = rusage {
+        ru_utime: timeval {
+            tv_sec: 0,
+            tv_usec: 0,
+        },
+        ru_stime: timeval {
+            tv_sec: 0,
+            tv_usec: 0,
+        },
+        ru_maxrss: 0,
+        ru_ixrss: 0,
+        ru_idrss: 0,
+        ru_isrss: 0,
+        ru_minflt: 0,
+        ru_majflt: 0,
+        ru_nswap: 0,
+        ru_inblock: 0,
+        ru_oublock: 0,
+        ru_msgsnd: 0,
+        ru_msgrcv: 0,
+        ru_nsignals: 0,
+        ru_nvcsw: 0,
+        ru_nivcsw: 0,
+    };
+    env.mem.write(usage_ptr, zero);
+}
+
+#[allow(non_camel_case_types)]
+#[repr(C, packed)]
+pub(super) struct rusage {
+    ru_utime: timeval,
+    ru_stime: timeval,
+    // The remaining fields are long counters; zero-filled is fine.
+    ru_maxrss: i32,
+    ru_ixrss: i32,
+    ru_idrss: i32,
+    ru_isrss: i32,
+    ru_minflt: i32,
+    ru_majflt: i32,
+    ru_nswap: i32,
+    ru_inblock: i32,
+    ru_oublock: i32,
+    ru_msgsnd: i32,
+    ru_msgrcv: i32,
+    ru_nsignals: i32,
+    ru_nvcsw: i32,
+    ru_nivcsw: i32,
+}
+
+unsafe impl SafeRead for rusage {}
+
+fn write_cstr_to_buffer(env: &mut Environment, ptr: MutPtr<u8>, s: &str, buf_size: GuestUSize) {
+    let bytes = s.as_bytes();
+    let buf = env.mem.bytes_at_mut(ptr, buf_size);
+    buf.fill(0);
+    let len = bytes.len().min((buf_size - 1) as usize);
+    buf[..len].copy_from_slice(&bytes[..len]);
+}
+
+const ASCTIME_MON: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+const ASCTIME_WDAY: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(clock()),
     export_c_func!(time(_)),
@@ -795,4 +1004,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(nanosleep(_, _)),
     export_c_func!(strptime(_, _, _)),
     export_c_func!(strftime(_, _, _, _)),
+    export_c_func!(asctime(_)),
+    export_c_func!(ctime(_)),
+    export_c_func!(getrusage(_, _)),
+    export_c_func!(strftime_l(_, _, _, _, _)),
 ];

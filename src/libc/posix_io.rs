@@ -35,6 +35,16 @@ impl State {
             .and_then(|file_or_none| file_or_none.as_mut())
     }
 
+    pub fn guest_file(&self, fd: FileDescriptor) -> Option<&GuestFile> {
+        if fd < NORMAL_FILENO_BASE {
+            return None;
+        }
+        self.files
+            .get(fd_to_file_idx(fd))
+            .and_then(|file_or_none| file_or_none.as_ref())
+            .map(|file_obj| &file_obj.file)
+    }
+
     pub(crate) fn is_fd_open(&mut self, fd: FileDescriptor) -> bool {
         self.files.get(fd_to_file_idx(fd)).is_some()
     }
@@ -1145,6 +1155,224 @@ fn setxattr(
     0
 }
 
+fn creat(env: &mut Environment, path: ConstPtr<u8>, _mode: u32) -> i32 {
+    // creat(path, mode) == open(path, O_WRONLY|O_CREAT|O_TRUNC)
+    // O_WRONLY=0x0001, O_CREAT=0x0200, O_TRUNC=0x0400
+    let flags = 0x0001 | 0x0200 | 0x0400;
+    open_direct(env, path, flags)
+}
+
+fn open_dprotected_np(
+    env: &mut Environment,
+    path: ConstPtr<u8>,
+    flags: i32,
+    _class: i32,
+    _dpflags: i32,
+    args: DotDotDot,
+) -> FileDescriptor {
+    open(env, path, flags, args)
+}
+
+/// `int poll(struct pollfd *fds, nfds_t nfds, int timeout)` — полная
+/// реализация: готовность сокетов (через
+/// socket_poll_events), обычных файлов и pipe-концов;
+/// блокировка с yield'ом гостевого ранлайна
+/// (env.sleep, как в select); записи `revents` всегда по
+/// возврату.
+fn poll(env: &mut Environment, fds: MutPtr<PollFd>, nfds: u32, timeout: i32) -> i32 {
+    set_errno(env, 0);
+    if nfds > 0 && fds.is_null() {
+        set_errno(env, EFAULT);
+        return -1;
+    }
+    // POSIX: EINVAL, если nfds больше {OPEN_MAX} (на iOS = 10240).
+    if nfds > 10240 {
+        set_errno(env, EINVAL);
+        return -1;
+    }
+
+    // timeout < 0 — ждать бессрочно; 0 — ровно один
+    // опрос.
+    let deadline = if timeout < 0 {
+        None
+    } else {
+        Some(std::time::Instant::now() + std::time::Duration::from_millis(timeout as u64))
+    };
+    const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+
+    let mut revents = vec![0i16; nfds as usize];
+    let mut count;
+    loop {
+        let mut ready = 0i32;
+        for i in 0..nfds {
+            let pfd: PollFd = env.mem.read(fds + i);
+            let re = evaluate_poll_fd(env, pfd.fd, pfd.events);
+            revents[i as usize] = re;
+            if re != 0 {
+                ready += 1;
+            }
+        }
+        count = ready;
+        if ready > 0 || timeout == 0 {
+            break;
+        }
+        // env.sleep() уступает гостевому ранлайну —
+        // остальные потоки идут.
+        match deadline {
+            Some(deadline) => {
+                let now = std::time::Instant::now();
+                if now >= deadline {
+                    break;
+                }
+                env.sleep(POLL_INTERVAL.min(deadline - now));
+            }
+            None => env.sleep(POLL_INTERVAL),
+        }
+    }
+
+    // revents пишутся всегда (в том числе по
+    // таймауту — там нули).
+    for i in 0..nfds {
+        let p = fds + i;
+        let pfd: PollFd = env.mem.read(p);
+        // Собираем структуру заново: запись в
+        // поля упакованного struct через
+        // place-выражение здесь не используется
+        // нарочно.
+        env.mem.write(
+            p,
+            PollFd {
+                fd: pfd.fd,
+                events: pfd.events,
+                revents: revents[i as usize],
+            },
+        );
+    }
+    count
+}
+
+/// `struct pollfd { int fd; short events; short revents; }` (32-битный
+/// гость).
+#[repr(C, packed)]
+#[derive(Copy, Clone)]
+struct PollFd {
+    fd: FileDescriptor,
+    events: i16,
+    revents: i16,
+}
+
+unsafe impl SafeRead for PollFd {}
+
+/// Оценить readiness одного fd для poll(2):
+/// возвращает `revents`. Нормальные биты
+/// (POLLIN/POLLOUT/…) отдаются только если
+/// запросили их в `events`; POLLERR/POLLHUP/POLLNVAL —
+/// всегда (POSIX).
+fn evaluate_poll_fd(env: &mut Environment, fd: FileDescriptor, events: i16) -> i16 {
+    if fd < 0 {
+        // Отрицательные fd игнорируются: revents=0, в
+        // счёт не идут.
+        return 0;
+    }
+    if fd < NORMAL_FILENO_BASE {
+        // stdin/stdout/stderr: запись всегда возможна;
+        // данных для чтения в HLE нет, поэтому POLLIN
+        // не сообщается.
+        let mut revents = 0;
+        if fd == STDOUT_FILENO || fd == STDERR_FILENO {
+            revents |= POLLOUT | POLLWRNORM;
+        }
+        return revents & events;
+    }
+    if is_socket(env, fd) {
+        return crate::libc::sys::socket::socket_poll_events(env, fd, events);
+    }
+    let Some(file_obj) = env.libc_state.posix_io.guest_file(fd) else {
+        // Файл не открыт → POLLNVAL (не ошибка, а
+        // готовый fd, как в POSIX).
+        return POLLNVAL;
+    };
+    // file_obj: &GuestFile (из guest_file).
+    match file_obj {
+        GuestFile::PipeRead(pipe) => {
+            let pipe = pipe.borrow();
+            let mut revents = 0;
+            if pipe.poll_has_data() {
+                revents |= POLLIN | POLLRDNORM;
+            }
+            if !pipe.poll_has_writers() {
+                // Писателей нет → EOF на читающем
+                // конце (HUP не зависит от events, но POLLIN
+                // сообщаем только если запросили).
+                return (revents & events) | POLLHUP;
+            }
+            revents & events
+        }
+        GuestFile::PipeWrite(pipe) => {
+            let pipe = pipe.borrow();
+            if !pipe.poll_has_readers() {
+                // Читателей нет → запись
+                // невозможна → POLLERR.
+                return POLLERR;
+            }
+            (POLLOUT | POLLWRNORM) & events
+        }
+        // Обычные файлы/каталоги/случайные
+        // числа: POSIX гарантирует — никогда не
+        // блокируются, всегда готовы и на
+        // чтение, и на запись.
+        _ => (POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM) & events,
+    }
+}
+
+pub(crate) const POLLERR: i16 = 0x0008;
+
+pub(crate) const POLLHUP: i16 = 0x0010;
+
+/// Значения `events`/`revents` для poll(2) (sys/poll.h, Darwin).
+pub(crate) const POLLIN: i16 = 0x0001;
+pub(crate) const POLLPRI: i16 = 0x0002;
+
+pub(crate) const POLLNVAL: i16 = 0x0020;
+
+pub(crate) const POLLOUT: i16 = 0x0004;
+
+pub(crate) const POLLRDNORM: i16 = 0x0040;
+
+pub(crate) const POLLWRNORM: i16 = 0x0100;
+
+pub fn find_or_create_pipe_read_fd(
+    env: &mut Environment,
+    buffer: std::rc::Rc<std::cell::RefCell<crate::fs::PipeBuffer>>,
+) -> FileDescriptor {
+    find_or_create_fd(
+        env,
+        PosixFileHostObject {
+            file: GuestFile::PipeRead(crate::fs::PipeEnd::new(buffer, true)),
+            needs_flush: false,
+            reached_eof: false,
+            flags: 0,
+            save_dump: false,
+        },
+    )
+}
+
+pub fn find_or_create_pipe_write_fd(
+    env: &mut Environment,
+    buffer: std::rc::Rc<std::cell::RefCell<crate::fs::PipeBuffer>>,
+) -> FileDescriptor {
+    find_or_create_fd(
+        env,
+        PosixFileHostObject {
+            file: GuestFile::PipeWrite(crate::fs::PipeEnd::new(buffer, false)),
+            needs_flush: false,
+            reached_eof: false,
+            flags: 0,
+            save_dump: false,
+        },
+    )
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(dup(_)),
     export_c_func!(dup2(_, _)),
@@ -1164,6 +1392,9 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(fsync(_)),
     export_c_func!(ftruncate(_, _)),
     export_c_func!(truncate(_, _)),
+    export_c_func!(creat(_, _)),
+    export_c_func!(open_dprotected_np(_, _, _, _, _)),
+    export_c_func!(poll(_, _, _)),
 ];
 
 /// Helper function, not part of API

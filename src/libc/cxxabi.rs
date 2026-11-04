@@ -492,7 +492,14 @@ fn __dynamic_cast(
     result.map_or(Ptr::null(), ConstVoidPtr::from_bits)
 }
 
+/// Called when a pure virtual function is called. The bundled C++ runtime
+/// provides the exception functions, including this one if the app links it.
+fn __cxa_pure_virtual(_env: &mut Environment) {
+    panic!("App called a pure virtual function");
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(__cxa_pure_virtual()),
     export_c_func!(__cxa_atexit(_, _, _)),
     export_c_func!(__cxa_finalize(_)),
     export_c_func!(__dynamic_cast(_, _, _, _)),

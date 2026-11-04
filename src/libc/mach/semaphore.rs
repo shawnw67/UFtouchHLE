@@ -222,6 +222,55 @@ fn semaphore_destroy(env: &mut Environment, task: task_t, semaphore: semaphore_t
     result
 }
 
+/// `kern_return_t semaphore_signal_thread(semaphore_t semaphore, thread_act_t
+/// thread)`
+///
+/// Signals the semaphore only if the given thread is waiting on it. We don't
+/// track which thread a Mach semaphore port belongs to, so signal
+/// unconditionally: over-signalling is benign (the waiter wakes up, which is
+/// what the caller wanted) whereas under-signalling would deadlock it.
+fn semaphore_signal_thread(
+    env: &mut Environment,
+    semaphore: semaphore_t,
+    thread: u32,
+) -> kern_return_t {
+    let result = semaphore_signal(env, semaphore);
+    log_dbg!(
+        "semaphore_signal_thread({:?}, thread {:?}) -> {:?}",
+        semaphore,
+        thread,
+        result
+    );
+    result
+}
+
+/// `kern_return_t semaphore_timedwait_signal(semaphore_t wait_semaphore,
+/// semaphore_t signal_semaphore, mach_timespec_t wait_time)`
+///
+/// Timed variant of [semaphore_wait_signal]. The second semaphore is only
+/// signalled when the wait succeeded; on timeout nothing is posted (matching
+/// Mach, where the pair is described as atomic).
+fn semaphore_timedwait_signal(
+    env: &mut Environment,
+    wait_semaphore: semaphore_t,
+    signal_semaphore: semaphore_t,
+    tv_sec: u32,
+    tv_nsec: u32,
+) -> kern_return_t {
+    let result = semaphore_timedwait(env, wait_semaphore, tv_sec, tv_nsec);
+    if result == KERN_SUCCESS {
+        let _ = sem_post(env, signal_semaphore);
+    }
+    log_dbg!(
+        "semaphore_timedwait_signal({:?}, {:?}, {}s) -> {:?}",
+        wait_semaphore,
+        signal_semaphore,
+        tv_sec,
+        result
+    );
+    result
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(semaphore_create(_, _, _, _)),
     export_c_func!(semaphore_signal(_)),
@@ -231,4 +280,6 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(semaphore_wait_signal(_, _)),
     export_c_func!(semaphore_timedwait(_, _, _)),
     export_c_func!(semaphore_destroy(_, _)),
+    export_c_func!(semaphore_signal_thread(_, _)),
+    export_c_func!(semaphore_timedwait_signal(_, _, _, _)),
 ];

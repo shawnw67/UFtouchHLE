@@ -1378,6 +1378,150 @@ fn vfprintf(env: &mut Environment, stream: MutPtr<FILE>, format: ConstPtr<u8>, a
     res.len().try_into().unwrap()
 }
 
+fn __vsnprintf_chk(
+    env: &mut Environment,
+    s: MutPtr<u8>,
+    maxlen: GuestUSize,
+    _flag: i32,
+    _os: GuestUSize,
+    format: ConstPtr<u8>,
+    ap: VaList,
+) -> i32 {
+    vsnprintf(env, s, maxlen, format, ap)
+}
+
+/// `asprintf()` — BSD/Darwin extension that formats into a freshly
+/// allocated buffer and returns a pointer to it via `ret`.
+fn asprintf(
+    env: &mut Environment,
+    ret: MutPtr<MutPtr<u8>>,
+    format: ConstPtr<u8>,
+    args: DotDotDot,
+) -> i32 {
+    log_dbg!("asprintf() implemented as a wrapper of vasprintf()");
+
+    vasprintf(env, ret, format, args.start())
+}
+
+fn snprintf_l(
+    env: &mut Environment,
+    dest: MutPtr<u8>,
+    n: GuestUSize,
+    _loc: MutVoidPtr,
+    format: ConstPtr<u8>,
+    args: DotDotDot,
+) -> i32 {
+    vsnprintf(env, dest, n, format, args.start())
+}
+
+fn sprintf_l(
+    env: &mut Environment,
+    dest: MutPtr<u8>,
+    _loc: MutVoidPtr,
+    format: ConstPtr<u8>,
+    args: DotDotDot,
+) -> i32 {
+    sprintf(env, dest, format, args)
+}
+
+fn vsnprintf_l(
+    env: &mut Environment,
+    dest: MutPtr<u8>,
+    n: GuestUSize,
+    _loc: MutVoidPtr,
+    format: ConstPtr<u8>,
+    arg: VaList,
+) -> i32 {
+    vsnprintf(env, dest, n, format, arg)
+}
+
+fn vsprintf_l(
+    env: &mut Environment,
+    dest: MutPtr<u8>,
+    _loc: MutVoidPtr,
+    format: ConstPtr<u8>,
+    arg: VaList,
+) -> i32 {
+    vsprintf(env, dest, format, arg)
+}
+
+fn vwprintf(env: &mut Environment, format: ConstPtr<wchar_t>, arg: VaList) -> i32 {
+    // Очищаем errno перед выполнением
+    set_errno(env, 0);
+    // Используем 'C' локаль для корректной
+    // работы с широкими символами, как это
+    // реализовано в vswprintf Only the "C" locale is supported, but
+    // apps sometimes request e.g. "UTF-8"; tolerate a mismatch rather than
+    // aborting the emulator.
+    let ctype_locale = setlocale(env, LC_CTYPE, Ptr::null());
+    if env.mem.read(ctype_locale) != b'C' {
+        log!("non-'C' LC_CTYPE locale set; treating it as 'C'.");
+    }
+
+    let wcstr_format = env.mem.wcstr_at(format);
+    log_dbg!("vwprintf({:?} ({:?}), ...)", format, wcstr_format);
+    let wcstr_format_bytes = wcstr_format.as_bytes();
+    let len: GuestUSize = wcstr_format_bytes.len() as GuestUSize;
+    // Передаем байты формата в printf_inner
+    let res = printf_inner::<false, _>(
+        env,
+        |_mem, idx| {
+            if idx == len {
+                b'\0'
+            } else {
+                wcstr_format_bytes[idx as usize]
+            }
+        },
+        arg,
+    );
+    // Пишем результат напрямую в стандартный
+    // вывод (stdout) Real libc returns a negative value when writing to
+    // stdout fails; mirror that instead of ignoring the error.
+    if std::io::stdout().write_all(&res).is_err() {
+        log!("Warning: vwprintf(): writing to stdout failed; returning EOF.");
+        return EOF;
+    }
+    res.len().try_into().unwrap()
+}
+
+fn wprintf(env: &mut Environment, format: ConstPtr<wchar_t>, args: DotDotDot) -> i32 {
+    // errno is cleared optimistically; ISO C does not define errno for
+    // the printf family, and error paths set it where it is meaningful.
+    set_errno(env, 0);
+
+    // Only the "C" locale is supported, but apps sometimes request e.g.
+    // "UTF-8"; tolerate a mismatch rather than aborting the emulator.
+    let ctype_locale = setlocale(env, LC_CTYPE, Ptr::null());
+    if env.mem.read(ctype_locale) != b'C' {
+        log!("non-'C' LC_CTYPE locale set; treating it as 'C'.");
+    }
+
+    let wcstr_format = env.mem.wcstr_at(format);
+    log_dbg!("wprintf({:?} ({:?}), ...)", format, wcstr_format);
+
+    let wcstr_format_bytes = wcstr_format.as_bytes();
+    let len: GuestUSize = wcstr_format_bytes.len() as GuestUSize;
+    let res = printf_inner::<false, _>(
+        env,
+        |_mem, idx| {
+            if idx == len {
+                b'\0'
+            } else {
+                wcstr_format_bytes[idx as usize]
+            }
+        },
+        args.start(),
+    );
+
+    // Real libc returns a negative value when writing to stdout fails;
+    // mirror that instead of ignoring the error.
+    if std::io::stdout().write_all(&res).is_err() {
+        log!("Warning: wprintf(): writing to stdout failed; returning EOF.");
+        return EOF;
+    }
+    res.len().try_into().unwrap()
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(__snprintf_chk(_, _, _, _, _, _)),
     export_c_func!(sscanf(_, _, _)),
@@ -1397,6 +1541,14 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(printf(_, _)),
     export_c_func!(fprintf(_, _, _)),
     export_c_func!(vfprintf(_, _, _)),
+    export_c_func!(__vsnprintf_chk(_, _, _, _, _, _)),
+    export_c_func!(asprintf(_, _, _)),
+    export_c_func!(snprintf_l(_, _, _, _, _)),
+    export_c_func!(sprintf_l(_, _, _, _)),
+    export_c_func!(vsnprintf_l(_, _, _, _, _)),
+    export_c_func!(vsprintf_l(_, _, _, _)),
+    export_c_func!(vwprintf(_, _)),
+    export_c_func!(wprintf(_, _)),
 ];
 
 // Helper function, not a part of printf family

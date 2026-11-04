@@ -75,6 +75,14 @@ fn uuid_unparse_upper(env: &mut Environment, input: ConstPtr<u8>, out: MutPtr<u8
 fn uuid_unparse_lower(env: &mut Environment, input: ConstPtr<u8>, out: MutPtr<u8>) {
     unparse(env, input, out, false);
 }
+/// `void uuid_generate_time(uuid_t out)` — RFC 4122 version-1 UUID
+/// (timestamp + MAC). touchHLE has no MAC address, so we fall back to
+/// the random implementation. The output is still a syntactically
+/// valid UUID with the version-4 bits set.
+fn uuid_generate_time(env: &mut Environment, out: MutPtr<u8>) {
+    uuid_generate_random(env, out);
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(uuid_clear(_)),
     export_c_func!(uuid_copy(_, _)),
@@ -86,4 +94,5 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(uuid_unparse(_, _)),
     export_c_func!(uuid_unparse_lower(_, _)),
     export_c_func!(uuid_unparse_upper(_, _)),
+    export_c_func!(uuid_generate_time(_)),
 ];

@@ -10,7 +10,13 @@ use crate::libc::unistd::pid_t;
 use crate::mem::MutPtr;
 use crate::{export_c_func, Environment};
 
-fn ptrace(_env: &mut Environment, request: i32, pid: pid_t, addr: MutPtr<u8>, data: i32) -> i32 {
+pub fn ptrace(
+    _env: &mut Environment,
+    request: i32,
+    pid: pid_t,
+    addr: MutPtr<u8>,
+    data: i32,
+) -> i32 {
     log!(
         "Warning: ptrace({}, {}, {:?}, {}) called, returning -1",
         request,

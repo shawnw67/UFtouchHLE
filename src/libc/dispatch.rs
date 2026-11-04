@@ -274,6 +274,10 @@ pub(crate) fn is_block(env: &Environment, object: id) -> bool {
     !class.is_null() && env.mem.read(object.cast::<id>()) == class
 }
 
+/// Opaque queue handle — we use a small integer sentinel.
+#[allow(non_camel_case_types)]
+pub type dispatch_queue_t = MutVoidPtr;
+
 pub const CLASSES: ClassExports = objc_classes! {
 (env, this, _cmd);
 @implementation _Podroid_NSBlock: NSObject
@@ -1301,6 +1305,36 @@ pub const CONSTANTS: ConstantExports = &[
         HostConstant::Custom(source_type_data_replace),
     ),
 ];
+/// `void dispatch_debug(dispatch_object_t object, const char *message, ...)`
+///
+/// Per Apple docs: "Programmatically logs debug information about a dispatch
+/// object." This is a debugging aid that apps rarely call in production,
+/// but some Unity-based games (Frontline Commando 2) reference it. Since
+/// we don't have real dispatch object internals to inspect, we simply no-op.
+fn dispatch_debug(_env: &mut Environment, _object: MutVoidPtr, _message: ConstVoidPtr) {
+    // No-op. The message is a printf-style format string with varargs that
+    // we intentionally ignore.
+}
+
+fn dispatch_main(_env: &mut Environment) {
+    log!("dispatch_main: stubbed (returning immediately)");
+    // Cannot spin forever here since GuestRet requires (). Just return.
+}
+
+fn dispatch_set_finalizer_f(
+    _env: &mut Environment,
+    _object: MutVoidPtr,
+    _finalizer: GuestFunction,
+) {
+}
+
+fn dispatch_set_target_queue(
+    _env: &mut Environment,
+    _object: MutVoidPtr,
+    _queue: dispatch_queue_t,
+) {
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(dispatch_get_current_queue()),
     export_c_func!(dispatch_get_specific(_)),
@@ -1362,4 +1396,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(_Block_release(_)),
     export_c_func!(_Block_object_assign(_, _, _)),
     export_c_func!(_Block_object_dispose(_, _)),
+    export_c_func!(dispatch_debug(_, _)),
+    export_c_func!(dispatch_main()),
+    export_c_func!(dispatch_set_finalizer_f(_, _)),
+    export_c_func!(dispatch_set_target_queue(_, _)),
 ];

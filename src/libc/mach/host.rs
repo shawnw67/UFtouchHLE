@@ -11,7 +11,9 @@ use crate::dyld::FunctionExports;
 use crate::libc::mach::arm::vm_types::vm_size_t;
 use crate::libc::mach::core_types::natural_t;
 use crate::libc::mach::port::mach_port_t;
+use crate::libc::mach::thread_info::KERN_INVALID_ARGUMENT;
 use crate::libc::mach::thread_info::{kern_return_t, mach_msg_type_number_t, KERN_SUCCESS};
+use crate::mem::GuestUSize;
 use crate::mem::{guest_size_of, MutPtr, SafeRead, PAGE_SIZE};
 use crate::{export_c_func, Environment};
 
@@ -115,8 +117,243 @@ fn host_statistics(
     KERN_SUCCESS
 }
 
+/// `kern_return_t clock_get_attributes(clock_serv_t clock_serv,
+///                                     clock_flavor_t flavor,
+///                                     clock_attr_t attr,
+///                                     mach_msg_type_number_t *attr_count)`
+///
+/// Stub — most apps only call this to query the clock resolution, which we
+/// report as 1 ms (1 000 000 ns), a safe conservative value.
+fn clock_get_attributes(
+    env: &mut Environment,
+    clock_serv: clock_serv_t,
+    flavor: natural_t,
+    attr: MutPtr<natural_t>,
+    attr_count: MutPtr<mach_msg_type_number_t>,
+) -> kern_return_t {
+    log_dbg!(
+        "clock_get_attributes(port={:#010x}, flavor={}) — returning 1ms resolution",
+        clock_serv,
+        flavor
+    );
+    // CLOCK_GET_TIME_RES (flavor 1): resolution in nanoseconds.
+    // Write a single natural_t value of 1 000 000 (1 ms).
+    if !attr.is_null() {
+        env.mem.write(attr, 1_000_000u32);
+    }
+    if !attr_count.is_null() {
+        env.mem.write(attr_count, 1);
+    }
+    KERN_SUCCESS
+}
+
+fn clock_get_time(
+    env: &mut Environment,
+    clock_serv: clock_serv_t,
+    cur_time: MutPtr<mach_timespec_t>,
+) -> kern_return_t {
+    let (secs, nanos): (u64, u32) = match clock_serv {
+        CLOCK_PORT_MONOTONIC | CLOCK_PORT_REALTIME => {
+            // Monotonic: seconds and nanoseconds since process startup.
+            let d = std::time::Instant::now().duration_since(env.startup_time);
+            (d.as_secs(), d.subsec_nanos())
+        }
+        CLOCK_PORT_CALENDAR => {
+            // Calendar: seconds since Unix epoch via SystemTime.
+            match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                Ok(d) => (d.as_secs(), d.subsec_nanos()),
+                Err(_) => (0, 0),
+            }
+        }
+        other => {
+            if other == 0 {
+                log_dbg!("clock_get_time: called with MACH_PORT_NULL (0)");
+            } else {
+                log_dbg!("clock_get_time: unknown clock_serv port {:#010x}", other);
+            }
+            // Per Mach documentation, an invalid clock service port should
+            // return KERN_INVALID_ARGUMENT. We still zero the output to avoid
+            // leaving garbage in guest memory for callers that ignore errors.
+            env.mem.write(
+                cur_time,
+                mach_timespec_t {
+                    tv_sec: 0,
+                    tv_nsec: 0,
+                },
+            );
+            return KERN_INVALID_ARGUMENT;
+        }
+    };
+    env.mem.write(
+        cur_time,
+        mach_timespec_t {
+            tv_sec: secs as u32,
+            tv_nsec: nanos,
+        },
+    );
+    log_dbg!(
+        "clock_get_time(port={:#010x}) => {}.{:09}",
+        clock_serv,
+        secs,
+        nanos
+    );
+    KERN_SUCCESS
+}
+
+/// `kern_return_t host_get_clock_service(host_t host, clock_id_t clock_id,
+///                                       clock_serv_t *clock_serv)`
+///
+/// Returns a send right to the named clock service. Apps use the returned
+/// port with `clock_get_time` / `clock_get_attributes`. We hand back a
+/// stable sentinel port value per clock ID so the caller can hold and pass
+/// it around freely.
+fn host_get_clock_service(
+    env: &mut Environment,
+    host: host_t,
+    clock_id: clock_id_t,
+    clock_serv: MutPtr<clock_serv_t>,
+) -> kern_return_t {
+    // Soft-fail on unexpected host ports (see host_page_size /
+    // host_statistics): per XNU host.c the kernel returns
+    // KERN_INVALID_ARGUMENT rather than aborting.
+    if host != MACH_HOST_SELF {
+        log!(
+            "host_get_clock_service: unexpected host port {:#010x} (expected MACH_HOST_SELF \
+             {:#010x}); returning KERN_INVALID_ARGUMENT",
+            host,
+            MACH_HOST_SELF
+        );
+        return KERN_INVALID_ARGUMENT;
+    }
+    let port = match clock_id {
+        SYSTEM_CLOCK => CLOCK_PORT_MONOTONIC,
+        CALENDAR_CLOCK => CLOCK_PORT_CALENDAR,
+        REALTIME_CLOCK => CLOCK_PORT_REALTIME,
+        other => {
+            log!(
+                "host_get_clock_service: unknown clock_id {}, returning monotonic port",
+                other
+            );
+            CLOCK_PORT_MONOTONIC
+        }
+    };
+    env.mem.write(clock_serv, port);
+    log_dbg!(
+        "host_get_clock_service(clock_id={}) => port {:#010x}",
+        clock_id,
+        port
+    );
+    KERN_SUCCESS
+}
+
+/// `kern_return_t host_statistics64(host_t host, host_flavor_t flavor,
+///                                  host_info_t host_info_out,
+///                                  mach_msg_type_number_t
+///                                      *host_info_out_count)`
+///
+/// The 64-bit variant of `host_statistics`, used by memory-monitors and by
+/// Mono's `GCGetTotalMemory`-style probes via
+/// `sysctl(CTL_VM, VM_METER)`-style reporting paths. Fill the same
+/// freshly-booted device model as `host_statistics`.
+fn host_statistics64(
+    env: &mut Environment,
+    host: host_t,
+    flavor: host_flavor_t,
+    host_info_out: host_info_t,
+    host_info_out_count: MutPtr<mach_msg_type_number_t>,
+) -> kern_return_t {
+    if host != MACH_HOST_SELF {
+        log!(
+            "host_statistics64: unexpected host port {:#010x} (expected MACH_HOST_SELF {:#010x}); \
+             returning KERN_INVALID_ARGUMENT",
+            host,
+            MACH_HOST_SELF
+        );
+        return KERN_INVALID_ARGUMENT;
+    }
+    if flavor != HOST_VM_INFO64 {
+        log!(
+            "host_statistics64: unsupported flavor {}; returning KERN_INVALID_ARGUMENT",
+            flavor
+        );
+        return KERN_INVALID_ARGUMENT;
+    }
+    let available = env.mem.read(host_info_out_count);
+    // Callers occasionally pass a byte-size count by mistake (as with
+    // host_statistics); writing `available` words could then overflow the
+    // buffer, so cap the write at a generous upper bound for the struct
+    // (the real iOS 6 count is well under this).
+    let fields_to_write = available.min(64);
+    let physical = physical_memory(env);
+    let total_pages = (physical / PAGE_SIZE as u64) as natural_t;
+    let free_count = total_pages / 4;
+    let inactive_count = total_pages / 8;
+    let wire_count = total_pages / 4;
+    let active_count = total_pages - free_count - inactive_count - wire_count;
+    // vm_statistics64 begins with the same four natural_t counts as
+    // vm_statistics (free/active/inactive/wire); everything after them is
+    // 64-bit statistics that may safely read as zero on a quiet device.
+    let field_size = guest_size_of::<natural_t>() as GuestUSize;
+    for i in 0..fields_to_write {
+        let value: natural_t = match i {
+            0 => free_count,
+            1 => active_count,
+            2 => inactive_count,
+            3 => wire_count,
+            _ => 0,
+        };
+        env.mem.write(
+            (host_info_out + (i as GuestUSize * field_size)).cast(),
+            value,
+        );
+    }
+    env.mem.write(host_info_out_count, fields_to_write);
+    KERN_SUCCESS
+}
+
+const CLOCK_PORT_CALENDAR: clock_serv_t = 0x200c0003;
+
+const CLOCK_PORT_MONOTONIC: clock_serv_t = 0x200c0002;
+
+// Clock service port sentinels — arbitrary unique values, one per clock ID.
+const CLOCK_PORT_REALTIME: clock_serv_t = 0x200c0001;
+
+const HOST_VM_INFO64: host_flavor_t = 4;
+
+type clock_id_t = natural_t;
+
+type clock_serv_t = mach_port_t;
+
+/// `kern_return_t clock_get_time(clock_serv_t clock_serv,
+///                               mach_timespec_t *cur_time)`
+///
+/// Fills `*cur_time` with the current time for the given clock service port.
+/// `mach_timespec_t` is `{ tv_sec: u32, tv_nsec: u32 }`.
+#[repr(C, packed)]
+struct mach_timespec_t {
+    tv_sec: u32,
+    tv_nsec: u32,
+}
+
+unsafe impl SafeRead for mach_timespec_t {}
+
+/// Physical memory of the emulated device, in bytes. Mirrors what a real
+/// device reports through `NSProcessInfo.physicalMemory` and `hw.memsize`.
+pub fn physical_memory(_env: &Environment) -> u64 {
+    // Same as the iPhone 4.
+    512 * 1024 * 1024
+}
+
+const SYSTEM_CLOCK: clock_id_t = 0; // monotonic uptime
+const CALENDAR_CLOCK: clock_id_t = 1; // wall-clock (UTC)
+const REALTIME_CLOCK: clock_id_t = 2; // alias for SYSTEM_CLOCK on Darwin
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(mach_host_self()),
     export_c_func!(host_page_size(_, _)),
     export_c_func!(host_statistics(_, _, _, _)),
+    export_c_func!(clock_get_attributes(_, _, _, _)),
+    export_c_func!(clock_get_time(_, _)),
+    export_c_func!(host_get_clock_service(_, _, _)),
+    export_c_func!(host_statistics64(_, _, _, _)),
 ];

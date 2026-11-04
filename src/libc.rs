@@ -11,8 +11,11 @@
 
 mod generic_char;
 
+pub mod aio;
 pub mod arpa;
+pub mod asl;
 pub mod clocale;
+pub mod codesign;
 pub mod crypto;
 pub mod ctype;
 pub mod cxxabi;
@@ -21,6 +24,7 @@ pub mod dispatch;
 pub mod dlfcn;
 pub mod dns_sd;
 pub mod errno;
+pub mod execinfo;
 pub mod fnmatch;
 pub mod glob;
 pub mod ifaddrs;
@@ -30,10 +34,11 @@ pub mod mach;
 pub mod mach_o;
 pub mod malloc;
 pub mod math;
-pub mod net;
 pub mod netdb;
 pub mod posix_io;
 pub mod pthread;
+pub mod pwd;
+pub mod resolv;
 pub mod sched;
 pub mod semaphore;
 pub mod setjmp;
@@ -61,7 +66,16 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         math::CONSTANTS,
     ],
     function_exports: &[
+        aio::FUNCTIONS,
         arpa::inet::FUNCTIONS,
+        asl::FUNCTIONS,
+        codesign::FUNCTIONS,
+        execinfo::FUNCTIONS,
+        mach::error::FUNCTIONS,
+        pthread::rwlock::FUNCTIONS,
+        pwd::FUNCTIONS,
+        resolv::FUNCTIONS,
+        sys::resource::FUNCTIONS,
         clocale::FUNCTIONS,
         ctype::FUNCTIONS,
         cxxabi::FUNCTIONS,
@@ -90,7 +104,6 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         mach_o::FUNCTIONS,
         malloc::FUNCTIONS,
         math::FUNCTIONS,
-        net::if_::FUNCTIONS,
         netdb::FUNCTIONS,
         posix_io::FUNCTIONS,
         posix_io::stat::FUNCTIONS,
@@ -128,6 +141,13 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
 /// Container for state of various child modules
 #[derive(Default)]
 pub struct State {
+    netdb: netdb::State,
+    signal: signal::State,
+    mach_o: mach_o::State,
+    mach_ports: mach::mach_port::State,
+    aio: aio::State,
+    resource: sys::resource::State,
+    mach_error: mach::error::State,
     cxxabi: cxxabi::State,
     pub dispatch: dispatch::State,
     crypto: crypto::State,
