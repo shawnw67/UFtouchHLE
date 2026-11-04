@@ -47,19 +47,53 @@ pub fn CFURLGetFileSystemRepresentation(
     buffer: MutPtr<u8>,
     buffer_size: CFIndex,
 ) -> bool {
-    if resolve_against_base {
-        // this function usually called to resolve resources from the main
-        // bundle
-        // thus, the url should already be an absolute path name
-        // TODO: use absoluteURL instead once implemented
-        let path = msg![env; url path];
-        // TODO: avoid copy
-        assert!(to_rust_string(env, path).starts_with('/'));
-    }
+    let url: id = if resolve_against_base {
+        msg![env; url absoluteURL]
+    } else {
+        url
+    };
     let buffer_size: NSUInteger = buffer_size.try_into().unwrap();
 
     msg![env; url getFileSystemRepresentation:buffer
                                     maxLength:buffer_size]
+}
+
+fn CFURLGetString(env: &mut Environment, url: CFURLRef) -> CFStringRef {
+    msg![env; url relativeString]
+}
+
+fn CFURLCopyAbsoluteURL(env: &mut Environment, url: CFURLRef) -> CFURLRef {
+    let absolute: id = msg![env; url absoluteURL];
+    retain(env, absolute)
+}
+
+fn CFURLGetBytes(
+    env: &mut Environment,
+    url: CFURLRef,
+    buffer: MutPtr<u8>,
+    length: CFIndex,
+) -> CFIndex {
+    if url == nil || length < 0 {
+        return -1;
+    }
+    let string = CFURLGetString(env, url);
+    if string == nil {
+        return -1;
+    }
+    let bytes = to_rust_string(env, string);
+    let Ok(size) = CFIndex::try_from(bytes.len()) else {
+        return -1;
+    };
+    if buffer.is_null() {
+        return size;
+    }
+    if length < size {
+        return -1;
+    }
+    env.mem
+        .bytes_at_mut(buffer, size as u32)
+        .copy_from_slice(bytes.as_bytes());
+    size
 }
 
 pub fn CFURLCreateFromFileSystemRepresentation(
@@ -557,6 +591,9 @@ fn CFURLCreateStringByReplacingPercentEscapes(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFURLGetString(_)),
+    export_c_func!(CFURLCopyAbsoluteURL(_)),
+    export_c_func!(CFURLGetBytes(_, _, _)),
     export_c_func!(CFURLRetain(_)),
     export_c_func!(CFURLRelease(_)),
     export_c_func!(CFURLGetBaseURL(_)),

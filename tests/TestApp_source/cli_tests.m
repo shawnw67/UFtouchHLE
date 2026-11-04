@@ -2510,6 +2510,38 @@ static int uf_url_string_equals(CFStringRef string, const char *expected) {
          !strcmp(buffer, expected);
 }
 
+int test_cfurl_absolute_string_and_bytes(void) {
+  CFStringRef path =
+      CFStringCreateWithCString(NULL, "/tmp/a b#c", kCFStringEncodingUTF8);
+  CFURLRef file =
+      CFURLCreateWithFileSystemPath(NULL, path, kCFURLPOSIXPathStyle, true);
+  CFStringRef string = CFURLGetString(file);
+  int passed = uf_url_string_equals(string, "file:///tmp/a%20b%23c/");
+  CFURLRef absolute = CFURLCopyAbsoluteURL(file);
+  passed =
+      passed && absolute &&
+      uf_url_string_equals(CFURLGetString(absolute), "file:///tmp/a%20b%23c/");
+  UInt8 bytes[128];
+  memset(bytes, 0xa5, sizeof(bytes));
+  CFIndex size = CFURLGetBytes(file, NULL, 0);
+  passed = passed && size == strlen("file:///tmp/a%20b%23c/") &&
+           CFURLGetBytes(file, bytes, size - 1) == -1 && bytes[0] == 0xa5 &&
+           CFURLGetBytes(file, bytes, sizeof(bytes)) == size &&
+           bytes[size] == 0xa5 &&
+           memcmp(bytes, "file:///tmp/a%20b%23c/", size) == 0;
+  CFRelease(absolute);
+  CFRelease(file);
+  CFRelease(path);
+  path = CFStringCreateWithCString(NULL, "file://server/tmp/a%20b?x=1#part",
+                                   kCFStringEncodingUTF8);
+  file = CFURLCreateWithString(NULL, path, NULL);
+  passed = passed && uf_url_string_equals(CFURLGetString(file),
+                                          "file://server/tmp/a%20b?x=1#part");
+  CFRelease(file);
+  CFRelease(path);
+  return passed ? 0 : -1;
+}
+
 int test_cfurl_query_and_fragment() {
   const char *inputs[] = {"http://e/a?q=%C3%A9%2F#f%20x",
                           "file://host/a?q=%2F#f%20x"};
@@ -12198,6 +12230,7 @@ struct {
     FUNC_DEF(test_cfurl_directory_path),
     FUNC_DEF(test_cfurl_escaped_path),
     FUNC_DEF(test_cfurl_query_and_fragment),
+    FUNC_DEF(test_cfurl_absolute_string_and_bytes),
     FUNC_DEF(test_cfurl_legacy_percent_decode),
     FUNC_DEF(test_cfdata_no_copy_deallocator),
     FUNC_DEF(test_cfdata_equality_and_dictionary_keys),
