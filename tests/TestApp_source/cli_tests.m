@@ -1452,6 +1452,16 @@ int test_CFBundle_explicit_localization(void) {
         fputc(0, file);
     }
     fclose(file);
+    snprintf(path, sizeof(path), "%s/%s.lproj/Nested", root, languages[i]);
+    if (mkdir(path, 0700))
+      return -5;
+    snprintf(path, sizeof(path), "%s/%s.lproj/Nested/asset.dat", root,
+             languages[i]);
+    file = fopen(path, "wb");
+    if (!file)
+      return -6;
+    fputc(i, file);
+    fclose(file);
   }
   CFStringRef rootString =
       CFStringCreateWithCString(NULL, root, kCFStringEncodingUTF8);
@@ -1472,6 +1482,37 @@ int test_CFBundle_explicit_localization(void) {
                                 kCFStringEncodingUTF8) &&
              strcmp(actual, i == 0 ? "Hello" : "Salut") == 0;
     CFRelease(result);
+    CFStringRef extension =
+        CFStringCreateWithCString(NULL, "strings", kCFStringEncodingUTF8);
+    CFArrayRef resources = CFBundleCopyResourceURLsOfTypeForLocalization(
+        bundle, extension, NULL, language);
+    passed = passed && resources && CFArrayGetCount(resources) == 1;
+    CFRelease(resources);
+    CFRelease(extension);
+    CFStringRef assetName =
+        CFStringCreateWithCString(NULL, "asset", kCFStringEncodingUTF8);
+    CFStringRef assetType =
+        CFStringCreateWithCString(NULL, "dat", kCFStringEncodingUTF8);
+    CFStringRef nested =
+        CFStringCreateWithCString(NULL, "Nested", kCFStringEncodingUTF8);
+    CFURLRef asset = CFBundleCopyResourceURLForLocalization(
+        bundle, assetName, assetType, nested, language);
+    char location[1200];
+    snprintf(path, sizeof(path), "%s/%s.lproj/Nested/asset.dat", root,
+             languages[i]);
+    passed = passed && asset &&
+             CFURLGetFileSystemRepresentation(asset, true, (UInt8 *)location,
+                                              sizeof(location)) &&
+             strcmp(path, location) == 0;
+    CFRelease(asset);
+    CFRelease(nested);
+    CFRelease(assetType);
+    CFRelease(assetName);
+    unlink(path);
+    snprintf(path, sizeof(path), "%s/%s.lproj/Nested", root, languages[i]);
+    [[NSFileManager defaultManager]
+        removeItemAtPath:[NSString stringWithUTF8String:path]
+                   error:NULL];
     CFRelease(language);
     snprintf(path, sizeof(path), "%s/%s.lproj/Localizable.strings", root,
              languages[i]);

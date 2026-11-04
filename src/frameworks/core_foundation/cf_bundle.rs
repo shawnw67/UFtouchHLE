@@ -272,7 +272,7 @@ fn CFBundleCopyResourceURLForLocalization(
         let loc = ns_string::to_rust_string(env, localization_name);
         let lproj_dir = if sub_dir_name != nil {
             let sub_dir = ns_string::to_rust_string(env, sub_dir_name);
-            format!("{}/{}.lproj", sub_dir, loc)
+            format!("{}.lproj/{}", loc, sub_dir)
         } else {
             format!("{}.lproj", loc)
         };
@@ -286,6 +286,32 @@ fn CFBundleCopyResourceURLForLocalization(
         }
     }
     CFBundleCopyResourceURL(env, bundle, resource_name, resource_type, sub_dir_name)
+}
+
+fn CFBundleCopyResourceURLsOfTypeForLocalization(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    resource_type: CFStringRef,
+    subdirectory: CFStringRef,
+    localization: CFStringRef,
+) -> CFArrayRef {
+    if bundle == nil {
+        return nil;
+    }
+    if localization == nil {
+        return CFBundleCopyResourceURLsOfType(env, bundle, resource_type, subdirectory);
+    }
+    let localization = ns_string::to_rust_string(env, localization);
+    let directory = if subdirectory == nil {
+        format!("{localization}.lproj")
+    } else {
+        let subdirectory = ns_string::to_rust_string(env, subdirectory);
+        format!("{localization}.lproj/{subdirectory}")
+    };
+    let directory = ns_string::from_rust_string(env, directory);
+    let result = CFBundleCopyResourceURLsOfType(env, bundle, resource_type, directory);
+    release(env, directory);
+    result
 }
 
 pub fn CFBundleCopyBundleLocalizations(env: &mut Environment, bundle: CFBundleRef) -> CFArrayRef {
@@ -420,6 +446,7 @@ fn CFBundleCopyLocalizedStringForLocalization(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFBundleCopyResourceURLsOfTypeForLocalization(_, _, _, _)),
     export_c_func!(CFBundleCopyLocalizedStringForLocalization(_, _, _, _, _)),
     export_c_func!(CFBundleCopyAuxiliaryExecutableURL(_, _)),
     export_c_func!(CFBundleCopyPrivateFrameworksURL(_)),
