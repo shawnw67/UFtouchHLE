@@ -2786,6 +2786,21 @@ extern void CFDataRelease(CFDataRef data);
 extern bool CFDataIsEqual(CFDataRef a, CFDataRef b);
 #endif
 int test_cfallocator_system_and_null(void) {
+  CFAllocatorContext context;
+  memset(&context, 0xa5, sizeof(context));
+  context.version = 0;
+  CFAllocatorGetContext(kCFAllocatorSystemDefault, &context);
+  if (context.version || context.retain || context.release ||
+      context.copyDescription || !context.allocate || !context.reallocate ||
+      !context.deallocate || !context.preferredSize)
+    return -6;
+  void *via_context = context.allocate(32, 0, context.info);
+  if (!via_context || context.preferredSize(32, 0, context.info) < 32)
+    return -7;
+  context.deallocate(via_context, context.info);
+  CFAllocatorGetContext(kCFAllocatorNull, &context);
+  if (context.allocate(32, 0, context.info))
+    return -8;
   if (CFAllocatorGetDefault() != kCFAllocatorSystemDefault)
     return -5;
   unsigned char *bytes = CFAllocatorAllocate(kCFAllocatorDefault, 16, 0);

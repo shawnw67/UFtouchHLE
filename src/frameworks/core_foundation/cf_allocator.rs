@@ -8,8 +8,9 @@
 //! Only a small subset of allocators is currently supported.
 
 use super::CFIndex;
+use crate::dyld::HostFunction;
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
-use crate::mem::{ConstPtr, ConstVoidPtr, MutVoidPtr, Ptr, SafeRead};
+use crate::mem::{ConstPtr, ConstVoidPtr, MutPtr, MutVoidPtr, Ptr, SafeRead};
 use crate::Environment;
 
 // CFAllocator is an opaque struct.
@@ -105,6 +106,62 @@ fn CFAllocatorGetDefault(env: &mut Environment) -> CFAllocatorRef {
     system_allocator(env)
 }
 
+fn context_allocate(
+    env: &mut Environment,
+    size: CFIndex,
+    hint: u32,
+    info: ConstVoidPtr,
+) -> MutVoidPtr {
+    CFAllocatorAllocate(env, info.cast(), size, hint)
+}
+fn context_reallocate(
+    env: &mut Environment,
+    ptr: MutVoidPtr,
+    size: CFIndex,
+    hint: u32,
+    info: ConstVoidPtr,
+) -> MutVoidPtr {
+    CFAllocatorReallocate(env, info.cast(), ptr, size, hint)
+}
+fn context_deallocate(env: &mut Environment, ptr: MutVoidPtr, info: ConstVoidPtr) {
+    CFAllocatorDeallocate(env, info.cast(), ptr)
+}
+fn context_preferred(
+    env: &mut Environment,
+    size: CFIndex,
+    hint: u32,
+    info: ConstVoidPtr,
+) -> CFIndex {
+    CFAllocatorGetPreferredSizeForSize(env, info.cast(), size, hint)
+}
+
+fn CFAllocatorGetContext(env: &mut Environment, allocator: CFAllocatorRef, context: MutPtr<u32>) {
+    if context.is_null() {
+        return;
+    }
+    let allocate: HostFunction = &(context_allocate as fn(&mut Environment, _, _, _) -> _);
+    let reallocate: HostFunction = &(context_reallocate as fn(&mut Environment, _, _, _, _) -> _);
+    let deallocate: HostFunction = &(context_deallocate as fn(&mut Environment, _, _));
+    let preferred: HostFunction = &(context_preferred as fn(&mut Environment, _, _, _) -> _);
+    let mut words = [0u32; 9];
+    words[1] = allocator.to_bits();
+    for (index, name, callback) in [
+        (5, "__Podroid_CFAllocator_allocate", allocate),
+        (6, "__Podroid_CFAllocator_reallocate", reallocate),
+        (7, "__Podroid_CFAllocator_deallocate", deallocate),
+        (8, "__Podroid_CFAllocator_preferred", preferred),
+    ] {
+        words[index] = env
+            .dyld
+            .create_guest_function(&mut env.mem, name, callback)
+            .to_ptr()
+            .to_bits();
+    }
+    for (index, word) in words.into_iter().enumerate() {
+        env.mem.write(context + index as u32, word);
+    }
+}
+
 fn CFGetAllocator(env: &mut Environment, _object: ConstVoidPtr) -> CFAllocatorRef {
     system_allocator(env)
 }
@@ -127,6 +184,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFAllocatorDeallocate(_, _)),
     export_c_func!(CFAllocatorReallocate(_, _, _, _)),
     export_c_func!(CFAllocatorGetDefault()),
+    export_c_func!(CFAllocatorGetContext(_, _)),
     export_c_func!(CFGetAllocator(_)),
     export_c_func!(CFAllocatorGetPreferredSizeForSize(_, _, _)),
 ];
