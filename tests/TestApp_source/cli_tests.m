@@ -757,6 +757,53 @@ int test_CFAttributedString_attributes(void) {
   return passed ? 0 : -1;
 }
 
+@interface NSMutableAttributedString : NSObject
+- (id)initWithString:(id)string;
+- (void)addAttribute:(id)name value:(id)value range:(NSRange)range;
+- (void)removeAttribute:(id)name range:(NSRange)range;
+- (void)replaceCharactersInRange:(NSRange)range withString:(id)string;
+- (void)appendAttributedString:(id)other;
+@end
+
+int test_CFAttributedString_attribute_runs(void) {
+  NSString *key = [NSString stringWithUTF8String:"color"];
+  NSString *other = [NSString stringWithUTF8String:"weight"];
+  NSString *red = [NSString stringWithUTF8String:"red"];
+  NSString *bold = [NSString stringWithUTF8String:"bold"];
+  NSMutableAttributedString *text = [[NSMutableAttributedString alloc]
+      initWithString:[NSString stringWithUTF8String:"abcdef"]];
+  [text addAttribute:key value:red range:NSMakeRange(1, 4)];
+  [text addAttribute:other value:bold range:NSMakeRange(2, 2)];
+  CFAttributedStringRef ref = (CFAttributedStringRef)text;
+  CFRange range = CFRangeMake(0, 0);
+  CFTypeRef value =
+      CFAttributedStringGetAttribute(ref, 2, (CFStringRef)key, &range);
+  int passed =
+      value && CFEqual(value, red) && range.location == 1 && range.length == 4;
+  CFDictionaryRef attrs = CFAttributedStringGetAttributes(ref, 2, &range);
+  passed = passed && attrs && range.location == 2 && range.length == 2;
+  [text removeAttribute:key range:NSMakeRange(3, 1)];
+  CFAttributedStringRef sub =
+      CFAttributedStringCreateWithSubstring(NULL, ref, CFRangeMake(1, 4));
+  passed = passed && sub &&
+           CFAttributedStringGetAttribute(sub, 1, (CFStringRef)key, &range) &&
+           range.location == 0 && range.length == 2 &&
+           !CFAttributedStringGetAttribute(sub, 2, (CFStringRef)key, NULL);
+  [text replaceCharactersInRange:NSMakeRange(2, 1)
+                      withString:[NSString stringWithUTF8String:"XY"]];
+  passed = passed && CFAttributedStringGetLength(ref) == 7 &&
+           CFAttributedStringGetAttribute(ref, 3, (CFStringRef)key, NULL) &&
+           !CFAttributedStringGetAttribute(ref, 4, (CFStringRef)key, NULL) &&
+           CFAttributedStringGetAttribute(ref, 4, (CFStringRef)other, NULL);
+  [text appendAttributedString:text];
+  passed = passed && CFAttributedStringGetLength(ref) == 14 &&
+           CFAttributedStringGetAttribute(ref, 8, (CFStringRef)key, NULL) &&
+           !CFAttributedStringGetAttribute(ref, 11, (CFStringRef)key, NULL);
+  CFRelease(sub);
+  [text release];
+  return passed ? 0 : -1;
+}
+
 static volatile int spin_lock_test_lock;
 static sem_t spin_lock_test_ready;
 
@@ -11667,6 +11714,7 @@ struct {
     FUNC_DEF(test_CFWriteStream_memory),
     FUNC_DEF(test_CFWriteStream_file),
     FUNC_DEF(test_CFAttributedString_attributes),
+    FUNC_DEF(test_CFAttributedString_attribute_runs),
     FUNC_DEF(test_CTLine_typographic_bounds),
     FUNC_DEF(test_CTLine_draw),
     FUNC_DEF(test_CTLine_glyph_runs),

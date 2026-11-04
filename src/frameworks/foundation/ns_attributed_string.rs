@@ -5,7 +5,7 @@
  */
 //! `NSAttributedString` and `NSMutableAttributedString`.
 //!
-//! Attributes are currently stored for the whole string rather than in runs.
+//! Attributes are stored in ranges of UTF-16 code units.
 
 use super::{ns_dictionary, ns_string, NSRange, NSUInteger};
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
@@ -22,6 +22,211 @@ struct NSAttributedStringHostObject {
     font: id,
     /// Immutable dictionary for the whole string, or nil when empty.
     attributes: id,
+    /// Non-overlapping runs, in string order. Each run owns its dictionary.
+    runs: Vec<(NSRange, id)>,
+}
+
+fn replace_runs(env: &mut crate::Environment, this: id, runs: Vec<(NSRange, id)>) {
+    let old = std::mem::replace(
+        &mut env
+            .objc
+            .borrow_mut::<NSAttributedStringHostObject>(this)
+            .runs,
+        runs,
+    );
+    for (_, attributes) in old {
+        release(env, attributes);
+    }
+}
+
+fn copy_runs(env: &mut crate::Environment, this: id) -> Vec<(NSRange, id)> {
+    let runs = env
+        .objc
+        .borrow::<NSAttributedStringHostObject>(this)
+        .runs
+        .clone();
+    for (_, attributes) in &runs {
+        retain(env, *attributes);
+    }
+    runs
+}
+
+fn splice_runs(
+    env: &mut crate::Environment,
+    this: id,
+    range: NSRange,
+    replacement_len: NSUInteger,
+    replacement: Vec<(NSRange, id)>,
+) {
+    let old = env
+        .objc
+        .borrow::<NSAttributedStringHostObject>(this)
+        .runs
+        .clone();
+    let end = range.location + range.length;
+    let mut runs = Vec::new();
+    for (run, attrs) in &old {
+        let stop = (run.location + run.length).min(range.location);
+        if run.location < stop {
+            runs.push((
+                NSRange {
+                    location: run.location,
+                    length: stop - run.location,
+                },
+                retain(env, *attrs),
+            ));
+        }
+    }
+    for (mut run, attrs) in replacement {
+        run.location += range.location;
+        runs.push((run, attrs));
+    }
+    for (run, attrs) in &old {
+        let start = run.location.max(end);
+        let stop = run.location + run.length;
+        if start < stop {
+            runs.push((
+                NSRange {
+                    location: start - range.length + replacement_len,
+                    length: stop - start,
+                },
+                retain(env, *attrs),
+            ));
+        }
+    }
+    replace_runs(env, this, runs);
+}
+
+fn edit_attributes(
+    env: &mut crate::Environment,
+    this: id,
+    range: NSRange,
+    edit: impl Fn(&mut crate::Environment, id),
+) {
+    let length: NSUInteger = msg![env; this length];
+    let Some(end) = range.location.checked_add(range.length) else {
+        return;
+    };
+    if end > length || range.length == 0 {
+        return;
+    }
+    let old = env
+        .objc
+        .borrow::<NSAttributedStringHostObject>(this)
+        .runs
+        .clone();
+    let mut runs = Vec::new();
+    for (run, attributes) in old {
+        let run_end = run.location + run.length;
+        let start = run.location.max(range.location);
+        let stop = run_end.min(end);
+        if start >= stop {
+            runs.push((run, retain(env, attributes)));
+            continue;
+        }
+        if run.location < start {
+            runs.push((
+                NSRange {
+                    location: run.location,
+                    length: start - run.location,
+                },
+                retain(env, attributes),
+            ));
+        }
+        let mutable: id = if attributes == nil {
+            msg_class![env; NSMutableDictionary new]
+        } else {
+            msg![env; attributes mutableCopy]
+        };
+        edit(env, mutable);
+        let count: NSUInteger = msg![env; mutable count];
+        let updated: id = if count == 0 {
+            nil
+        } else {
+            msg![env; mutable copy]
+        };
+        release(env, mutable);
+        runs.push((
+            NSRange {
+                location: start,
+                length: stop - start,
+            },
+            updated,
+        ));
+        if stop < run_end {
+            runs.push((
+                NSRange {
+                    location: stop,
+                    length: run_end - stop,
+                },
+                retain(env, attributes),
+            ));
+        }
+    }
+    replace_runs(env, this, runs);
+}
+
+/// Return the value and its longest matching run, bounded by `limit`.
+pub(crate) fn attribute_range(
+    env: &mut crate::Environment,
+    this: id,
+    index: NSUInteger,
+    limit: NSRange,
+    key: Option<id>,
+) -> (id, NSRange) {
+    let runs = env
+        .objc
+        .borrow::<NSAttributedStringHostObject>(this)
+        .runs
+        .clone();
+    let Some(at) = runs
+        .iter()
+        .position(|(r, _)| index >= r.location && index < r.location + r.length)
+    else {
+        return (
+            nil,
+            NSRange {
+                location: index,
+                length: 0,
+            },
+        );
+    };
+    let value = |env: &mut crate::Environment, attributes: id| -> id {
+        match key {
+            None => attributes,
+            Some(_) if attributes == nil => nil,
+            Some(key) => msg![env; attributes objectForKey:key],
+        }
+    };
+    let target = value(env, runs[at].1);
+    let equals = |env: &mut crate::Environment, other: id| -> bool {
+        let other = value(env, other);
+        if target == other {
+            true
+        } else if target == nil || other == nil {
+            false
+        } else {
+            msg![env; target isEqual:other]
+        }
+    };
+    let mut first = at;
+    let mut last = at;
+    while first > 0 && equals(env, runs[first - 1].1) {
+        first -= 1;
+    }
+    while last + 1 < runs.len() && equals(env, runs[last + 1].1) {
+        last += 1;
+    }
+    let start = runs[first].0.location.max(limit.location);
+    let end = (runs[last].0.location + runs[last].0.length)
+        .min(limit.location.saturating_add(limit.length));
+    (
+        target,
+        NSRange {
+            location: start,
+            length: end.saturating_sub(start),
+        },
+    )
 }
 
 fn set_attributes(env: &mut crate::Environment, this: id, attributes: id) {
@@ -74,7 +279,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @implementation NSAttributedString: NSObject
 
 + (id)allocWithZone:(NSZonePtr)_zone {
-    let host_object = Box::new(NSAttributedStringHostObject { string: nil, font: nil, attributes: nil });
+    let host_object = Box::new(NSAttributedStringHostObject { string: nil, font: nil, attributes: nil, runs: Vec::new() });
     env.objc.alloc_object(this, host_object, &mut env.mem)
 }
 
@@ -85,13 +290,17 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (id)initWithString:(id)string { // NSString*
     let string: id = msg![env; string copy];
+    let length: NSUInteger = msg![env; string length];
     env.objc.borrow_mut::<NSAttributedStringHostObject>(this).string = string;
+    if length != 0 { replace_runs(env, this, vec![(NSRange { location: 0, length }, nil)]); }
     this
 }
 - (id)initWithString:(id)string // NSString*
           attributes:(id)attributes { // NSDictionary*
     let this: id = msg![env; this initWithString:string];
     set_attributes(env, this, attributes);
+    let length: NSUInteger = msg![env; this length];
+    if length != 0 { let count: NSUInteger = msg![env; attributes count]; let copy: id = if count == 0 { nil } else { msg![env; attributes copy] }; replace_runs(env, this, vec![(NSRange { location: 0, length }, copy)]); }
     if attributes != nil {
         let key = ns_string::get_static_str(env, "NSFont");
         let font: id = msg![env; attributes objectForKey:key];
@@ -106,11 +315,15 @@ pub const CLASSES: ClassExports = objc_classes! {
     let attributes = env.objc.borrow::<NSAttributedStringHostObject>(other).attributes;
     set_attributes(env, this, attributes);
     set_font(env, this, font);
+    let runs = copy_runs(env, other);
+    replace_runs(env, this, runs);
     this
 }
 
 - (())dealloc {
-    let &NSAttributedStringHostObject { string, font, attributes } = env.objc.borrow(this);
+    let object = env.objc.borrow::<NSAttributedStringHostObject>(this);
+    let (string, font, attributes) = (object.string, object.font, object.attributes);
+    replace_runs(env, this, Vec::new());
     release(env, string);
     release(env, font);
     release(env, attributes);
@@ -137,6 +350,33 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.borrow::<NSAttributedStringHostObject>(this).string
 }
 
+- (id)attributedSubstringFromRange:(NSRange)range {
+    let length: NSUInteger = msg![env; this length];
+    let Some(end) = range.location.checked_add(range.length) else { return nil; };
+    if end > length { return nil; }
+    let text: id = msg![env; this string];
+    let text: id = msg![env; text substringWithRange:range];
+    let result: id = msg_class![env; NSAttributedString alloc];
+    let result: id = msg![env; result initWithString:text];
+    let old = env.objc.borrow::<NSAttributedStringHostObject>(this).runs.clone();
+    let mut runs = Vec::new();
+    for (run, attrs) in old {
+        let start = run.location.max(range.location);
+        let stop = (run.location + run.length).min(end);
+        if start < stop { runs.push((NSRange { location: start - range.location, length: stop - start }, retain(env, attrs))); }
+    }
+    replace_runs(env, result, runs);
+    autorelease(env, result)
+}
+
+- (id)attribute:(id)name atIndex:(NSUInteger)index effectiveRange:(MutPtr<NSRange>)range {
+    let length: NSUInteger = msg![env; this length];
+    if index >= length || name == nil { return nil; }
+    let (value, effective) = attribute_range(env, this, index, NSRange { location: 0, length }, Some(name));
+    if !range.is_null() { env.mem.write(range, effective); }
+    value
+}
+
 // From UIKit's NSStringDrawing additions (iOS 7).
 - (CGRect)boundingRectWithSize:(CGSize)size
                        options:(NSUInteger)_options
@@ -154,13 +394,14 @@ pub const CLASSES: ClassExports = objc_classes! {
     }
 }
 
-- (id)attributesAtIndex:(NSUInteger)_index
+- (id)attributesAtIndex:(NSUInteger)index
          effectiveRange:(MutPtr<NSRange>)range {
+    let length: NSUInteger = msg![env; this length];
+    if index >= length { return nil; }
+    let (attributes, effective) = attribute_range(env, this, index, NSRange { location: 0, length }, None);
     if !range.is_null() {
-        let length: NSUInteger = msg![env; this length];
-        env.mem.write(range, NSRange { location: 0, length });
+        env.mem.write(range, effective);
     }
-    let attributes = env.objc.borrow::<NSAttributedStringHostObject>(this).attributes;
     if attributes != nil { attributes } else {
         let dict = ns_dictionary::dict_from_keys_and_objects(env, &[]);
         autorelease(env, dict)
@@ -187,6 +428,14 @@ pub const CLASSES: ClassExports = objc_classes! {
                     withString:(id)replacement { // NSString*
     let string = env.objc.borrow::<NSAttributedStringHostObject>(this).string;
     let NSRange { location, length } = range;
+    let old_length: NSUInteger = msg![env; string length];
+    if location.checked_add(length).is_none_or(|end| end > old_length) { return; }
+    let replacement_len: NSUInteger = msg![env; replacement length];
+    let attrs = if old_length == 0 { nil } else {
+        attribute_range(env, this, location.min(old_length - 1), NSRange { location: 0, length: old_length }, None).0
+    };
+    let replacement_runs = if replacement_len == 0 { Vec::new() } else { vec![(NSRange { location: 0, length: replacement_len }, retain(env, attrs))] };
+    splice_runs(env, this, range, replacement_len, replacement_runs);
     let before: id = msg![env; string substringToIndex:location];
     let after: id = msg![env; string substringFromIndex:(location + length)];
     let new_string: id = msg![env; before stringByAppendingString:replacement];
@@ -198,6 +447,10 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())appendAttributedString:(id)other {
     let other_string: id = msg![env; other string];
     let string = env.objc.borrow::<NSAttributedStringHostObject>(this).string;
+    let length: NSUInteger = msg![env; string length];
+    let other_length: NSUInteger = msg![env; other_string length];
+    let runs = copy_runs(env, other);
+    splice_runs(env, this, NSRange { location: length, length: 0 }, other_length, runs);
     let new_string: id = msg![env; string stringByAppendingString:other_string];
     let new_string: id = msg![env; new_string copy];
     env.objc.borrow_mut::<NSAttributedStringHostObject>(this).string = new_string;
@@ -213,12 +466,15 @@ pub const CLASSES: ClassExports = objc_classes! {
     set_attributes(env, this, attributes);
     let font = env.objc.borrow::<NSAttributedStringHostObject>(other).font;
     set_font(env, this, font);
+    let runs = copy_runs(env, other);
+    replace_runs(env, this, runs);
 }
 
-// These operations currently apply to the whole string.
 - (())addAttribute:(id)name // NSString*
              value:(id)value
-             range:(NSRange)_range {
+             range:(NSRange)range {
+    if name == nil || value == nil { return; }
+    edit_attributes(env, this, range, |env, attrs| { let _: () = msg![env; attrs setObject:value forKey:name]; });
     set_attribute(env, this, name, value);
     let attributes = mutable_attributes(env, this);
     () = msg![env; attributes setObject:value forKey:name];
@@ -226,7 +482,8 @@ pub const CLASSES: ClassExports = objc_classes! {
     release(env, attributes);
 }
 - (())addAttributes:(id)attributes // NSDictionary*
-              range:(NSRange)_range {
+              range:(NSRange)range {
+    if attributes != nil { edit_attributes(env, this, range, |env, attrs| { let _: () = msg![env; attrs addEntriesFromDictionary:attributes]; }); }
     let key = ns_string::get_static_str(env, "NSFont");
     let font: id = msg![env; attributes objectForKey:key];
     if font != nil {
@@ -240,7 +497,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     }
 }
 - (())setAttributes:(id)attributes // NSDictionary*
-              range:(NSRange)_range {
+              range:(NSRange)range {
+    edit_attributes(env, this, range, |env, attrs| {
+        let _: () = msg![env; attrs removeAllObjects];
+        if attributes != nil { let _: () = msg![env; attrs addEntriesFromDictionary:attributes]; }
+    });
     let font: id = if attributes == nil {
         nil
     } else {
@@ -251,7 +512,9 @@ pub const CLASSES: ClassExports = objc_classes! {
     set_attributes(env, this, attributes);
 }
 - (())removeAttribute:(id)name // NSString*
-                range:(NSRange)_range {
+                range:(NSRange)range {
+    if name == nil { return; }
+    edit_attributes(env, this, range, |env, attrs| { let _: () = msg![env; attrs removeObjectForKey:name]; });
     let attributes = mutable_attributes(env, this);
     () = msg![env; attributes removeObjectForKey:name];
     set_attributes(env, this, attributes);

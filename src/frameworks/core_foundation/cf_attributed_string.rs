@@ -10,9 +10,9 @@ use super::cf_dictionary::CFDictionaryRef;
 use super::cf_string::CFStringRef;
 use super::{CFIndex, CFRange, CFTypeRef};
 use crate::dyld::{export_c_func, FunctionExports};
-use crate::frameworks::foundation::{NSRange, NSUInteger};
+use crate::frameworks::foundation::{ns_attributed_string, NSRange, NSUInteger};
 use crate::mem::MutPtr;
-use crate::objc::{id, msg, msg_class, nil, Class};
+use crate::objc::{id, msg, msg_class, nil, retain, Class};
 use crate::Environment;
 
 pub(crate) type CFAttributedStringRef = CFTypeRef;
@@ -62,18 +62,12 @@ pub(crate) fn CFAttributedStringCreateWithSubstring(
     {
         return nil;
     }
-    let text = CFAttributedStringGetString(env, string);
     let ns_range = NSRange {
         location: range.location as NSUInteger,
         length: range.length as NSUInteger,
     };
-    let substring: id = msg![env; text substringWithRange:ns_range];
-    let attrs = if range.length == 0 {
-        nil
-    } else {
-        CFAttributedStringGetAttributes(env, string, range.location, MutPtr::null())
-    };
-    CFAttributedStringCreate(env, allocator, substring, attrs)
+    let substring: id = msg![env; string attributedSubstringFromRange:ns_range];
+    retain(env, substring)
 }
 
 pub(crate) fn CFAttributedStringGetLength(
@@ -107,18 +101,32 @@ fn CFAttributedStringGetAttributes(
     if location < 0 || location >= length {
         return nil;
     }
+    let (attrs, range) = ns_attributed_string::attribute_range(
+        env,
+        string,
+        location as NSUInteger,
+        NSRange {
+            location: 0,
+            length: length as NSUInteger,
+        },
+        None,
+    );
     if !effective_range.is_null() {
         env.mem.write(
             effective_range,
             CFRange {
-                location: 0,
-                length,
+                location: range.location as CFIndex,
+                length: range.length as CFIndex,
             },
         );
     }
-    let index = location as NSUInteger;
-    let null_range: MutPtr<crate::frameworks::foundation::NSRange> = MutPtr::null();
-    msg![env; string attributesAtIndex:index effectiveRange:null_range]
+    if attrs != nil {
+        attrs
+    } else {
+        let index = location as NSUInteger;
+        let null_range: MutPtr<NSRange> = MutPtr::null();
+        msg![env; string attributesAtIndex:index effectiveRange:null_range]
+    }
 }
 
 fn CFAttributedStringGetAttribute(
@@ -128,11 +136,30 @@ fn CFAttributedStringGetAttribute(
     name: CFStringRef,
     effective_range: MutPtr<CFRange>,
 ) -> CFTypeRef {
-    let attributes = CFAttributedStringGetAttributes(env, string, location, effective_range);
-    if attributes.is_null() || name.is_null() {
+    let length = CFAttributedStringGetLength(env, string);
+    if location < 0 || location >= length || name.is_null() {
         return nil;
     }
-    msg![env; attributes objectForKey:name]
+    let (value, range) = ns_attributed_string::attribute_range(
+        env,
+        string,
+        location as NSUInteger,
+        NSRange {
+            location: 0,
+            length: length as NSUInteger,
+        },
+        Some(name),
+    );
+    if !effective_range.is_null() {
+        env.mem.write(
+            effective_range,
+            CFRange {
+                location: range.location as CFIndex,
+                length: range.length as CFIndex,
+            },
+        );
+    }
+    value
 }
 
 fn limited_range(length: CFIndex, location: CFIndex, limit: CFRange) -> Option<CFRange> {
@@ -155,15 +182,34 @@ fn CFAttributedStringGetAttributesAndLongestEffectiveRange(
     limit: CFRange,
     effective_range: MutPtr<CFRange>,
 ) -> CFDictionaryRef {
-    let Some(range) = limited_range(CFAttributedStringGetLength(env, string), location, limit)
+    let Some(limit) = limited_range(CFAttributedStringGetLength(env, string), location, limit)
     else {
         return nil;
     };
-    let attrs = CFAttributedStringGetAttributes(env, string, location, MutPtr::null());
+    let (attrs, range) = ns_attributed_string::attribute_range(
+        env,
+        string,
+        location as NSUInteger,
+        NSRange {
+            location: limit.location as NSUInteger,
+            length: limit.length as NSUInteger,
+        },
+        None,
+    );
     if !effective_range.is_null() {
-        env.mem.write(effective_range, range);
+        env.mem.write(
+            effective_range,
+            CFRange {
+                location: range.location as CFIndex,
+                length: range.length as CFIndex,
+            },
+        );
     }
-    attrs
+    if attrs != nil {
+        attrs
+    } else {
+        CFAttributedStringGetAttributes(env, string, location, MutPtr::null())
+    }
 }
 
 fn CFAttributedStringGetAttributeAndLongestEffectiveRange(
@@ -177,18 +223,30 @@ fn CFAttributedStringGetAttributeAndLongestEffectiveRange(
     if name.is_null() {
         return nil;
     }
-    let attrs = CFAttributedStringGetAttributesAndLongestEffectiveRange(
+    let Some(limit) = limited_range(CFAttributedStringGetLength(env, string), location, limit)
+    else {
+        return nil;
+    };
+    let (value, range) = ns_attributed_string::attribute_range(
         env,
         string,
-        location,
-        limit,
-        effective_range,
+        location as NSUInteger,
+        NSRange {
+            location: limit.location as NSUInteger,
+            length: limit.length as NSUInteger,
+        },
+        Some(name),
     );
-    if attrs.is_null() {
-        nil
-    } else {
-        msg![env; attrs objectForKey:name]
+    if !effective_range.is_null() {
+        env.mem.write(
+            effective_range,
+            CFRange {
+                location: range.location as CFIndex,
+                length: range.length as CFIndex,
+            },
+        );
     }
+    value
 }
 
 fn CFAttributedStringGetTypeID(env: &mut Environment) -> u32 {
