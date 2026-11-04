@@ -514,6 +514,9 @@ pub fn run_run_loop(
         for audio_unit in audio_units_tmp.drain(..) {
             render_audio_unit(env, audio_unit);
         }
+        crate::frameworks::audio_toolbox::audio_services::tick_system_sound_completions(
+            env, run_loop,
+        );
 
         loop {
             let selector_objects = &mut env

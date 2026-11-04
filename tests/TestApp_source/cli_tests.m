@@ -12109,6 +12109,122 @@ int test_audio_converter_planar(void) {
   return 0;
 }
 
+extern int AudioServicesCreateSystemSoundID(CFURLRef, uint32_t *);
+extern int AudioServicesDisposeSystemSoundID(uint32_t);
+extern void AudioServicesPlaySystemSound(uint32_t);
+extern void AudioServicesPlayAlertSound(uint32_t);
+extern int AudioServicesAddSystemSoundCompletion(uint32_t, CFRunLoopRef,
+                                                 CFStringRef,
+                                                 void (*)(uint32_t, void *),
+                                                 void *);
+extern void AudioServicesRemoveSystemSoundCompletion(uint32_t);
+struct TestSoundCompletion {
+  int count, replay;
+};
+static void test_sound_completed(uint32_t sound, void *context) {
+  struct TestSoundCompletion *state = context;
+  ++state->count;
+  if (state->replay && state->count == 1)
+    AudioServicesPlayAlertSound(sound);
+  else
+    AudioServicesRemoveSystemSoundCompletion(sound);
+}
+struct TestSoundPair {
+  uint32_t sounds[2];
+  int count;
+};
+static void test_sound_pair_completed(uint32_t sound, void *context) {
+  struct TestSoundPair *pair = context;
+  if (pair->count++ == 0) {
+    uint32_t other =
+        sound == pair->sounds[0] ? pair->sounds[1] : pair->sounds[0];
+    AudioServicesPlaySystemSound(other);
+  }
+  AudioServicesRemoveSystemSoundCompletion(sound);
+}
+int test_audio_services_completion(void) {
+  struct TestSoundCompletion state = {0, 1};
+  if (AudioServicesAddSystemSoundCompletion(0xfff, NULL, NULL,
+                                            test_sound_completed, &state))
+    return -1;
+  AudioServicesPlaySystemSound(0xfff);
+  if (state.count)
+    return -2;
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  if (state.count != 1)
+    return -3;
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+  if (state.count != 2)
+    return -4;
+  char path[1024];
+  const char *home = getenv("HOME");
+  if (!home ||
+      snprintf(path, sizeof(path), "%s/tmp/sound-XXXXXX", home) >= sizeof(path))
+    return -5;
+  int fd = mkstemp(path);
+  if (fd < 0)
+    return -6;
+  close(fd);
+  FILE *file = fopen(path, "wb");
+  if (!file)
+    return -7;
+  const unsigned char header[] = {
+      'R', 'I', 'F',  'F',  0x96, 3,   0,    0,    'W', 'A', 'V',
+      'E', 'f', 'm',  't',  ' ',  16,  0,    0,    0,   1,   0,
+      1,   0,   0x44, 0xac, 0,    0,   0x88, 0x58, 1,   0,   2,
+      0,   16,  0,    'd',  'a',  't', 'a',  0x72, 3,   0,   0};
+  int16_t silence[441] = {0};
+  fwrite(header, 1, sizeof(header), file);
+  fwrite(silence, 1, sizeof(silence), file);
+  fclose(file);
+  CFStringRef name =
+      CFStringCreateWithCString(NULL, path, kCFStringEncodingUTF8);
+  CFURLRef url =
+      CFURLCreateWithFileSystemPath(NULL, name, kCFURLPOSIXPathStyle, false);
+  uint32_t sound = 0;
+  state = (struct TestSoundCompletion){0, 0};
+  int passed =
+      !AudioServicesCreateSystemSoundID(url, &sound) &&
+      !AudioServicesAddSystemSoundCompletion(sound, NULL, kCFRunLoopDefaultMode,
+                                             test_sound_completed, &state);
+  if (passed) {
+    AudioServicesPlayAlertSound(sound);
+    struct timespec pause = {0, 10000000};
+    for (int i = 0; i < 50 && !state.count; ++i) {
+      nanosleep(&pause, NULL);
+      CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+    }
+    passed = state.count == 1 && !AudioServicesDisposeSystemSoundID(sound);
+  }
+  if (passed) {
+    struct TestSoundPair pair = {{0, 0}, 0};
+    passed = !AudioServicesCreateSystemSoundID(url, &pair.sounds[0]) &&
+             !AudioServicesCreateSystemSoundID(url, &pair.sounds[1]);
+    for (int i = 0; i < 2 && passed; ++i) {
+      passed = !AudioServicesAddSystemSoundCompletion(
+          pair.sounds[i], NULL, NULL, test_sound_pair_completed, &pair);
+      AudioServicesPlaySystemSound(pair.sounds[i]);
+    }
+    struct timespec settle = {0, 250000000}, pause = {0, 10000000};
+    nanosleep(&settle, NULL);
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+    passed = passed && pair.count == 1;
+    for (int i = 0; i < 50 && pair.count < 2; ++i) {
+      nanosleep(&pause, NULL);
+      CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, false);
+    }
+    passed = passed && pair.count == 2;
+    for (int i = 0; i < 2; ++i)
+      if (pair.sounds[i])
+        AudioServicesDisposeSystemSoundID(pair.sounds[i]);
+  }
+  CFRelease(url);
+  CFRelease(name);
+  unlink(path);
+  return passed ? 0 : -8;
+}
+
 struct TestRenderState {
   int pre, render, post, bad;
 };
@@ -12848,6 +12964,7 @@ struct {
     FUNC_DEF(test_audio_converter_lists_and_callback),
     FUNC_DEF(test_audio_converter_planar),
     FUNC_DEF(test_audio_format_pcm_properties),
+    FUNC_DEF(test_audio_services_completion),
 #endif
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),
