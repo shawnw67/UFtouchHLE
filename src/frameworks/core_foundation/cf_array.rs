@@ -24,6 +24,26 @@ use crate::Environment;
 pub type CFArrayRef = super::CFTypeRef;
 pub type CFMutableArrayRef = super::CFTypeRef;
 
+fn CFArrayRetain(env: &mut Environment, array: CFArrayRef) -> CFArrayRef {
+    if array.is_null() {
+        array
+    } else {
+        super::CFRetain(env, array)
+    }
+}
+
+fn CFArrayRelease(env: &mut Environment, array: CFArrayRef) {
+    super::CFRelease(env, array);
+}
+
+fn CFArrayCreateDescription(env: &mut Environment, array: CFArrayRef) -> super::CFTypeRef {
+    if array.is_null() {
+        return array;
+    }
+    let description: id = msg![env; array description];
+    retain(env, description)
+}
+
 pub const CONSTANTS: ConstantExports = &[(
     "_kCFTypeArrayCallBacks",
     HostConstant::Custom(|env| {
@@ -395,6 +415,9 @@ fn CFArrayRemoveValueAtIndex(env: &mut Environment, array: CFMutableArrayRef, id
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFArrayRetain(_)),
+    export_c_func!(CFArrayRelease(_)),
+    export_c_func!(CFArrayCreateDescription(_)),
     export_c_func!(CFArrayCreate(_, _, _, _)),
     export_c_func!(CFArrayCreateMutable(_, _, _)),
     export_c_func!(CFArrayCreateCopy(_, _)),

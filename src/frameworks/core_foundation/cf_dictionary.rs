@@ -28,6 +28,18 @@ use crate::Environment;
 pub type CFDictionaryRef = super::CFTypeRef;
 pub type CFMutableDictionaryRef = super::CFTypeRef;
 
+fn CFDictionaryRetain(env: &mut Environment, dictionary: CFDictionaryRef) -> CFDictionaryRef {
+    if dictionary.is_null() {
+        dictionary
+    } else {
+        CFRetain(env, dictionary)
+    }
+}
+
+fn CFDictionaryRelease(env: &mut Environment, dictionary: CFDictionaryRef) {
+    CFRelease(env, dictionary);
+}
+
 fn CFDictionaryCreate(
     env: &mut Environment,
     allocator: CFAllocatorRef,
@@ -389,6 +401,8 @@ pub const CONSTANTS: ConstantExports = &[
 ];
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFDictionaryRetain(_)),
+    export_c_func!(CFDictionaryRelease(_)),
     export_c_func!(CFDictionaryCreate(_, _, _, _, _, _)),
     export_c_func!(CFDictionaryCreateCopy(_, _)),
     export_c_func!(CFDictionaryCreateMutableCopy(_, _, _)),

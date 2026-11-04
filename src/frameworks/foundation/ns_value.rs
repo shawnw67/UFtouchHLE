@@ -555,6 +555,13 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 };
 
+pub(crate) fn is_boolean(env: &Environment, this: id) -> bool {
+    matches!(
+        env.objc.borrow::<NSNumberHostObject>(this),
+        NSNumberHostObject::Bool(_)
+    )
+}
+
 pub fn is_conversion_lossless(env: &mut Environment, this: id, type_: CFNumberType) -> bool {
     let num = env.objc.borrow::<NSNumberHostObject>(this);
     let num2: id = match type_ {

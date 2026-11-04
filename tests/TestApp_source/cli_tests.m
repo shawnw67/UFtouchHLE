@@ -2958,6 +2958,58 @@ static void uf_array_visit(const void *value, void *context) {
   visit->count++;
 }
 
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+extern CFArrayRef CFArrayRetain(CFArrayRef array);
+extern void CFArrayRelease(CFArrayRef array);
+extern CFStringRef CFArrayCreateDescription(CFArrayRef array);
+extern CFDictionaryRef CFDictionaryRetain(CFDictionaryRef dictionary);
+extern void CFDictionaryRelease(CFDictionaryRef dictionary);
+int test_cfcollection_ownership_exports(void) {
+  CFArrayRef array = CFArrayCreate(NULL, NULL, 0, NULL);
+  CFDictionaryRef dictionary =
+      CFDictionaryCreate(NULL, NULL, NULL, 0, NULL, NULL);
+  CFStringRef description = CFArrayCreateDescription(array);
+  int passed = description && CFStringGetLength(description) > 0 &&
+               CFArrayRetain(array) == array &&
+               CFDictionaryRetain(dictionary) == dictionary &&
+               CFArrayRetain(NULL) == NULL && CFDictionaryRetain(NULL) == NULL;
+  CFArrayRelease(array);
+  CFDictionaryRelease(dictionary);
+  CFRelease(description);
+  CFRelease(array);
+  CFRelease(dictionary);
+  return passed ? 0 : -1;
+}
+#endif
+
+int test_cftype_bridged_ids(void) {
+  CFStringRef string =
+      CFStringCreateWithCString(NULL, "type", kCFStringEncodingUTF8);
+  CFArrayRef array = CFArrayCreate(NULL, NULL, 0, &kCFTypeArrayCallBacks);
+  CFMutableArrayRef mutable =
+      CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
+  CFMutableDataRef data = CFDataCreateMutable(NULL, 0);
+  CFDictionaryRef dict = CFDictionaryCreate(NULL, NULL, NULL, 0, NULL, NULL);
+  int one = 1;
+  CFNumberRef number = CFNumberCreate(NULL, kCFNumberIntType, &one);
+  int passed = CFGetTypeID(string) == CFStringGetTypeID() &&
+               CFGetTypeID(array) == CFArrayGetTypeID() &&
+               CFGetTypeID(mutable) == CFArrayGetTypeID() &&
+               CFGetTypeID(data) == CFDataGetTypeID() &&
+               CFGetTypeID(dict) == CFDictionaryGetTypeID() &&
+               CFGetTypeID(number) == CFNumberGetTypeID() &&
+               CFGetTypeID(kCFBooleanTrue) == CFBooleanGetTypeID() &&
+               CFBooleanGetTypeID() != CFNumberGetTypeID() &&
+               CFEqual(array, mutable) && !CFEqual(string, array);
+  CFRelease(number);
+  CFRelease(dict);
+  CFRelease(data);
+  CFRelease(mutable);
+  CFRelease(array);
+  CFRelease(string);
+  return passed ? 0 : -1;
+}
+
 int test_cfarray_nonretaining_mutations() {
   int first, second, third;
   CFMutableArrayRef array = CFArrayCreateMutable(NULL, 0, NULL);
@@ -11934,6 +11986,7 @@ struct {
     FUNC_DEF(test_cfdata_replace_and_delete),
     FUNC_DEF(test_cfarray_custom_callbacks),
     FUNC_DEF(test_cfarray_nonretaining_mutations),
+    FUNC_DEF(test_cftype_bridged_ids),
     FUNC_DEF(test_nsmutablearray_remove_multiple_matches),
     FUNC_DEF(test_nsmutabledictionary_replacement_key_lifetime),
     FUNC_DEF(test_cfuuid_cf_collection_interop),
@@ -12051,6 +12104,7 @@ struct {
     FUNC_DEF(test_converter_pull_render),
     FUNC_DEF(test_augraph_single_output_lifecycle),
     FUNC_DEF(test_audio_component_enumeration),
+    FUNC_DEF(test_cfcollection_ownership_exports),
 #endif
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),
