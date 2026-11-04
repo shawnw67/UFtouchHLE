@@ -759,6 +759,7 @@ int test_CFAttributedString_attributes(void) {
 
 @interface NSMutableAttributedString : NSObject
 - (id)initWithString:(id)string;
+- (bool)isEqualToAttributedString:(id)other;
 - (void)addAttribute:(id)name value:(id)value range:(NSRange)range;
 - (void)removeAttribute:(id)name range:(NSRange)range;
 - (void)replaceCharactersInRange:(NSRange)range withString:(id)string;
@@ -778,12 +779,19 @@ int test_CFAttributedString_attribute_runs(void) {
       initWithString:[NSString stringWithUTF8String:"abcdef"]];
   [text addAttribute:key value:red range:NSMakeRange(1, 4)];
   [text addAttribute:other value:bold range:NSMakeRange(2, 2)];
+  id copy = [text copy];
+  int copied_equal = [text isEqualToAttributedString:copy];
+  [text removeAttribute:other range:NSMakeRange(3, 1)];
+  copied_equal = copied_equal && ![text isEqualToAttributedString:copy];
+  [text addAttribute:other value:bold range:NSMakeRange(3, 1)];
+  copied_equal = copied_equal && [text isEqualToAttributedString:copy];
+  [copy release];
   CFAttributedStringRef ref = (CFAttributedStringRef)text;
   CFRange range = CFRangeMake(0, 0);
   CFTypeRef value =
       CFAttributedStringGetAttribute(ref, 2, (CFStringRef)key, &range);
-  int passed =
-      value && CFEqual(value, red) && range.location == 1 && range.length == 4;
+  int passed = copied_equal && value && CFEqual(value, red) &&
+               range.location == 1 && range.length == 4;
   CFDictionaryRef attrs = CFAttributedStringGetAttributes(ref, 2, &range);
   passed = passed && attrs && range.location == 2 && range.length == 2;
   [text removeAttribute:key range:NSMakeRange(3, 1)];

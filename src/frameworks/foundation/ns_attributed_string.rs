@@ -333,6 +333,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     let host_object = Box::new(NSAttributedStringHostObject { string: nil, font: nil, attributes: nil, runs: Vec::new() });
     env.objc.alloc_object(this, host_object, &mut env.mem)
 }
++ (id)attributedStringWithString:(id)string {
+    let object: id = msg![env; this alloc];
+    let object: id = msg![env; object initWithString:string];
+    autorelease(env, object)
+}
 
 - (id)init {
     let empty: id = msg_class![env; NSString new];
@@ -399,6 +404,26 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 - (id)description {
     env.objc.borrow::<NSAttributedStringHostObject>(this).string
+}
+
+- (bool)isEqualToAttributedString:(id)other {
+    if other == nil { return false; }
+    if this == other { return true; }
+    let left: id = msg![env; this string];
+    let right: id = msg![env; other string];
+    let equal: bool = msg![env; left isEqualToString:right];
+    if !equal { return false; }
+    let length: NSUInteger = msg![env; this length];
+    let limit = NSRange { location: 0, length };
+    let mut index = 0;
+    while index < length {
+        let (a, left_range) = attribute_range(env, this, index, limit, None);
+        let (b, right_range) = attribute_range(env, other, index, limit, None);
+        let equal = if a == b { true } else if a == nil || b == nil { false } else { msg![env; a isEqual:b] };
+        if !equal || left_range.length == 0 || right_range.length == 0 { return false; }
+        index = (left_range.location + left_range.length).min(right_range.location + right_range.length);
+    }
+    true
 }
 
 - (id)attributedSubstringFromRange:(NSRange)range {
