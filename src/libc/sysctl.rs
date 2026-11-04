@@ -223,7 +223,15 @@ fn sysctl(
                 newlen,
             )
         }
-        _ => unimplemented!("sysctl() for name length {name_len} is unimplemented!"),
+        // Other lengths are things like net.route.0.link.iflist.<index> (length
+        // 6), which apps use to read the Wi-Fi MAC address once
+        // if_nametoindex() has found en0. Fail as if the entry didn't exist,
+        // so that they take their error path.
+        _ => {
+            log!("TODO: sysctl() for name length {name_len}, returning -1");
+            set_errno(env, ENOENT);
+            -1
+        }
     }
 }
 

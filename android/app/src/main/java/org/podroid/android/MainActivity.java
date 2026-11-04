@@ -35,6 +35,12 @@ import org.libsdl.app.SDLActivity;
  */
 
 public class MainActivity extends SDLActivity {
+    // Public accessor for SDLActivity's protected static mSingleton, so
+    // helper classes in this package (HostMedia) can reach the Activity.
+    public static android.app.Activity getActivity() {
+        return mSingleton;
+    }
+
     /**
      * The command-line arguments for touchHLE (the app path and options),
      * set by LauncherActivity.
