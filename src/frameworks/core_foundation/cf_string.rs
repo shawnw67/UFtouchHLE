@@ -288,7 +288,7 @@ fn CFStringCreateMutableCopy(
     msg![env; the_string mutableCopy]
 }
 
-fn CFStringCreateWithBytes(
+pub(crate) fn CFStringCreateWithBytes(
     env: &mut Environment,
     allocator: CFAllocatorRef,
     bytes: ConstPtr<u8>,

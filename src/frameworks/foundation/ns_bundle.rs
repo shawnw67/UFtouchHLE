@@ -10,9 +10,7 @@ use crate::bundle::Bundle;
 use crate::frameworks::core_foundation::cf_bundle::{
     CFBundleCopyBundleLocalizations, CFBundleCopyPreferredLocalizationsFromArray,
 };
-use crate::frameworks::foundation::ns_string::{
-    from_rust_string, to_rust_string, NSUTF8StringEncoding,
-};
+use crate::frameworks::foundation::ns_string::{from_rust_string, to_rust_string};
 use crate::fs::GuestPath;
 use crate::mem::{ConstVoidPtr, MutPtr, Ptr};
 use crate::objc::{
@@ -408,8 +406,7 @@ pub const CLASSES: ClassExports = objc_classes! {
             if dict != nil {
                 dict
             } else {
-                let dict = load_strings_as_standard_format(env, dict_url);
-                autorelease(env, dict)
+                load_strings_as_standard_format(env, dict_url)
             }
         }
     } else if let Some(&table_dict) = env.framework_state.foundation.ns_bundle.localization_tables.get(&name) {
@@ -554,19 +551,42 @@ fn path_for_resource_helper(
 /// comments. Returned dictionary is autoreleased, so it's a responsibility of
 /// the caller to retain it.
 /// [String Resources reference](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/LoadingResources/Strings/Strings.html#//apple_ref/doc/uid/10000051i-CH6)
-fn load_strings_as_standard_format(env: &mut Environment, dict_url: id) -> id {
+pub(crate) fn load_strings_as_standard_format(env: &mut Environment, dict_url: id) -> id {
     let res: id = msg_class![env; NSMutableDictionary new];
     // TODO: avoid loading whole file in memory
     let data: id = msg_class![env; NSData dataWithContentsOfURL:dict_url];
-    assert!(data != nil); // TODO
+    if data == nil {
+        release(env, res);
+        return nil;
+    }
     let length: NSUInteger = msg![env; data length];
-    assert!(length > 2);
+    if length == 0 {
+        return autorelease(env, res);
+    }
     let bytes: ConstVoidPtr = msg![env; data bytes];
-    let maybe_bom = env.mem.bytes_at(bytes.cast(), 2);
-    assert!(maybe_bom[0..2] != [0xFE, 0xFF] && maybe_bom[0..2] != [0xFF, 0xFE]); // TODO: UTF-16 cases
-    let strings_str = msg_class![env; NSString alloc];
-    let strings_str: id = msg![env; strings_str initWithData:data encoding:NSUTF8StringEncoding];
-    assert!(strings_str != nil); // TODO
+    let input = env.mem.bytes_at(bytes.cast(), length);
+    let utf16 = input.starts_with(&[0xfe, 0xff]) || input.starts_with(&[0xff, 0xfe]);
+    let encoding = if utf16 {
+        crate::frameworks::core_foundation::cf_string::kCFStringEncodingUTF16
+    } else {
+        crate::frameworks::core_foundation::cf_string::kCFStringEncodingUTF8
+    };
+    let Ok(length) = i32::try_from(length) else {
+        release(env, res);
+        return nil;
+    };
+    let strings_str = crate::frameworks::core_foundation::cf_string::CFStringCreateWithBytes(
+        env,
+        crate::frameworks::core_foundation::cf_allocator::kCFAllocatorDefault,
+        bytes.cast(),
+        length,
+        encoding,
+        true,
+    );
+    if strings_str == nil {
+        release(env, res);
+        return nil;
+    }
 
     let comment_start = ns_string::get_static_str(env, "/*");
     let comment_end = ns_string::get_static_str(env, "*/");

@@ -1422,6 +1422,75 @@ int test_CFBundle_internal_directories(void) {
   return passed ? 0 : -4;
 }
 
+int test_CFBundle_explicit_localization(void) {
+  char root[1024], path[1200];
+  const char *home = getenv("HOME");
+  if (!home ||
+      snprintf(root, sizeof(root), "%s/tmp/localization-XXXXXX", home) >=
+          sizeof(root) ||
+      !mkdtemp(root))
+    return -1;
+  const char *languages[] = {"en", "fr"};
+  const char *contents[] = {"\"greeting\" = \"Hello\";",
+                            "\"greeting\" = \"Salut\";"};
+  for (int i = 0; i < 2; ++i) {
+    snprintf(path, sizeof(path), "%s/%s.lproj", root, languages[i]);
+    if (mkdir(path, 0700))
+      return -2;
+    snprintf(path, sizeof(path), "%s/%s.lproj/Localizable.strings", root,
+             languages[i]);
+    FILE *file = fopen(path, "wb");
+    if (!file)
+      return -3;
+    if (i == 1) {
+      fputc(0xff, file);
+      fputc(0xfe, file);
+    }
+    for (const char *p = contents[i]; *p; ++p) {
+      fputc(*p, file);
+      if (i == 1)
+        fputc(0, file);
+    }
+    fclose(file);
+  }
+  CFStringRef rootString =
+      CFStringCreateWithCString(NULL, root, kCFStringEncodingUTF8);
+  CFURLRef rootURL = CFURLCreateWithFileSystemPath(NULL, rootString,
+                                                   kCFURLPOSIXPathStyle, true);
+  CFBundleRef bundle = CFBundleCreate(NULL, rootURL);
+  CFStringRef key =
+      CFStringCreateWithCString(NULL, "greeting", kCFStringEncodingUTF8);
+  int passed = bundle != NULL;
+  for (int i = 0; i < 2; ++i) {
+    CFStringRef language =
+        CFStringCreateWithCString(NULL, languages[i], kCFStringEncodingUTF8);
+    CFStringRef result = CFBundleCopyLocalizedStringForLocalization(
+        bundle, key, NULL, NULL, language);
+    char actual[32];
+    passed = passed && result &&
+             CFStringGetCString(result, actual, sizeof(actual),
+                                kCFStringEncodingUTF8) &&
+             strcmp(actual, i == 0 ? "Hello" : "Salut") == 0;
+    CFRelease(result);
+    CFRelease(language);
+    snprintf(path, sizeof(path), "%s/%s.lproj/Localizable.strings", root,
+             languages[i]);
+    unlink(path);
+    snprintf(path, sizeof(path), "%s/%s.lproj", root, languages[i]);
+    [[NSFileManager defaultManager]
+        removeItemAtPath:[NSString stringWithUTF8String:path]
+                   error:NULL];
+  }
+  CFRelease(key);
+  CFRelease(bundle);
+  CFRelease(rootURL);
+  CFRelease(rootString);
+  [[NSFileManager defaultManager]
+      removeItemAtPath:[NSString stringWithUTF8String:root]
+                 error:NULL];
+  return passed ? 0 : -4;
+}
+
 int test_CFBundle_resource_urls(void) {
   CFStringRef extension =
       CFStringCreateWithCString(NULL, "plist", kCFStringEncodingUTF8);
@@ -12157,6 +12226,7 @@ struct {
     FUNC_DEF(test_CFBundle_create_from_url),
     FUNC_DEF(test_CFBundle_resource_urls),
     FUNC_DEF(test_CFBundle_internal_directories),
+    FUNC_DEF(test_CFBundle_explicit_localization),
     FUNC_DEF(test_CFString_split_join_and_replace),
     FUNC_DEF(test_CFString_encoding_queries),
     FUNC_DEF(test_CTFont_graphics_font_round_trip),

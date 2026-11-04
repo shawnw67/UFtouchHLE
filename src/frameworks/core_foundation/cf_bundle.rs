@@ -369,7 +369,58 @@ fn CFBundleCopyLocalizedString(
     msg![env; res copy]
 }
 
+fn CFBundleCopyLocalizedStringForLocalization(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    key: CFStringRef,
+    value: CFStringRef,
+    table: CFStringRef,
+    localization: CFStringRef,
+) -> CFStringRef {
+    if localization == nil {
+        return CFBundleCopyLocalizedString(env, bundle, key, value, table);
+    }
+    if bundle == nil {
+        return nil;
+    }
+    let empty = ns_string::get_static_str(env, "");
+    if key == nil {
+        let result = if value == nil { empty } else { value };
+        return msg![env; result copy];
+    }
+    let table = if table == nil || ns_string::to_rust_string(env, table).is_empty() {
+        ns_string::get_static_str(env, "Localizable")
+    } else {
+        table
+    };
+    let extension = ns_string::get_static_str(env, "strings");
+    let url =
+        CFBundleCopyResourceURLForLocalization(env, bundle, table, extension, nil, localization);
+    let dictionary: id = if url == nil {
+        nil
+    } else {
+        let plist: id = msg_class![env; NSDictionary dictionaryWithContentsOfURL:url];
+        if plist != nil {
+            plist
+        } else {
+            crate::frameworks::foundation::ns_bundle::load_strings_as_standard_format(env, url)
+        }
+    };
+    let result: id = msg![env; dictionary objectForKey:key];
+    let result = if result != nil {
+        result
+    } else if value != nil && !ns_string::to_rust_string(env, value).is_empty() {
+        value
+    } else {
+        key
+    };
+    let result: id = msg![env; result copy];
+    release(env, url);
+    result
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFBundleCopyLocalizedStringForLocalization(_, _, _, _, _)),
     export_c_func!(CFBundleCopyAuxiliaryExecutableURL(_, _)),
     export_c_func!(CFBundleCopyPrivateFrameworksURL(_)),
     export_c_func!(CFBundleCopySharedFrameworksURL(_)),
