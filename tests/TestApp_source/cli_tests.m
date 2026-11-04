@@ -11896,6 +11896,42 @@ extern int AudioConverterGetProperty(void *, uint32_t, uint32_t *, void *);
 extern int AudioConverterSetProperty(void *, uint32_t, uint32_t, const void *);
 extern int AudioConverterGetPropertyInfo(void *, uint32_t, uint32_t *,
                                          unsigned char *);
+extern int AudioFormatGetPropertyInfo(uint32_t, uint32_t, const void *,
+                                      uint32_t *);
+extern int AudioFormatGetProperty(uint32_t, uint32_t, const void *, uint32_t *,
+                                  void *);
+
+int test_audio_format_pcm_properties(void) {
+  struct TestStreamFormat format = {44100, 0x6c70636d, 12, 0, 0, 0, 2, 16, 0};
+  uint32_t size = sizeof(format);
+  if (AudioFormatGetPropertyInfo(0x666d7469, 0, NULL, &size) ||
+      size != sizeof(format) ||
+      AudioFormatGetProperty(0x666d7469, 0, NULL, &size, &format) ||
+      format.bytes_frame != 4 || format.bytes_packet != 4 ||
+      format.frames_packet != 1)
+    return -1;
+  uint32_t variable = 99;
+  size = 4;
+  if (AudioFormatGetProperty(0x66766272, sizeof(format), &format, &size,
+                             &variable) ||
+      variable != 0)
+    return -2;
+  CFStringRef name = NULL;
+  size = sizeof(name);
+  if (AudioFormatGetProperty(0x666e616d, sizeof(format), &format, &size,
+                             &name) ||
+      !name || CFStringGetLength(name) == 0)
+    return -3;
+  CFRelease(name);
+  uint32_t codec = 0x61616320;
+  size = 99;
+  if (AudioFormatGetPropertyInfo(0x61766465, sizeof(codec), &codec, &size) ||
+      size != 0 ||
+      AudioFormatGetProperty(0x61766465, sizeof(codec), &codec, &size, NULL) ||
+      size != 0 || !AudioFormatGetPropertyInfo(0xffffffff, 0, NULL, &size))
+    return -4;
+  return 0;
+}
 
 int test_audio_converter_pcm(void) {
   const struct TestStreamFormat source = {44100, 0x6c70636d, 12, 2, 1,
@@ -12811,6 +12847,7 @@ struct {
     FUNC_DEF(test_audio_converter_pcm),
     FUNC_DEF(test_audio_converter_lists_and_callback),
     FUNC_DEF(test_audio_converter_planar),
+    FUNC_DEF(test_audio_format_pcm_properties),
 #endif
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),

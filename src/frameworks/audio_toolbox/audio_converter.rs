@@ -4,7 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 //! AudioConverter entry points based on HyperHLE's LPCM conversion support.
-//! Currently accepts packed interleaved or planar LPCM at matching sample rates.
+//! Accepts packed interleaved or planar LPCM at matching sample rates.
 
 use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::{export_c_func, FunctionExports};
