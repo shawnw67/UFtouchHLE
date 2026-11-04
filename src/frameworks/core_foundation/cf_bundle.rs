@@ -57,6 +57,69 @@ fn CFBundleGetMainBundle(env: &mut Environment) -> CFBundleRef {
     msg_class![env; NSBundle mainBundle]
 }
 
+fn CFBundleGetAllBundles(env: &mut Environment) -> CFArrayRef {
+    msg_class![env; NSBundle allBundles]
+}
+
+fn CFBundleGetBundleWithIdentifier(env: &mut Environment, identifier: CFStringRef) -> CFBundleRef {
+    msg_class![env; NSBundle bundleWithIdentifier:identifier]
+}
+
+fn CFBundleCreateBundlesFromDirectory(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    directory: CFURLRef,
+    bundle_type: CFStringRef,
+) -> CFArrayRef {
+    if !(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default())
+        || directory == nil
+    {
+        return nil;
+    }
+    let is_file: bool = msg![env; directory isFileURL];
+    if !is_file {
+        return nil;
+    }
+    let path: id = msg![env; directory path];
+    let path = ns_string::to_rust_string(env, path);
+    let root = crate::fs::GuestPath::new(&path);
+    let extension = if bundle_type == nil {
+        None
+    } else {
+        Some(ns_string::to_rust_string(env, bundle_type).to_string())
+    };
+    let Ok(entries) = env.fs.enumerate(root) else {
+        return nil;
+    };
+    let mut candidates: Vec<_> = entries
+        .filter_map(|name| {
+            let path = root.join(name);
+            if !env.fs.is_dir(&path) {
+                return None;
+            }
+            if let Some(extension) = &extension {
+                if !name.ends_with(&format!(".{extension}")) {
+                    return None;
+                }
+            } else if !env.fs.is_file(&path.join("Info.plist")) {
+                return None;
+            }
+            Some(path.as_str().to_string())
+        })
+        .collect();
+    candidates.sort();
+    let mut bundles = Vec::new();
+    for path in candidates {
+        let path = ns_string::from_rust_string(env, path);
+        let bundle: id = msg_class![env; NSBundle bundleWithPath:path];
+        release(env, path);
+        if bundle != nil {
+            bundles.push(retain(env, bundle));
+        }
+    }
+    ns_array::from_vec(env, bundles)
+}
+
 fn CFBundleCreate(env: &mut Environment, allocator: CFAllocatorRef, url: CFURLRef) -> CFBundleRef {
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default());
     if url == nil {
@@ -446,6 +509,9 @@ fn CFBundleCopyLocalizedStringForLocalization(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFBundleGetAllBundles()),
+    export_c_func!(CFBundleGetBundleWithIdentifier(_)),
+    export_c_func!(CFBundleCreateBundlesFromDirectory(_, _, _)),
     export_c_func!(CFBundleCopyResourceURLsOfTypeForLocalization(_, _, _, _)),
     export_c_func!(CFBundleCopyLocalizedStringForLocalization(_, _, _, _, _)),
     export_c_func!(CFBundleCopyAuxiliaryExecutableURL(_, _)),

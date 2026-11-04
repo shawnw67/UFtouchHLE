@@ -1422,6 +1422,61 @@ int test_CFBundle_internal_directories(void) {
   return passed ? 0 : -4;
 }
 
+int test_CFBundle_discovery(void) {
+  char root[1024], path[1200], child[1200];
+  const char *home = getenv("HOME");
+  if (!home ||
+      snprintf(root, sizeof(root), "%s/tmp/discovery-XXXXXX", home) >=
+          sizeof(root) ||
+      !mkdtemp(root))
+    return -1;
+  snprintf(child, sizeof(child), "%s/Resource.bundle", root);
+  if (mkdir(child, 0700))
+    return -2;
+  snprintf(path, sizeof(path), "%s/Info.plist", child);
+  FILE *file = fopen(path, "wb");
+  if (!file)
+    return -3;
+  fputs("<?xml version=\"1.0\"?><plist "
+        "version=\"1.0\"><dict><key>CFBundleIdentifier</"
+        "key><string>test.hyper.discovery</string></dict></plist>",
+        file);
+  fclose(file);
+  CFStringRef rootString =
+      CFStringCreateWithCString(NULL, root, kCFStringEncodingUTF8);
+  CFURLRef rootURL = CFURLCreateWithFileSystemPath(NULL, rootString,
+                                                   kCFURLPOSIXPathStyle, true);
+  CFStringRef identifier = CFStringCreateWithCString(
+      NULL, "test.hyper.discovery", kCFStringEncodingUTF8);
+  CFStringRef type =
+      CFStringCreateWithCString(NULL, "bundle", kCFStringEncodingUTF8);
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  CFArrayRef bundles = CFBundleCreateBundlesFromDirectory(NULL, rootURL, type);
+  int passed = bundles && CFArrayGetCount(bundles) == 1;
+  if (passed) {
+    CFBundleRef bundle = CFArrayGetValueAtIndex(bundles, 0);
+    CFArrayRef all = CFBundleGetAllBundles();
+    passed =
+        CFBundleGetBundleWithIdentifier(identifier) == bundle && all &&
+        CFArrayContainsValue(all, CFRangeMake(0, CFArrayGetCount(all)), bundle);
+  }
+  CFRelease(bundles);
+  [pool drain];
+  passed = passed && !CFBundleGetBundleWithIdentifier(identifier);
+  CFRelease(type);
+  CFRelease(identifier);
+  CFRelease(rootURL);
+  CFRelease(rootString);
+  unlink(path);
+  [[NSFileManager defaultManager]
+      removeItemAtPath:[NSString stringWithUTF8String:child]
+                 error:NULL];
+  [[NSFileManager defaultManager]
+      removeItemAtPath:[NSString stringWithUTF8String:root]
+                 error:NULL];
+  return passed ? 0 : -4;
+}
+
 int test_CFBundle_explicit_localization(void) {
   char root[1024], path[1200];
   const char *home = getenv("HOME");
@@ -12292,6 +12347,7 @@ struct {
     FUNC_DEF(test_CFBundle_resource_urls),
     FUNC_DEF(test_CFBundle_internal_directories),
     FUNC_DEF(test_CFBundle_explicit_localization),
+    FUNC_DEF(test_CFBundle_discovery),
     FUNC_DEF(test_CFString_split_join_and_replace),
     FUNC_DEF(test_CFString_encoding_queries),
     FUNC_DEF(test_CTFont_graphics_font_round_trip),

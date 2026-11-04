@@ -75,6 +75,9 @@ pub(crate) const LANG_ID_TO_LANG_PROJ: &[(&str, &[&str])] = &[
 pub struct State {
     main_bundle: Option<id>,
     localization_tables: HashMap<id, id>, // NSString* to NSDictionary*
+    /// Weak entries removed by dealloc; enumerating bundles must not keep
+    /// every resource bundle alive for the lifetime of the emulator.
+    known_bundles: Vec<id>,
 }
 
 pub struct NSBundleHostObject {
@@ -140,6 +143,32 @@ pub const CLASSES: ClassExports = objc_classes! {
     autorelease(env, preferredLocalizations)
 }
 
++ (id)allBundles {
+    let main: id = msg![env; this mainBundle];
+    let mut bundles = vec![main];
+    bundles.extend(env.framework_state.foundation.ns_bundle.known_bundles.iter().copied());
+    let mut paths = HashSet::new();
+    let mut unique = Vec::new();
+    for bundle in bundles {
+        let path: id = msg![env; bundle bundlePath];
+        if path != nil && paths.insert(to_rust_string(env, path).to_string()) { unique.push(retain(env, bundle)); }
+    }
+    let array = super::ns_array::from_vec(env, unique);
+    autorelease(env, array)
+}
+
++ (id)bundleWithIdentifier:(id)identifier {
+    if identifier == nil { return nil; }
+    let bundles: id = msg![env; this allBundles];
+    let count: NSUInteger = msg![env; bundles count];
+    for index in 0..count {
+        let bundle: id = msg![env; bundles objectAtIndex:index];
+        let bundle_id: id = msg![env; bundle bundleIdentifier];
+        if bundle_id != nil && msg![env; bundle_id isEqualToString:identifier] { return bundle; }
+    }
+    nil
+}
+
 - (id)initWithPath:(id)path { // NSString*
     // Only directories can be bundles.
     let mut is_dir = false;
@@ -171,10 +200,14 @@ pub const CLASSES: ClassExports = objc_classes! {
         retain(env, identifier);
         env.objc.borrow_mut::<NSBundleHostObject>(this).bundle_identifier = identifier;
     }
+    if !env.framework_state.foundation.ns_bundle.known_bundles.contains(&this) {
+        env.framework_state.foundation.ns_bundle.known_bundles.push(this);
+    }
     this
 }
 
 - (())dealloc {
+    env.framework_state.foundation.ns_bundle.known_bundles.retain(|&bundle| bundle != this);
     let &NSBundleHostObject {
         bundle: _,
         bundle_path,
