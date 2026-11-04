@@ -803,6 +803,20 @@ int test_CFAttributedString_attribute_runs(void) {
   passed = passed && CFAttributedStringGetLength(ref) == 14 &&
            CFAttributedStringGetAttribute(ref, 8, (CFStringRef)key, NULL) &&
            !CFAttributedStringGetAttribute(ref, 11, (CFStringRef)key, NULL);
+  NSMutableAttributedString *inserted = [[NSMutableAttributedString alloc]
+      initWithString:[NSString stringWithUTF8String:"ab"]];
+  [inserted addAttribute:key value:red range:NSMakeRange(0, 1)];
+  [inserted addAttribute:other value:bold range:NSMakeRange(1, 1)];
+  [inserted replaceCharactersInRange:NSMakeRange(1, 0)
+                          withString:[NSString stringWithUTF8String:"X"]];
+  CFAttributedStringRef insertedRef = (CFAttributedStringRef)inserted;
+  passed =
+      passed &&
+      CFAttributedStringGetAttribute(insertedRef, 1, (CFStringRef)key, NULL) &&
+      !CFAttributedStringGetAttribute(insertedRef, 1, (CFStringRef)other,
+                                      NULL) &&
+      CFAttributedStringGetAttribute(insertedRef, 2, (CFStringRef)other, NULL);
+  [inserted release];
   CFRelease(sub);
   [text release];
   return passed ? 0 : -1;

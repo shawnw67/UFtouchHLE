@@ -490,7 +490,8 @@ pub const CLASSES: ClassExports = objc_classes! {
     if location.checked_add(length).is_none_or(|end| end > old_length) { return; }
     let replacement_len: NSUInteger = msg![env; replacement length];
     let attrs = if old_length == 0 { nil } else {
-        attribute_range(env, this, location.min(old_length - 1), NSRange { location: 0, length: old_length }, None).0
+        let inherited_index = if length == 0 && location > 0 { location - 1 } else { location.min(old_length - 1) };
+        attribute_range(env, this, inherited_index, NSRange { location: 0, length: old_length }, None).0
     };
     let replacement_runs = if replacement_len == 0 { Vec::new() } else { vec![(NSRange { location: 0, length: replacement_len }, retain(env, attrs))] };
     splice_runs(env, this, range, replacement_len, replacement_runs);
