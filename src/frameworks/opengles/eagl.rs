@@ -1594,7 +1594,7 @@ unsafe fn present_renderbuffer_inner(
     let old_arrays = {
         let mut old_arrays = [gles11::FALSE; gles1_on_gl2::ARRAYS.len()];
         for (is_enabled, info) in old_arrays.iter_mut().zip(gles1_on_gl2::ARRAYS.iter()) {
-            gles.GetBooleanv(info.name, is_enabled);
+            *is_enabled = gles.IsEnabled(info.name);
             gles.DisableClientState(info.name);
         }
         old_arrays
@@ -1605,7 +1605,10 @@ unsafe fn present_renderbuffer_inner(
             .iter_mut()
             .zip(gles1_on_gl2::CAPABILITIES.iter())
         {
-            gles.GetBooleanv(name, is_enabled);
+            // glGetBooleanv doesn't work for this on Adreno's ES 1.1 driver: it
+            // reports these as disabled. That would leave them off, and games
+            // that only enable them once then draw without a depth test.
+            *is_enabled = gles.IsEnabled(name);
             gles.Disable(name);
         }
         old_capabilities

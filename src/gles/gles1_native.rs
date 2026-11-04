@@ -9,7 +9,7 @@
 use super::gles11_raw as gles11;
 use super::gles11_raw::types::*;
 use super::gles_generic::GLES;
-use super::util::{try_decode_pvrtc, PalettedTextureFormat};
+use super::util::{pad_paletted_data, try_decode_pvrtc, PalettedTextureFormat};
 use super::GLESContext;
 use crate::window::{GLContext, GLVersion, Window};
 use std::ffi::{CStr, CString};
@@ -2035,7 +2035,7 @@ impl GLES1Native<'_> {
                 let indices_size = index_word_size * index_word_count;
 
                 let expected_size = palette_size + indices_size;
-                if payload.len() < expected_size {
+                if payload.len() < palette_size {
                     log!(
                         "Warning: GLES1Native::CompressedTexImage2D: paletted \
                          format {internalformat:#x} payload too small: got {} \
@@ -2046,6 +2046,7 @@ impl GLES1Native<'_> {
                     return;
                 }
 
+                let payload = pad_paletted_data(payload, expected_size);
                 let (palette, indices) = payload.split_at(palette_size);
 
                 let mut decoded = Vec::<u8>::with_capacity(palette_entry_size * index_count);

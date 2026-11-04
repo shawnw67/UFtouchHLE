@@ -441,6 +441,19 @@ pub unsafe fn decode_texture_to_rgba8(
     Some(output)
 }
 
+/// Pad a paletted texture's data to the size it should have. Some apps round
+/// the size of the indices down, so a 1x1 4-bit texture (Assassin's Creed II
+/// Discovery's placeholder textures) only has a palette. iPhone OS accepts
+/// that, so treat the missing indices as 0.
+pub fn pad_paletted_data(data: &[u8], expected_size: usize) -> std::borrow::Cow<'_, [u8]> {
+    if data.len() >= expected_size {
+        return std::borrow::Cow::Borrowed(data);
+    }
+    let mut padded = data.to_vec();
+    padded.resize(expected_size, 0);
+    std::borrow::Cow::Owned(padded)
+}
+
 pub struct PalettedTextureFormat {
     /// * `true` for 4-bit (nibble) index, 16-color palette.
     /// * `false` for 8-bit (byte) index, 256-color palette.
@@ -483,9 +496,10 @@ impl PalettedTextureFormat {
             pixel_count
         };
         let total_size = palette_size.checked_add(index_size)?;
-        if payload.len() < total_size {
+        if payload.len() < palette_size {
             return None;
         }
+        let payload = pad_paletted_data(payload, total_size);
         let (palette, indices) = payload.split_at(palette_size);
         let mut output = Vec::with_capacity(pixel_count.checked_mul(4)?);
         for pixel in 0..pixel_count {
@@ -593,5 +607,24 @@ impl PalettedTextureFormat {
             }),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod paletted_tests {
+    use super::*;
+
+    #[test]
+    fn missing_indices_of_a_1x1_texture_are_zero() {
+        // PALETTE4_RGBA8: 16 entries, without the index byte.
+        let mut palette = vec![0u8; 16 * 4];
+        palette[..4].copy_from_slice(&[1, 2, 3, 4]);
+        let decoded = PalettedTextureFormat::decode_rgba8(0x8B91, 1, 1, &palette).unwrap();
+        assert_eq!(decoded, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn data_without_a_full_palette_is_rejected() {
+        assert!(PalettedTextureFormat::decode_rgba8(0x8B91, 1, 1, &[0u8; 16]).is_none());
     }
 }

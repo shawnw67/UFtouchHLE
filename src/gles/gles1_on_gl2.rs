@@ -28,8 +28,8 @@ const IMPLEMENTATION_COLOR_READ_FORMAT_OES: GLenum = 0x8B9B;
 const IMPLEMENTATION_COLOR_READ_TYPE_OES: GLenum = 0x8B98;
 use super::gles_generic::GLES;
 use super::util::{
-    fixed_to_float, float_to_fixed, matrix_fixed_to_float, try_decode_pvrtc, PalettedTextureFormat,
-    ParamTable, ParamType,
+    fixed_to_float, float_to_fixed, matrix_fixed_to_float, pad_paletted_data, try_decode_pvrtc,
+    PalettedTextureFormat, ParamTable, ParamType,
 };
 use super::GLESContext;
 use crate::window::{GLContext, GLVersion, Window};
@@ -2744,7 +2744,7 @@ impl GLES for GLES1OnGL2<'_> {
 
             // TODO: support multiple miplevels in one image
             assert!(level == 0);
-            assert_eq!(data.len(), palette_size + indices_size);
+            let data = pad_paletted_data(data, palette_size + indices_size);
             let (palette, indices) = data.split_at(palette_size);
 
             let mut decoded = Vec::<u8>::with_capacity(palette_entry_size * index_count);
