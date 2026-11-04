@@ -14,9 +14,7 @@ use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::core_foundation::cf_string::{
     kCFStringEncodingASCII, kCFStringEncodingUTF8, CFStringEncoding, CFStringRef,
 };
-use crate::frameworks::foundation::ns_string::{
-    from_rust_string, get_static_str, to_rust_string, NSUTF8StringEncoding,
-};
+use crate::frameworks::foundation::ns_string::{from_rust_string, get_static_str, to_rust_string};
 use crate::frameworks::foundation::NSUInteger;
 use crate::mem::{ConstPtr, MutPtr, Ptr};
 use crate::objc::{id, msg, msg_class, nil, release, retain};
@@ -102,19 +100,45 @@ pub fn CFURLCreateFromFileSystemRepresentation(
     buffer_size: CFIndex,
     is_directory: bool,
 ) -> CFURLRef {
-    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
+    CFURLCreateFromFileSystemRepresentationRelativeToBase(
+        env,
+        allocator,
+        buffer,
+        buffer_size,
+        is_directory,
+        nil,
+    )
+}
 
-    let buffer_size: NSUInteger = buffer_size.try_into().unwrap();
-
-    let string: id = msg_class![env; NSString alloc];
-    let string: id = msg![env; string initWithBytes:buffer
-                                             length:buffer_size
-                                           encoding:NSUTF8StringEncoding];
-
-    let url: id = msg_class![env; NSURL alloc];
-    let res = msg![env; url initFileURLWithPath:string isDirectory:is_directory];
+fn CFURLCreateFromFileSystemRepresentationRelativeToBase(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    buffer: ConstPtr<u8>,
+    length: CFIndex,
+    directory: bool,
+    base: CFURLRef,
+) -> CFURLRef {
+    let string = super::cf_string::CFStringCreateWithBytes(
+        env,
+        allocator,
+        buffer,
+        length,
+        kCFStringEncodingUTF8,
+        false,
+    );
+    if string == nil {
+        return nil;
+    }
+    let result = CFURLCreateWithFileSystemPathRelativeToBase(
+        env,
+        allocator,
+        string,
+        kCFURLPOSIXPathStyle,
+        directory,
+        base,
+    );
     release(env, string);
-    res
+    result
 }
 
 fn CFURLCreateWithBytes(
@@ -171,6 +195,55 @@ fn CFURLCreateWithString(
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
     let url: id = msg_class![env; NSURL alloc];
     msg![env; url initWithString:url_string relativeToURL:base_url]
+}
+
+fn CFURLCreateWithFileSystemPathRelativeToBase(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    path: CFStringRef,
+    style: CFURLPathStyle,
+    directory: bool,
+    base: CFURLRef,
+) -> CFURLRef {
+    if path == nil || style != kCFURLPOSIXPathStyle {
+        return nil;
+    }
+    let text = to_rust_string(env, path);
+    if base == nil || text.starts_with('/') {
+        return CFURLCreateWithFileSystemPath(env, allocator, path, style, directory);
+    }
+    let is_file: bool = msg![env; base isFileURL];
+    if !is_file {
+        return nil;
+    }
+    let mut escaped = add_percent_escapes(&text, "", "%?#;:");
+    if directory && !escaped.ends_with('/') {
+        escaped.push('/');
+    }
+    let string = from_rust_string(env, escaped);
+    let result = CFURLCreateWithString(env, allocator, string, base);
+    release(env, string);
+    result
+}
+
+fn CFURLCreateAbsoluteURLWithBytes(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    bytes: ConstPtr<u8>,
+    length: CFIndex,
+    encoding: CFStringEncoding,
+    base: CFURLRef,
+    _compatibility: bool,
+) -> CFURLRef {
+    // Both entry modes currently use the hierarchical reference resolver;
+    // historical compatibility-only parsing differences remain unsupported.
+    let relative = CFURLCreateWithBytes(env, allocator, bytes, length, encoding, base);
+    if relative == nil {
+        return nil;
+    }
+    let absolute = CFURLCopyAbsoluteURL(env, relative);
+    release(env, relative);
+    absolute
 }
 
 pub fn CFURLCopyPathExtension(env: &mut Environment, url: CFURLRef) -> CFStringRef {
@@ -585,6 +658,15 @@ fn CFURLCreateStringByReplacingPercentEscapes(
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFURLCreateWithFileSystemPathRelativeToBase(_, _, _, _, _)),
+    export_c_func!(CFURLCreateFromFileSystemRepresentationRelativeToBase(
+        _,
+        _,
+        _,
+        _,
+        _
+    )),
+    export_c_func!(CFURLCreateAbsoluteURLWithBytes(_, _, _, _, _, _)),
     export_c_func!(CFURLGetString(_)),
     export_c_func!(CFURLCopyAbsoluteURL(_)),
     export_c_func!(CFURLGetBytes(_, _, _)),

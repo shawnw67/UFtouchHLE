@@ -2699,6 +2699,44 @@ static int uf_url_string_equals(CFStringRef string, const char *expected) {
          !strcmp(buffer, expected);
 }
 
+int test_cfurl_relative_filesystem_constructors(void) {
+  CFStringRef basePath =
+      CFStringCreateWithCString(NULL, "/tmp/Base", kCFStringEncodingUTF8);
+  CFURLRef base =
+      CFURLCreateWithFileSystemPath(NULL, basePath, kCFURLPOSIXPathStyle, true);
+  CFStringRef path =
+      CFStringCreateWithCString(NULL, "Data/a b#c%:d", kCFStringEncodingUTF8);
+  CFURLRef relative = CFURLCreateWithFileSystemPathRelativeToBase(
+      NULL, path, kCFURLPOSIXPathStyle, false, base);
+  char actual[128];
+  int passed =
+      relative && CFURLGetBaseURL(relative) == base &&
+      uf_url_string_equals(CFURLGetString(relative), "Data/a%20b%23c%25%3Ad") &&
+      CFURLGetFileSystemRepresentation(relative, true, (UInt8 *)actual,
+                                       sizeof(actual)) &&
+      strcmp(actual, "/tmp/Base/Data/a b#c%:d") == 0;
+  CFRelease(relative);
+  const UInt8 bytes[] = "../Other/a b";
+  relative = CFURLCreateFromFileSystemRepresentationRelativeToBase(
+      NULL, bytes, sizeof(bytes) - 1, false, base);
+  passed = passed && relative &&
+           CFURLGetFileSystemRepresentation(relative, true, (UInt8 *)actual,
+                                            sizeof(actual)) &&
+           strcmp(actual, "/tmp/Other/a b") == 0;
+  CFRelease(relative);
+  const UInt8 encoded[] = "../Other/a%20b";
+  CFURLRef absolute = CFURLCreateAbsoluteURLWithBytes(
+      NULL, encoded, sizeof(encoded) - 1, kCFStringEncodingUTF8, base, false);
+  passed =
+      passed && absolute && !CFURLGetBaseURL(absolute) &&
+      uf_url_string_equals(CFURLGetString(absolute), "file:///tmp/Other/a%20b");
+  CFRelease(absolute);
+  CFRelease(path);
+  CFRelease(base);
+  CFRelease(basePath);
+  return passed ? 0 : -1;
+}
+
 int test_cfurl_relative_base(void) {
   CFStringRef baseText = CFStringCreateWithCString(
       NULL, "http://example.com/a/b/index.html?old#z", kCFStringEncodingUTF8);
@@ -12460,6 +12498,7 @@ struct {
     FUNC_DEF(test_cfurl_query_and_fragment),
     FUNC_DEF(test_cfurl_absolute_string_and_bytes),
     FUNC_DEF(test_cfurl_relative_base),
+    FUNC_DEF(test_cfurl_relative_filesystem_constructors),
     FUNC_DEF(test_cfurl_legacy_percent_decode),
     FUNC_DEF(test_cfdata_no_copy_deallocator),
     FUNC_DEF(test_cfdata_equality_and_dictionary_keys),
