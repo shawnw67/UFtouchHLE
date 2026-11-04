@@ -45,6 +45,8 @@ pub const kCGBitmapAlphaInfoMask: CGBitmapInfo = 0x1F; // huh, it's not 0x7?
 pub const kCGBitmapByteOrderMask: CGBitmapInfo = kCGImageByteOrderMask;
 // TODO: other stuff in this enum (for now, always assert the rest is 0)
 
+pub type CGImageSourceRef = CFTypeRef;
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
@@ -738,6 +740,90 @@ fn CGImageCreateWithBitmapData(
     from_image(env, Image::from_pixel_vec(pixels, (width, height)))
 }
 
+/// Invert-mask stub — just copy.
+fn CGImageCreateMaskWithImageMask(env: &mut Environment, mask_image: CGImageRef) -> CGImageRef {
+    log!("CGImageCreateMaskWithImageMask: stubbed");
+    CGImageCreateCopy(env, mask_image)
+}
+
+/// Premultiply alpha on a copy of the image.
+fn CGImageCreatePremultiplied(env: &mut Environment, image: CGImageRef) -> CGImageRef {
+    if image.is_null() {
+        return nil;
+    }
+    let (w, h) = env
+        .objc
+        .borrow::<CGImageHostObject>(image)
+        .image
+        .dimensions();
+    let mut pixels = env
+        .objc
+        .borrow::<CGImageHostObject>(image)
+        .image
+        .pixels()
+        .to_vec();
+    for px in pixels.as_chunks_mut::<4>().0 {
+        let a = px[3] as u32;
+        px[0] = ((px[0] as u32 * a + 127) / 255) as u8;
+        px[1] = ((px[1] as u32 * a + 127) / 255) as u8;
+        px[2] = ((px[2] as u32 * a + 127) / 255) as u8;
+    }
+    from_image(env, Image::from_pixels(w, h, pixels))
+}
+
+/// Un-premultiply alpha on a copy of the image.
+#[allow(clippy::manual_checked_ops)]
+fn CGImageCreateUnpremultiplied(env: &mut Environment, image: CGImageRef) -> CGImageRef {
+    if image.is_null() {
+        return nil;
+    }
+    let (w, h) = env
+        .objc
+        .borrow::<CGImageHostObject>(image)
+        .image
+        .dimensions();
+    let mut pixels = env
+        .objc
+        .borrow::<CGImageHostObject>(image)
+        .image
+        .pixels()
+        .to_vec();
+    for px in pixels.as_chunks_mut::<4>().0 {
+        let a = px[3] as u32;
+        if a > 0 {
+            px[0] = ((px[0] as u32 * 255 + a / 2) / a).min(255) as u8;
+            px[1] = ((px[1] as u32 * 255 + a / 2) / a).min(255) as u8;
+            px[2] = ((px[2] as u32 * 255 + a / 2) / a).min(255) as u8;
+        }
+    }
+    from_image(env, Image::from_pixels(w, h, pixels))
+}
+
+/// `CFTypeID CGImageGetTypeID()` — returns a stable non-zero type ID.
+fn CGImageGetTypeID(_env: &mut Environment) -> u32 {
+    // Any stable non-zero value is fine — apps use this for type checking.
+    0x0000_BABE
+}
+
+/// `CGImageRef CGImageCreateWithImageInRect` — already exists, this is the
+/// `CGImageGetUTType` variant that returns the UTI string.
+fn CGImageGetUTType(_env: &mut Environment, _image: CGImageRef) -> crate::objc::id {
+    // Return nil — we don't track the original file type.
+    nil
+}
+
+fn CGImageSourceCopyProperties(
+    _env: &mut Environment,
+    _source: CGImageSourceRef,
+    _options: CFTypeRef,
+) -> CFTypeRef {
+    nil
+}
+
+fn CGImageSourceGetTypeID(_env: &mut Environment) -> u32 {
+    0x0000_CAFE
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGImageCreateWithBitmapData(_, _, _, _, _)),
     export_c_func!(CGImageMaskCreate(_, _, _, _, _, _, _, _)),
@@ -767,4 +853,11 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGImageGetDataProvider(_)),
     export_c_func!(CGImageGetBitsPerComponent(_)),
     export_c_func!(CGImageCreateWithImageInRect(_, _)),
+    export_c_func!(CGImageCreateMaskWithImageMask(_)),
+    export_c_func!(CGImageCreatePremultiplied(_)),
+    export_c_func!(CGImageCreateUnpremultiplied(_)),
+    export_c_func!(CGImageGetTypeID()),
+    export_c_func!(CGImageGetUTType(_)),
+    export_c_func!(CGImageSourceCopyProperties(_, _)),
+    export_c_func!(CGImageSourceGetTypeID()),
 ];

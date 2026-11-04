@@ -109,6 +109,12 @@ pub fn CGBitmapContextCreate(
         ),
         // TODO: is this the correct default?
         rgb_fill_color: (0.0, 0.0, 0.0, 0.0),
+        line_cap: 0,
+        line_join: 0,
+        miter_limit: 10.0,
+        flatness: 1.0,
+        rendering_intent: 0,
+        shadow: Default::default(),
         font: Ptr::null(),
         font_size: 14.0,
         transform: CGAffineTransformIdentity,

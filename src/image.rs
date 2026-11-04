@@ -35,6 +35,15 @@ enum PixelStore {
 const PNG_MAGIC_NUMBER: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
 
 impl Image {
+    /// Wrap RGBA8 pixels.
+    pub fn from_pixels(width: u32, height: u32, pixels: Vec<u8>) -> Self {
+        assert_eq!(pixels.len(), (width * height * 4) as usize);
+        Image {
+            pixels: PixelStore::Vec(pixels),
+            dimensions: (width, height),
+        }
+    }
+
     pub fn from_bytes(bytes: &[u8]) -> Result<Image, String> {
         let len: c_int = bytes.len().try_into().unwrap();
 

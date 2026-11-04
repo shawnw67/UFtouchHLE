@@ -316,6 +316,23 @@ struct CGPathHostObject {
     path: Path,
 }
 impl HostObject for CGPathHostObject {}
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+pub(crate) enum PathElement {
+    MoveTo(CGPoint),
+    LineTo(CGPoint),
+    QuadCurveTo {
+        control: CGPoint,
+        to: CGPoint,
+    },
+    CurveTo {
+        c1: CGPoint,
+        c2: CGPoint,
+        to: CGPoint,
+    },
+    Close,
+}
+
 pub const CLASSES: ClassExports = objc_classes! {
     (env, this, _cmd);
     @implementation _Podroid_CGPath: NSObject

@@ -502,6 +502,22 @@ fn substitute_classes(
 }
 
 impl ObjC {
+    /// For use by host functions when the caller wants to handle the
+    /// "class does not exist" case gracefully (e.g. UIClassSwapper falling
+    /// back to the NIB's original class when the app-defined custom class is
+    /// missing). Returns `Some(class)` if the class is already registered or
+    /// a host-side template exists for it; otherwise returns `None` instead
+    /// of panicking or installing a placeholder.
+    pub fn try_get_known_class(&mut self, name: &str, mem: &mut Mem) -> Option<Class> {
+        if let Some(class) = self.get_class(name, /* is_metaclass: */ false, mem) {
+            return Some(class);
+        }
+        if Self::find_template(name).is_some() {
+            return Some(self.link_class(name, /* is_metaclass: */ false, mem));
+        }
+        None
+    }
+
     /// Iterator over all known classes and their names.
     pub fn all_classes(&self) -> impl Iterator<Item = (&String, &Class)> {
         self.classes.iter()

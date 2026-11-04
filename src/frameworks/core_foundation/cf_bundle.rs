@@ -17,6 +17,7 @@ use super::CFTypeRef;
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::foundation::ns_bundle::NSBundleHostObject;
 use crate::frameworks::foundation::{ns_array, ns_string, NSUInteger};
+use crate::mem::MutVoidPtr;
 use crate::objc::{id, msg, msg_class, nil, release, retain};
 use crate::Environment;
 
@@ -508,6 +509,143 @@ fn CFBundleCopyLocalizedStringForLocalization(
     result
 }
 
+fn CFBundleGetDataPointerForName(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    symbol_name: CFStringRef,
+) -> CFTypeRef {
+    if symbol_name == nil {
+        return nil;
+    }
+    let name = ns_string::to_rust_string(env, symbol_name);
+    // Host data constants cannot be resolved to guest pointers (they are
+    // materialised lazily by the linker), so NULL is all we can return.
+    log_dbg!(
+        "CFBundleGetDataPointerForName({:?}, \"{}\") -> NULL (not supported)",
+        bundle,
+        name
+    );
+    nil
+}
+
+fn CFBundleGetDataPointersForNames(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    symbol_names: CFArrayRef,
+    stbl: MutVoidPtr,
+) {
+    if stbl.is_null() {
+        return;
+    }
+    let count: NSUInteger = msg![env; symbol_names count];
+    log_dbg!(
+        "CFBundleGetDataPointersForNames({:?}, count={}) — writing NULL for all",
+        bundle,
+        count
+    );
+    let null_ptr: crate::mem::MutPtr<MutVoidPtr> = stbl.cast();
+    for i in 0..count {
+        env.mem.write(null_ptr + i, crate::mem::Ptr::null());
+    }
+}
+
+fn CFBundleGetFunctionPointerForName(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    function_name: CFStringRef,
+) -> CFTypeRef {
+    if function_name == nil {
+        return nil;
+    }
+    let name = ns_string::to_rust_string(env, function_name);
+    // Resolve the symbol through dyld the same way `dlsym` does. Mach-O C
+    // symbols are prefixed with an underscore.
+    let mangled = format!("_{}", name);
+    match env
+        .dyld
+        .create_proc_address(&mut env.mem, &mut env.cpu, &mangled)
+    {
+        Ok(function) => MutVoidPtr::from_bits(function.addr_with_thumb_bit()).cast(),
+        Err(_) => {
+            // Unknown symbols legitimately return NULL (the documented
+            // failure result), so keep this quiet.
+            log_dbg!(
+                "CFBundleGetFunctionPointerForName({:?}, \"{}\") -> NULL (no host implementation)",
+                bundle,
+                name
+            );
+            nil
+        }
+    }
+}
+
+fn CFBundleGetFunctionPointersForNames(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    function_names: CFArrayRef,
+    ftbl: MutVoidPtr,
+) {
+    if ftbl.is_null() {
+        return;
+    }
+    let count: NSUInteger = msg![env; function_names count];
+    let ftbl_ptr: crate::mem::MutPtr<MutVoidPtr> = ftbl.cast();
+    for i in 0..count {
+        let name: CFStringRef = msg![env; function_names objectAtIndex:i];
+        let resolved = CFBundleGetFunctionPointerForName(env, bundle, name);
+        env.mem.write(ftbl_ptr + i, resolved.cast());
+    }
+}
+
+fn CFBundleGetLocalInfoDictionary(env: &mut Environment, bundle: CFBundleRef) -> CFTypeRef {
+    // Return localizedInfoDictionary if available, fall back to plain dict.
+    if bundle == nil {
+        return nil;
+    }
+    let loc: id = msg![env; bundle localizedInfoDictionary];
+    if loc != nil {
+        return loc;
+    }
+    msg![env; bundle infoDictionary]
+}
+
+fn CFBundleIsExecutableLoaded(_env: &mut Environment, _bundle: CFBundleRef) -> bool {
+    true
+}
+
+fn CFBundleLoadExecutable(_env: &mut Environment, bundle: CFBundleRef) -> bool {
+    // The app binary is always "loaded"; other bundles have no code we could
+    // load, but reporting success matches CFBundleIsExecutableLoaded above
+    // and keeps callers out of their error-handling paths.
+    log_dbg!(
+        "CFBundleLoadExecutable({:?}) -> true (pretend success)",
+        bundle
+    );
+    true
+}
+
+fn CFBundleLoadExecutableAndReturnError(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    _error: MutVoidPtr,
+) -> bool {
+    CFBundleLoadExecutable(env, bundle)
+}
+
+fn CFBundlePreflightExecutable(
+    env: &mut Environment,
+    bundle: CFBundleRef,
+    _error: MutVoidPtr,
+) -> bool {
+    let main: CFBundleRef = CFBundleGetMainBundle(env);
+    bundle == main
+}
+
+fn CFBundleUnloadExecutable(_env: &mut Environment, bundle: CFBundleRef) {
+    // There is no code to unload; treat as a successful no-op.
+    log_dbg!("CFBundleUnloadExecutable({:?}) -> ignored", bundle);
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFBundleGetAllBundles()),
     export_c_func!(CFBundleGetBundleWithIdentifier(_)),
@@ -542,4 +680,14 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFBundleCopyBundleLocalizations(_)),
     export_c_func!(CFBundleCopyPreferredLocalizationsFromArray(_)),
     export_c_func!(CFBundleCopyLocalizedString(_, _, _, _)),
+    export_c_func!(CFBundleGetDataPointerForName(_, _)),
+    export_c_func!(CFBundleGetDataPointersForNames(_, _, _)),
+    export_c_func!(CFBundleGetFunctionPointerForName(_, _)),
+    export_c_func!(CFBundleGetFunctionPointersForNames(_, _, _)),
+    export_c_func!(CFBundleGetLocalInfoDictionary(_)),
+    export_c_func!(CFBundleIsExecutableLoaded(_)),
+    export_c_func!(CFBundleLoadExecutable(_)),
+    export_c_func!(CFBundleLoadExecutableAndReturnError(_, _)),
+    export_c_func!(CFBundlePreflightExecutable(_, _)),
+    export_c_func!(CFBundleUnloadExecutable(_)),
 ];

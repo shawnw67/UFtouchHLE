@@ -19,15 +19,21 @@
 pub mod cf_allocator;
 pub mod cf_array;
 pub mod cf_attributed_string;
+pub mod cf_binary_heap;
 pub mod cf_bundle;
 pub mod cf_data;
 pub mod cf_dictionary;
+pub mod cf_error;
+pub mod cf_host;
 pub mod cf_locale;
+pub mod cf_net_service;
+pub mod cf_notification_center;
 pub mod cf_number;
 pub mod cf_preferences;
 pub mod cf_run_loop;
 pub mod cf_run_loop_source;
 pub mod cf_run_loop_timer;
+pub mod cf_set;
 pub mod cf_socket;
 pub mod cf_stream;
 pub mod cf_string;
@@ -38,6 +44,7 @@ pub mod time;
 
 #[derive(Default)]
 pub struct State {
+    pub cf_binary_heap: cf_binary_heap::CFBinaryHeapState,
     cf_uuid: cf_uuid::State,
     cf_allocator: cf_allocator::State,
 }
@@ -50,6 +57,9 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cf_run_loop_source::CLASSES,
         cf_stream::CLASSES,
         cf_uuid::CLASSES,
+        cf_host::CLASSES,
+        cf_net_service::CLASSES,
+        cf_socket::CLASSES,
     ],
     constant_exports: &[
         CONSTANTS,
@@ -57,6 +67,8 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cf_array::CONSTANTS,
         cf_bundle::CONSTANTS,
         cf_dictionary::CONSTANTS,
+        cf_error::CONSTANTS,
+        cf_set::CONSTANTS,
         cf_locale::CONSTANTS,
         cf_number::CONSTANTS,
         cf_preferences::CONSTANTS,
@@ -83,6 +95,12 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cf_type::FUNCTIONS,
         cf_url::FUNCTIONS,
         cf_uuid::FUNCTIONS,
+        cf_binary_heap::FUNCTIONS,
+        cf_error::FUNCTIONS,
+        cf_host::FUNCTIONS,
+        cf_net_service::FUNCTIONS,
+        cf_notification_center::FUNCTIONS,
+        cf_set::FUNCTIONS,
         time::FUNCTIONS,
     ],
 };
@@ -104,7 +122,7 @@ use crate::{export_c_func, impl_GuestRet_for_large_struct, msg};
 
 pub const kCFNotFound: CFIndex = -1;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 #[repr(C, packed)]
 pub struct CFRange {
     pub location: CFIndex,

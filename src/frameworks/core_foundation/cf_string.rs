@@ -12,12 +12,17 @@ use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::cf_array::CFArrayRef;
 use super::cf_dictionary::CFDictionaryRef;
 use super::cf_locale::CFLocaleRef;
+use super::CFRelease;
+use super::CFTypeRef;
 use super::{kCFNotFound, CFComparisonResult, CFIndex, CFOptionFlags, CFRange};
 use crate::abi::{DotDotDot, VaList};
 use crate::dyld::{export_c_func, FunctionExports};
+use crate::frameworks::foundation::NSNotFound;
 use crate::frameworks::foundation::{ns_string, unichar, NSRange, NSUInteger};
 use crate::libc::string::strlen;
+use crate::mem::MutVoidPtr;
 use crate::mem::{ConstPtr, ConstVoidPtr, GuestUSize, MutPtr};
+use crate::objc::nil;
 use crate::objc::{id, msg, msg_class, release, retain};
 use crate::Environment;
 
@@ -1007,6 +1012,281 @@ fn CFStringNormalize(
     assert!(str.is_ascii()); // TODO
 }
 
+fn CFStringCapitalize(env: &mut Environment, string: CFMutableStringRef, _locale: CFLocaleRef) {
+    if string.is_null() {
+        return;
+    }
+
+    // See CFStringLowercase: locale-specific rules are not emulated.
+    let capitalized: id = msg![env;
+    string capitalizedString];
+    () = msg![env; string setString:capitalized];
+}
+
+fn CFStringCompareWithOptionsAndLocale(
+    env: &mut Environment,
+    a: CFStringRef,
+    b: CFStringRef,
+    range: CFRange,
+    flags: CFStringCompareFlags,
+    locale: CFLocaleRef,
+) -> CFComparisonResult {
+    if a.is_null() || b.is_null() {
+        return if a.is_null() && b.is_null() {
+            0
+        } else if a.is_null() {
+            -1
+        } else {
+            1
+        };
+    }
+
+    let ns_range = match safe_cf_range_to_ns_range(range) {
+        Some(r) => r,
+        None => return 0,
+    };
+    let a_sub: id = msg![env; a substringWithRange:ns_range];
+
+    if locale.is_null() {
+        msg![env;
+        a_sub compare:b options:flags]
+    } else {
+        msg![env;
+        a_sub compare:b options:flags range:(NSRange { location: 0, length: msg![env; b length] }) locale:locale]
+    }
+}
+
+fn CFStringCreateMutableWithExternalCharactersNoCopy(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    chars: MutPtr<unichar>,
+    num_chars: CFIndex,
+    capacity: CFIndex,
+    external_characters_allocator: CFAllocatorRef,
+) -> CFMutableStringRef {
+    if !validate_allocator(env, allocator) {
+        return nil;
+    }
+
+    // Not fully supported - create a regular mutable copy
+    let _ = (chars, external_characters_allocator);
+    let string = CFStringCreateMutable(env, allocator, capacity);
+
+    if !string.is_null() && !chars.is_null() && num_chars > 0 {
+        let temp = CFStringCreateWithCharacters(env, allocator, chars.cast_const(), num_chars);
+        if !temp.is_null() {
+            () = msg![env; string appendString:temp];
+            CFRelease(env, temp);
+        }
+    }
+
+    string
+}
+
+fn CFStringFindCharacterFromSet(
+    env: &mut Environment,
+    string: CFStringRef,
+    set: CFTypeRef, // CFCharacterSetRef
+    range_to_search: CFRange,
+    options: CFStringCompareFlags,
+    result: MutPtr<CFRange>,
+) -> bool {
+    if string.is_null() || set.is_null() {
+        return false;
+    }
+
+    let search_range = match safe_cf_range_to_ns_range(range_to_search) {
+        Some(r) => r,
+        None => return false,
+    };
+    let found_range: NSRange =
+        msg![env; string rangeOfCharacterFromSet:set options:options range:search_range];
+
+    if found_range.location == NSNotFound as NSUInteger {
+        return false;
+    }
+
+    if !result.is_null() {
+        let cf_range = CFRange {
+            location: found_range.location.try_into().unwrap_or(kCFNotFound),
+            length: found_range.length.try_into().unwrap_or(0),
+        };
+        env.mem.write(result, cf_range);
+    }
+
+    true
+}
+
+fn CFStringGetCharacterFromInlineBuffer(
+    env: &mut Environment,
+    buf: MutVoidPtr,
+    idx: CFIndex,
+) -> unichar {
+    if buf.is_null() || idx < 0 {
+        return 0;
+    }
+
+    // Apple's 32-bit layout of CFStringInlineBuffer (from CFString.h):
+    //     UniChar buffer[32];
+    //     CFStringRef theString;
+    //     const UniChar *chars;
+    //     CFRange rangeToBuffer; // two CFIndex fields
+    //     CFIndex bufferIndex;
+    //     CFIndex stringIndex;
+    // The caller (usually inlined guest code) fills the cache itself, so we
+    // just fetch the character from the referenced string, which is always
+    // correct regardless of what is currently cached.
+    const INLINE_BUFFER_STRING_OFFSET: GuestUSize = 32 * 2;
+
+    let the_string_ptr: MutPtr<CFStringRef> =
+        (buf.cast::<u8>() + INLINE_BUFFER_STRING_OFFSET).cast();
+    let the_string: CFStringRef = env.mem.read(the_string_ptr);
+    if the_string.is_null() {
+        return 0;
+    }
+
+    let length = CFStringGetLength(env, the_string);
+    if idx >= length {
+        return 0;
+    }
+
+    let idx_u: NSUInteger = idx.try_into().unwrap();
+    msg![env;
+    the_string characterAtIndex:idx_u]
+}
+
+/// Returns the encoding in which the string is most efficiently stored.
+///
+/// CoreFoundation's `CFString` may hold its bytes as ASCII, UTF-16, or a
+/// platform encoding; this getter lets callers grab those bytes without a
+/// conversion. We bridge into `NSString`'s host object via
+/// [`ns_string::fastest_encoding`] and translate the result back to a
+/// `CFStringEncoding`.
+fn CFStringGetFastestEncoding(env: &mut Environment, the_string: CFStringRef) -> CFStringEncoding {
+    if the_string.is_null() {
+        // Apple's real implementation also tolerates NULL by returning
+        // `kCFStringEncodingASCII` rather than crashing.
+        return kCFStringEncodingASCII;
+    }
+    let ns_enc = ns_string::fastest_encoding(env, the_string);
+    CFStringConvertNSStringEncodingToEncoding(env, ns_enc)
+}
+
+fn CFStringGetMostCompatibleMacStringEncoding(
+    _env: &mut Environment,
+    encoding: CFStringEncoding,
+) -> CFStringEncoding {
+    // Return closest Mac encoding
+    match encoding {
+        kCFStringEncodingUTF8
+        | kCFStringEncodingUTF16
+        | kCFStringEncodingUTF16BE
+        | kCFStringEncodingUTF16LE => kCFStringEncodingUTF8,
+        kCFStringEncodingASCII => kCFStringEncodingASCII,
+        _ => kCFStringEncodingMacRoman,
+    }
+}
+
+/// Returns the smallest encoding that can losslessly represent the string.
+///
+/// Mirrors `CFStringGetSmallestEncoding`. ASCII-only content reports
+/// `kCFStringEncodingASCII`; anything with non-ASCII code points reports
+/// `kCFStringEncodingUTF8` (UTF-8 covers the full Unicode range).
+fn CFStringGetSmallestEncoding(env: &mut Environment, the_string: CFStringRef) -> CFStringEncoding {
+    if the_string.is_null() {
+        return kCFStringEncodingASCII;
+    }
+    let ns_enc = ns_string::smallest_encoding(env, the_string);
+    CFStringConvertNSStringEncodingToEncoding(env, ns_enc)
+}
+
+fn CFStringTransform(
+    env: &mut Environment,
+    string: CFMutableStringRef,
+    _range: MutPtr<CFRange>,
+    transform: CFStringRef,
+    reverse: bool,
+) -> bool {
+    if string.is_null() || transform.is_null() {
+        return false;
+    }
+
+    let transform_name = ns_string::to_rust_string(env, transform);
+    log_dbg!(
+        "CFStringTransform('{}', reverse={})",
+        transform_name,
+        reverse
+    );
+
+    // Apple's public constants (e.g. kCFStringTransformStripDiacritics) hold
+    // names without a "StringTransform" prefix, but guest code may also pass
+    // the prefixed or ICU-style spelling; accept all of them.
+    let name = transform_name
+        .strip_prefix("StringTransform")
+        .unwrap_or(&transform_name);
+
+    // Approximate but adequate for the transforms real apps actually use.
+    // Transliterations we cannot perform (e.g. CJK -> Latin) are reported as
+    // success with the string unchanged, so callers do not take error paths.
+    match name {
+        "StripDiacritics" | "StripCombiningMarks" | "Latin-ASCII" => {
+            // NSDiacriticInsensitiveSearch strips accents/diacritics.
+            let folded: id = msg![env;
+            string
+                stringByFoldingWithOptions:128 // NSCaseInsensitiveSearch + NSDiacriticInsensitiveSearch
+                locale:nil];
+            () = msg![env; string setString:folded];
+            true
+        }
+        "ToLatin" | "Any-Latin" => {
+            let content = ns_string::to_rust_string(env, string);
+            if !content.bytes().all(|b| b < 0x80) {
+                // Best-effort: fold away diacritics; leave other scripts
+                // untouched.
+                let folded: id = msg![env;
+                string
+                    stringByFoldingWithOptions:128 // NSCaseInsensitiveSearch + NSDiacriticInsensitiveSearch
+                    locale:nil];
+                () = msg![env; string setString:folded];
+            }
+            true
+        }
+        "Lower" => {
+            let lowered: id = msg![env; string lowercaseString];
+            () = msg![env; string setString:lowered];
+            true
+        }
+        "Upper" => {
+            let uppered: id = msg![env; string uppercaseString];
+            () = msg![env; string setString:uppered];
+            true
+        }
+        _ => {
+            log_dbg!(
+                "CFStringTransform: unsupported transform '{}'; returning false",
+                name
+            );
+            false
+        }
+    }
+}
+
+fn safe_cf_range_to_ns_range(range: CFRange) -> Option<NSRange> {
+    if range.location < 0 || range.length < 0 {
+        return None;
+    }
+    Some(NSRange {
+        location: range.location.try_into().ok()?,
+        length: range.length.try_into().ok()?,
+    })
+}
+
+fn validate_allocator(env: &mut Environment, allocator: CFAllocatorRef) -> bool {
+    allocator == kCFAllocatorDefault
+        || allocator.is_null()
+        || env.mem.read(allocator).is_system_default()
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringRetain(_)),
     export_c_func!(CFStringIsEncodingAvailable(_)),
@@ -1064,4 +1344,19 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringCreateWithPascalString(_, _, _)),
     export_c_func!(CFStringGetPascalString(_, _, _, _)),
     export_c_func!(CFStringNormalize(_, _)),
+    export_c_func!(CFStringCapitalize(_, _)),
+    export_c_func!(CFStringCompareWithOptionsAndLocale(_, _, _, _, _)),
+    export_c_func!(CFStringCreateMutableWithExternalCharactersNoCopy(
+        _,
+        _,
+        _,
+        _,
+        _
+    )),
+    export_c_func!(CFStringFindCharacterFromSet(_, _, _, _, _)),
+    export_c_func!(CFStringGetCharacterFromInlineBuffer(_, _)),
+    export_c_func!(CFStringGetFastestEncoding(_)),
+    export_c_func!(CFStringGetMostCompatibleMacStringEncoding(_)),
+    export_c_func!(CFStringGetSmallestEncoding(_)),
+    export_c_func!(CFStringTransform(_, _, _, _)),
 ];

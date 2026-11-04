@@ -13,6 +13,9 @@
 
 use crate::dyld::{export_c_func, FunctionExports, HostConstant, HostDylib};
 use crate::font::Font;
+use crate::font::WrapMode;
+use crate::frameworks::core_foundation::cf_array::CFArrayRef;
+use crate::frameworks::core_foundation::cf_attributed_string::CFAttributedStringRef;
 use crate::frameworks::core_foundation::{CFIndex, CFRange, CFRelease, CFTypeRef};
 use crate::frameworks::core_graphics::cg_affine_transform::CGAffineTransform;
 use crate::frameworks::core_graphics::cg_context::{show_glyphs_with_font, CGContextRef};
@@ -20,8 +23,17 @@ use crate::frameworks::core_graphics::cg_font::{
     from_font, CGFontHostObject, CGFontRef, CGFontRetain, CGGlyph,
 };
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
+use crate::frameworks::foundation::ns_string::from_rust_string;
+use crate::frameworks::foundation::ns_string::get_static_str;
+use crate::frameworks::foundation::ns_string::to_rust_string;
 use crate::frameworks::foundation::{ns_array, ns_string, unichar, NSRange, NSUInteger};
+use crate::frameworks::uikit::ui_font::font_for_text;
+use crate::frameworks::uikit::ui_font::is_uifont;
+use crate::mem::ConstVoidPtr;
+use crate::mem::Ptr;
 use crate::mem::{guest_size_of, ConstPtr, GuestUSize, MutPtr};
+use crate::objc::autorelease;
+use crate::objc::msg_class;
 use crate::objc::{id, msg, nil, objc_classes, release, retain, ClassExports, HostObject};
 use crate::Environment;
 
@@ -41,6 +53,8 @@ struct CTFontHostObject {
     cg_fonts: [CGFontRef; 2],
     size: CGFloat,
     uses_fallback: bool,
+    /// The `UIFont` this was created from, if any.
+    font: id,
 }
 
 struct CTLineHostObject {
@@ -70,7 +84,268 @@ impl HostObject for CTTypesetterHostObject {}
 const FALLBACK_GLYPH: CGGlyph = 0x8000;
 impl HostObject for CTFontHostObject {}
 
-const CLASSES: ClassExports = objc_classes! {
+/// Opaque CoreText font descriptor reference.
+pub type CTFontDescriptorRef = crate::objc::id;
+
+#[derive(Clone, Default)]
+struct CTFrameHostObject {
+    /// The single CTLine we produce for the (whole) attributed string. Our
+    /// layout engine doesn't break a framesetter's string across multiple
+    /// lines/columns, so a frame holds exactly one line. This matches what
+    /// the apps in the corpus need (they mostly measure / draw short labels).
+    line: id,
+    /// The string range covered by the frame, mirrored back from the
+    /// attributed string for `CTFrameGetStringRange`/`GetVisibleStringRange`.
+    range: CFRange,
+}
+
+impl HostObject for CTFrameHostObject {}
+
+/// Opaque CoreText frame reference.
+pub type CTFrameRef = crate::objc::id;
+
+#[derive(Clone, Default)]
+struct CTFramesetterHostObject {
+    attr_string: id,
+}
+
+impl HostObject for CTFramesetterHostObject {}
+
+/// Opaque CoreText framesetter reference.
+pub type CTFramesetterRef = crate::objc::id;
+
+/// Opaque CoreText line reference.
+pub type CTLineRef = crate::objc::id;
+
+/// Opaque paragraph style reference.
+pub type CTParagraphStyleRef = crate::objc::id;
+
+fn alloc_descriptor(env: &mut Environment, attrs: id) -> CTFontDescriptorRef {
+    let class = env
+        .objc
+        .get_known_class("_Podroid_CTFontDescriptor", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CTFontDescriptorHostObject { attrs }),
+        &mut env.mem,
+    )
+}
+
+fn alloc_font(env: &mut Environment, font: id) -> CTFontRef {
+    let name: id = msg![env; font fontName];
+    let size: CGFloat = msg![env; font pointSize];
+    let ct_font = CTFontCreateWithName(env, name, size, Ptr::null());
+    env.objc.borrow_mut::<CTFontHostObject>(ct_font).font = font;
+    ct_font
+}
+
+fn alloc_frame(env: &mut Environment, line: id, range: CFRange) -> CTFrameRef {
+    let class = env.objc.get_known_class("_Podroid_CTFrame", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CTFrameHostObject { line, range }),
+        &mut env.mem,
+    )
+}
+
+fn alloc_framesetter(env: &mut Environment, attr_string: id) -> CTFramesetterRef {
+    let class = env
+        .objc
+        .get_known_class("_Podroid_CTFramesetter", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CTFramesetterHostObject { attr_string }),
+        &mut env.mem,
+    )
+}
+
+fn alloc_line(env: &mut Environment, text: id, font: id, attributes: id) -> CTLineRef {
+    let class = env.objc.get_known_class("_Podroid_CTLine", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CTLineHostObject {
+            text,
+            font,
+            attributes,
+            runs: nil,
+        }),
+        &mut env.mem,
+    )
+}
+
+fn descriptor_attrs(env: &mut Environment, descriptor: CTFontDescriptorRef) -> id {
+    env.objc
+        .borrow::<CTFontDescriptorHostObject>(descriptor)
+        .attrs
+}
+
+fn font_from_descriptor(
+    env: &mut Environment,
+    descriptor: CTFontDescriptorRef,
+    size: CGFloat,
+) -> id {
+    let attrs = descriptor_attrs(env, descriptor);
+    if attrs == nil {
+        return msg_class![env; UIFont systemFontOfSize:size];
+    }
+    let font_name_key =
+        crate::frameworks::foundation::ns_string::get_static_str(env, "NSFontNameAttribute");
+    let family_key =
+        crate::frameworks::foundation::ns_string::get_static_str(env, "NSFontFamilyAttribute");
+    let size_key =
+        crate::frameworks::foundation::ns_string::get_static_str(env, "NSFontSizeAttribute");
+    let mut name: id = nil;
+    let by_name: id = msg![env; attrs objectForKey:font_name_key];
+    if by_name != nil {
+        name = by_name;
+    } else {
+        let family: id = msg![env; attrs objectForKey:family_key];
+        if family != nil {
+            let family_str = to_rust_string(env, family).into_owned();
+            name = match family_str.as_str() {
+                "Courier New" => get_static_str(env, "CourierNewPSMT"),
+                "Helvetica" => get_static_str(env, "Helvetica"),
+                "Times New Roman" => get_static_str(env, "TimesNewRomanPSMT"),
+                _ => nil,
+            };
+        }
+    }
+    let font_size: CGFloat = if size > 0.0 {
+        size
+    } else {
+        let size_num: id = msg![env; attrs objectForKey:size_key];
+        if size_num != nil {
+            msg![env; size_num floatValue]
+        } else {
+            12.0
+        }
+    };
+    if name == nil {
+        msg_class![env; UIFont systemFontOfSize:font_size]
+    } else {
+        msg_class![env; UIFont fontWithName:name size:font_size]
+    }
+}
+
+fn line_font(env: &mut Environment, line: CTLineRef) -> id {
+    env.objc.borrow::<CTLineHostObject>(line).font
+}
+
+fn line_text(env: &mut Environment, line: CTLineRef) -> id {
+    env.objc.borrow::<CTLineHostObject>(line).text
+}
+
+fn string_and_font_from_attr_string(
+    env: &mut Environment,
+    attr_string: CFAttributedStringRef,
+) -> (id, id, id) {
+    let (string, attrs) = attributed_string_parts(env, attr_string);
+    let font = if attrs == nil {
+        msg_class![env; UIFont systemFontOfSize:12.0]
+    } else {
+        let key = get_static_str(env, "NSFont");
+        let maybe_font = msg![env; attrs objectForKey:key];
+        let ui_font = if maybe_font == nil || is_uifont(env, maybe_font) {
+            maybe_font
+        } else {
+            env.objc
+                .get_host_object(maybe_font)
+                .and_then(|host| host.as_any().downcast_ref::<CTFontHostObject>())
+                .map(|host| host.font)
+                .unwrap_or(nil)
+        };
+        if ui_font == nil {
+            msg_class![env; UIFont systemFontOfSize:12.0]
+        } else {
+            ui_font
+        }
+    };
+    (string, font, attrs)
+}
+
+/// The file in `/System/Library/Fonts/Cache` (see `fs.rs`) that stands in for
+/// a font with this name or family and style. touchHLE ships the metric
+/// compatible Liberation fonts, plus Arial and a bold Helvetica.
+fn system_font_file(name: &str, style: &str) -> &'static str {
+    let name = name.to_ascii_lowercase();
+    let style = style.to_ascii_lowercase();
+    let bold = name.contains("bold") || style.contains("bold");
+    let italic = ["italic", "oblique"]
+        .iter()
+        .any(|word| name.contains(word) || style.contains(word));
+    let family = if name.contains("courier") || name.contains("mono") {
+        "LiberationMono"
+    } else if ["times", "georgia", "serif"]
+        .iter()
+        .any(|word| name.contains(word))
+        && !name.contains("sans")
+    {
+        "LiberationSerif"
+    } else if name.contains("helvetica") && bold && !italic {
+        return "helvetica-bold.ttf";
+    } else if name.contains("arial") && !bold && !italic {
+        return "Arial.ttf";
+    } else {
+        "LiberationSans"
+    };
+    match (family, bold, italic) {
+        ("LiberationMono", false, false) => "LiberationMono-Regular.ttf",
+        ("LiberationMono", true, false) => "LiberationMono-Bold.ttf",
+        ("LiberationMono", false, true) => "LiberationMono-Italic.ttf",
+        ("LiberationMono", true, true) => "LiberationMono-BoldItalic.ttf",
+        ("LiberationSerif", false, false) => "LiberationSerif-Regular.ttf",
+        ("LiberationSerif", true, false) => "LiberationSerif-Bold.ttf",
+        ("LiberationSerif", false, true) => "LiberationSerif-Italic.ttf",
+        ("LiberationSerif", true, true) => "LiberationSerif-BoldItalic.ttf",
+        (_, false, false) => "LiberationSans-Regular.ttf",
+        (_, true, false) => "LiberationSans-Bold.ttf",
+        (_, false, true) => "LiberationSans-Italic.ttf",
+        (_, true, true) => "LiberationSans-BoldItalic.ttf",
+    }
+}
+
+/// Resolve a `CTFontRef` to the `UIFont` backing it. Also accepts a bare
+/// `UIFont`, which some apps pass where a `CTFontRef` is expected.
+fn ui_font_for_ct_font(env: &mut Environment, font: CTFontRef) -> id {
+    if font == nil {
+        return nil;
+    }
+    if is_uifont(env, font) {
+        return font;
+    }
+    env.objc
+        .get_host_object(font)
+        .and_then(|host| host.as_any().downcast_ref::<CTFontHostObject>())
+        .map(|host| host.font)
+        .unwrap_or(nil)
+}
+
+#[derive(Clone, Default)]
+struct CTFontDescriptorHostObject {
+    attrs: id,
+}
+
+impl HostObject for CTFontDescriptorHostObject {}
+
+fn attributed_string_parts(env: &mut Environment, attr_string: CFAttributedStringRef) -> (id, id) {
+    if attr_string == nil {
+        return (nil, nil);
+    }
+    let string: id = msg![env; attr_string string];
+    if string == nil {
+        return (nil, nil);
+    }
+    let length: NSUInteger = msg![env; string length];
+    let attrs = if length == 0 {
+        nil
+    } else {
+        let range_ptr: MutPtr<NSRange> = MutPtr::null();
+        msg![env; attr_string attributesAtIndex:(0u32) effectiveRange:range_ptr]
+    };
+    (string, attrs)
+}
+
+pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
 
@@ -113,6 +388,24 @@ const CLASSES: ClassExports = objc_classes! {
 - (())dealloc {
     let attributed = env.objc.borrow::<CTTypesetterHostObject>(this).attributed;
     release(env, attributed);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+@end
+
+@implementation _Podroid_CTFontDescriptor: NSObject
+- (())dealloc {
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+@end
+
+@implementation _Podroid_CTFramesetter: NSObject
+- (())dealloc {
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+@end
+
+@implementation _Podroid_CTFrame: NSObject
+- (())dealloc {
     env.objc.dealloc_object(this, &mut env.mem)
 }
 @end
@@ -179,6 +472,7 @@ fn CTFontCreateWithName(
         cg_fonts,
         size,
         uses_fallback: true,
+        font: nil,
     });
     let class = env.objc.get_known_class("_Podroid_CTFont", &mut env.mem);
     env.objc.alloc_object(class, host_object, &mut env.mem)
@@ -596,6 +890,7 @@ fn CTFontCreateWithGraphicsFont(
             cg_fonts,
             size,
             uses_fallback: false,
+            font: nil,
         }),
         &mut env.mem,
     )
@@ -753,7 +1048,493 @@ fn CTFontDrawGlyphs(
     env.mem.free(glyph_ptr.cast());
 }
 
-const FUNCTIONS: FunctionExports = &[
+fn CTFontCopyPostScriptName(env: &mut Environment, font: CTFontRef) -> id {
+    if font.is_null() {
+        return nil;
+    }
+    let ui_font = env.objc.borrow::<CTFontHostObject>(font).font;
+    if ui_font == nil {
+        return nil;
+    }
+    let name: id = msg![env; ui_font fontName];
+    if name == nil {
+        nil
+    } else {
+        retain(env, name)
+    }
+}
+
+/// `CTFontRef CTFontCreateCopyWithAttributes(CTFontRef font, CGFloat size,
+///     const CGAffineTransform *matrix, CTFontDescriptorRef attributes)`
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1509393-ctfontcreatecopywithattributes>
+///
+/// > Returns a new font with additional attributes based on the original
+/// > font. [...] `size`: The point size for the font reference. If 0.0 is
+/// > specified, the original font's size is preserved.
+///
+/// The original font's name is kept unless `attributes` carries a font name
+/// or family of its own, in which case those win (descriptor attributes
+/// override the original font's, as on iOS). Like the other CTFont
+/// constructors here the transform matrix is not applied: touchHLE's text
+/// renderer only supports untransformed fonts.
+fn CTFontCreateCopyWithAttributes(
+    env: &mut Environment,
+    font: CTFontRef,
+    size: CGFloat,
+    _matrix: ConstPtr<CGAffineTransform>,
+    attributes: CTFontDescriptorRef,
+) -> CTFontRef {
+    let original = ui_font_for_ct_font(env, font);
+    if original == nil {
+        return nil;
+    }
+    let size: CGFloat = if size > 0.0 {
+        size
+    } else {
+        msg![env; original pointSize]
+    };
+
+    let overrides_face = attributes != nil && {
+        let attrs = descriptor_attrs(env, attributes);
+        attrs != nil && {
+            let name_key = get_static_str(env, "NSFontNameAttribute");
+            let family_key = get_static_str(env, "NSFontFamilyAttribute");
+            let by_name: id = msg![env; attrs objectForKey:name_key];
+            let by_family: id = msg![env; attrs objectForKey:family_key];
+            by_name != nil || by_family != nil
+        }
+    };
+
+    let new_font: id = if overrides_face {
+        font_from_descriptor(env, attributes, size)
+    } else {
+        msg![env; original fontWithSize:size]
+    };
+    let new_font = if new_font == nil { original } else { new_font };
+    retain(env, new_font);
+    alloc_font(env, new_font)
+}
+
+fn CTFontCreateWithFontDescriptor(
+    env: &mut Environment,
+    descriptor: CTFontDescriptorRef,
+    size: CGFloat,
+    _matrix: ConstVoidPtr,
+) -> CTFontRef {
+    let font = font_from_descriptor(env, descriptor, size);
+    retain(env, font);
+    alloc_font(env, font)
+}
+
+/// `CFTypeRef CTFontDescriptorCopyAttribute(CTFontDescriptorRef descriptor,
+///     CFStringRef attribute)`. Attributes the descriptor was created with are
+/// returned as is. The font file URL is filled in from the bundled fonts:
+/// engines such as Unity load the font file themselves through it, and draw
+/// no text at all without one.
+fn CTFontDescriptorCopyAttribute(
+    env: &mut Environment,
+    descriptor: CTFontDescriptorRef,
+    attribute: id,
+) -> CFTypeRef {
+    if descriptor == nil || attribute == nil {
+        return nil;
+    }
+    let attrs = descriptor_attrs(env, descriptor);
+    if attrs != nil {
+        let value: id = msg![env; attrs objectForKey:attribute];
+        if value != nil {
+            return retain(env, value);
+        }
+    }
+    let url_key = get_static_str(env, "NSCTFontFileURLAttribute");
+    let is_url_key: bool = msg![env; attribute isEqualToString:url_key];
+    if !is_url_key {
+        return nil;
+    }
+    let mut attr_string = |key: &'static str| {
+        if attrs == nil {
+            return None;
+        }
+        let key = get_static_str(env, key);
+        let value: id = msg![env; attrs objectForKey:key];
+        (value != nil).then(|| to_rust_string(env, value).into_owned())
+    };
+    let name = attr_string("NSFontNameAttribute")
+        .or_else(|| attr_string("NSFontFamilyAttribute"))
+        .unwrap_or_default();
+    let style = attr_string("NSFontFaceAttribute").unwrap_or_default();
+    let path = format!(
+        "/System/Library/Fonts/Cache/{}",
+        system_font_file(&name, &style)
+    );
+    let path = from_rust_string(env, path);
+    let url: id = msg_class![env; NSURL fileURLWithPath:path];
+    release(env, path);
+    retain(env, url)
+}
+
+/// `CTFontDescriptorCreateMatchingFontDescriptor` — the single best match
+/// for a descriptor. Every name falls back to one of the bundled fonts (see
+/// [CTFontDescriptorCopyAttribute]), so the descriptor matches itself.
+fn CTFontDescriptorCreateMatchingFontDescriptor(
+    env: &mut Environment,
+    descriptor: CTFontDescriptorRef,
+    _mandatory_attributes: CFTypeRef, // CFSetRef of attribute keys
+) -> CTFontDescriptorRef {
+    if descriptor == nil {
+        return nil;
+    }
+    retain(env, descriptor)
+}
+
+/// `CTFontDescriptorCreateMatchingFontDescriptors` — returns descriptors
+/// matching the given one under `attributes` (a set of mandatory keys).
+/// touchHLE's font stack only exposes the built-in system fonts, so no
+/// additional descriptors can ever match: return an empty (non-null)
+/// CFArray, which is what a real system returns when nothing matches.
+/// Returning NULL here makes some engines treat Core Text as broken and
+/// abort font fallback entirely.
+fn CTFontDescriptorCreateMatchingFontDescriptors(
+    env: &mut Environment,
+    _descriptor: CTFontDescriptorRef,
+    _attributes: CFTypeRef, // CFSetRef of mandatory attribute keys
+) -> CFArrayRef {
+    let empty: CFArrayRef = msg_class![env; NSArray array];
+    retain(env, empty);
+    empty
+}
+
+fn CTFontDescriptorCreateWithAttributes(
+    env: &mut Environment,
+    attributes: id,
+) -> CTFontDescriptorRef {
+    let attrs = if attributes == nil {
+        msg_class![env; NSDictionary dictionary]
+    } else {
+        attributes
+    };
+    retain(env, attrs);
+    alloc_descriptor(env, attrs)
+}
+
+/// `bool CTFontManagerRegisterGraphicsFont(CGFontRef font, CFErrorRef *error)`
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1499468-ctfontmanagerregistergraphicsfon>
+fn CTFontManagerRegisterGraphicsFont(
+    env: &mut Environment,
+    font: ConstVoidPtr,             // CGFontRef
+    error: MutPtr<crate::objc::id>, // CFErrorRef*
+) -> bool {
+    if !error.is_null() {
+        env.mem.write(error, crate::objc::nil);
+    }
+    if font.is_null() {
+        return false;
+    }
+    true
+}
+
+/// `void CTFrameDraw(CTFrameRef frame, CGContextRef context)`
+///
+/// Draws the frame's lines into the context. We draw our single line at the
+/// origin, matching `CTLineDraw`.
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1509601-ctframedraw>
+fn CTFrameDraw(env: &mut Environment, frame: CTFrameRef, context: id) {
+    if frame.is_null() || context.is_null() {
+        return;
+    }
+    let line = env.objc.borrow::<CTFrameHostObject>(frame).line;
+    if line != nil {
+        CTLineDraw(env, line, context);
+    }
+}
+
+/// `void CTFrameGetLineOrigins(CTFrameRef frame, CFRange range, CGPoint
+/// origins[])`
+///
+/// Writes the origin of each line into `origins`. Our frame is a single line
+/// whose origin sits at the top-left of the frame's coordinate space.
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1509559-ctframegetlineorigins>
+fn CTFrameGetLineOrigins(
+    env: &mut Environment,
+    frame: CTFrameRef,
+    range: CFRange,
+    origins: MutPtr<CGPoint>,
+) {
+    if frame.is_null() || origins.is_null() {
+        return;
+    }
+    let line = env.objc.borrow::<CTFrameHostObject>(frame).line;
+    let line_count: i32 = if line != nil { 1 } else { 0 };
+    let count = if range.length == 0 {
+        line_count
+    } else {
+        range.length.min(line_count)
+    };
+    for i in 0..count as u32 {
+        env.mem.write(origins + i, CGPoint { x: 0.0, y: 0.0 });
+    }
+}
+
+/// `CFArrayRef CTFrameGetLines(CTFrameRef frame)`
+///
+/// Returns the array of `CTLine`s that make up the frame. touchHLE lays the
+/// frame out as a single line, so this returns a one-element array.
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1509601-ctframegetlines>
+fn CTFrameGetLines(env: &mut Environment, frame: CTFrameRef) -> id {
+    if frame.is_null() {
+        return nil;
+    }
+    let line = env.objc.borrow::<CTFrameHostObject>(frame).line;
+    let arr: id = msg_class![env; NSMutableArray arrayWithCapacity:1u32];
+    if line != nil {
+        () = msg![env; arr addObject:line];
+    }
+    let immutable: id = msg![env; arr copy];
+    autorelease(env, immutable)
+}
+
+/// `CFRange CTFrameGetStringRange(CTFrameRef frame)`
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1509593-ctframegetstringrange>
+fn CTFrameGetStringRange(env: &mut Environment, frame: CTFrameRef) -> CFRange {
+    if frame.is_null() {
+        return CFRange {
+            location: 0,
+            length: 0,
+        };
+    }
+    env.objc.borrow::<CTFrameHostObject>(frame).range
+}
+
+/// `CFRange CTFrameGetVisibleStringRange(CTFrameRef frame)`
+///
+/// We lay the entire string into the (single-line) frame, so the visible
+/// range equals the full string range.
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1509563-ctframegetvisiblestringrange>
+fn CTFrameGetVisibleStringRange(env: &mut Environment, frame: CTFrameRef) -> CFRange {
+    if frame.is_null() {
+        return CFRange {
+            location: 0,
+            length: 0,
+        };
+    }
+    env.objc.borrow::<CTFrameHostObject>(frame).range
+}
+
+/// `CTFrameRef CTFramesetterCreateFrame(CTFramesetterRef framesetter,
+///     CFRange stringRange, CGPathRef path, CFDictionaryRef frameAttributes)`
+///
+/// Creates a frame laying the framesetter's attributed string into the
+/// supplied path's bounding region. touchHLE represents the laid-out frame as
+/// a single `CTLine` over the whole text; `CTFrameGetLines` then returns it.
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1509702-ctframesettercreateframe>
+fn CTFramesetterCreateFrame(
+    env: &mut Environment,
+    framesetter: CTFramesetterRef,
+    string_range: CFRange,
+    _path: id,
+    _frame_attributes: id,
+) -> CTFrameRef {
+    if framesetter.is_null() {
+        return nil;
+    }
+    let attr_string = env
+        .objc
+        .borrow::<CTFramesetterHostObject>(framesetter)
+        .attr_string;
+    let (text, font, attributes) = string_and_font_from_attr_string(env, attr_string);
+    retain(env, text);
+    retain(env, font);
+    retain(env, attributes);
+    let line = alloc_line(env, text, font, attributes);
+    // alloc_line took the retains above; the frame owns the line.
+    let full_len = {
+        let len: NSUInteger = msg![env; text length];
+        len as i32
+    };
+    let range = CFRange {
+        location: string_range.location,
+        length: if string_range.length == 0 {
+            (full_len - string_range.location).max(0)
+        } else {
+            string_range.length
+        },
+    };
+    alloc_frame(env, line, range)
+}
+
+/// `CTFramesetterRef
+/// CTFramesetterCreateWithAttributedString(CFAttributedStringRef string)`
+///
+/// Creates a framesetter that manages laying the attributed string into
+/// frames. We retain the attributed string and wrap it in a host object so
+/// frame creation and size suggestion can re-derive the text and font.
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1509611-ctframesettercreatewithattribute>
+fn CTFramesetterCreateWithAttributedString(
+    env: &mut Environment,
+    string: CFAttributedStringRef,
+) -> CTFramesetterRef {
+    if string.is_null() {
+        return nil;
+    }
+    retain(env, string);
+    alloc_framesetter(env, string)
+}
+
+/// `CGSize CTFramesetterSuggestFrameSizeWithConstraints(CTFramesetterRef
+/// framesetter, CFRange stringRange, CFDictionaryRef frameAttributes, CGSize
+/// constraints,
+///     CFRange *fitRange)`
+///
+/// Determines the frame size needed for a string range. We measure the text
+/// with the backing font, wrapping at the constraint width when one is given
+/// (a width <= 0 or non-finite means "unconstrained"), and report the fit
+/// range as the whole string. This produces correct sizing for the
+/// single-/multi-line labels the apps in the corpus lay out.
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/ctframesettersuggestframesizewithconstraints(_:_:_:_:_:)>
+fn CTFramesetterSuggestFrameSizeWithConstraints(
+    env: &mut Environment,
+    framesetter: CTFramesetterRef,
+    string_range: CFRange,
+    _frame_attributes: id,
+    constraints: CGSize,
+    fit_range: MutPtr<CFRange>,
+) -> CGSize {
+    if framesetter.is_null() {
+        if !fit_range.is_null() {
+            env.mem.write(
+                fit_range,
+                CFRange {
+                    location: 0,
+                    length: 0,
+                },
+            );
+        }
+        return CGSize {
+            width: 0.0,
+            height: 0.0,
+        };
+    }
+    let attr_string = env
+        .objc
+        .borrow::<CTFramesetterHostObject>(framesetter)
+        .attr_string;
+    let (text, font, _) = string_and_font_from_attr_string(env, attr_string);
+    let size: CGFloat = msg![env; font pointSize];
+    let text_str = to_rust_string(env, text).into_owned();
+    let font_obj = font_for_text(env, font, &text_str).unwrap_or_else(Font::sans_regular);
+
+    let wrap = if constraints.width.is_finite() && constraints.width > 0.0 {
+        Some((constraints.width, WrapMode::Word))
+    } else {
+        None
+    };
+    let (w, h) = font_obj.calculate_text_size(size, &text_str, wrap);
+
+    let full_len = {
+        let len: NSUInteger = msg![env; text length];
+        len as i32
+    };
+    if !fit_range.is_null() {
+        // Report the entire requested range as fitting. A length of 0 in the
+        // requested range means "to the end of the string" per Apple's docs.
+        let length = if string_range.length == 0 {
+            (full_len - string_range.location).max(0)
+        } else {
+            string_range.length
+        };
+        env.mem.write(
+            fit_range,
+            CFRange {
+                location: string_range.location,
+                length,
+            },
+        );
+    }
+    CGSize {
+        width: w,
+        height: h,
+    }
+}
+
+fn CTLineGetImageBounds(env: &mut Environment, line: CTLineRef, _context: id) -> CGRect {
+    if line.is_null() {
+        return CGRect::default();
+    }
+    let text = line_text(env, line);
+    let font = line_font(env, line);
+    let size: CGFloat = msg![env; font pointSize];
+    let ascent_val: CGFloat = msg![env; font ascender];
+    let text_str = to_rust_string(env, text).into_owned();
+    let font_obj = font_for_text(env, font, &text_str).unwrap_or_else(Font::sans_regular);
+    let (w, h) = font_obj.calculate_text_size(size, &text_str, None);
+    CGRect {
+        origin: CGPoint {
+            x: 0.0,
+            y: -ascent_val,
+        },
+        size: CGSize {
+            width: w,
+            height: h,
+        },
+    }
+}
+
+/// `CTParagraphStyleRef CTParagraphStyleCreate(
+///     const CTParagraphStyleSetting *settings, size_t settingCount)`
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1524171-ctparagraphstylecreate>
+fn CTParagraphStyleCreate(
+    env: &mut Environment,
+    _settings: ConstVoidPtr,
+    _setting_count: u32,
+) -> CTParagraphStyleRef {
+    msg_class![env; NSObject new]
+}
+
+/// `CTParagraphStyleRef CTParagraphStyleCreateCopy(CTParagraphStyleRef)`
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1525098-ctparagraphstylecreatecopy>
+fn CTParagraphStyleCreateCopy(
+    env: &mut Environment,
+    paragraph_style: CTParagraphStyleRef,
+) -> CTParagraphStyleRef {
+    if paragraph_style.is_null() {
+        return nil;
+    }
+    retain(env, paragraph_style);
+    paragraph_style
+}
+
+/// `bool CTParagraphStyleGetValueForSpecifier(CTParagraphStyleRef,
+/// CTParagraphStyleSpecifier,
+///     size_t valueBufferSize, void *valueBuffer)`
+///
+/// Reference: <https://developer.apple.com/documentation/coretext/1525353-ctparagraphstylegetvalueforspeci>
+fn CTParagraphStyleGetValueForSpecifier(
+    env: &mut Environment,
+    _paragraph_style: CTParagraphStyleRef,
+    _spec: u32,
+    value_buffer_size: u32,
+    value_buffer: MutPtr<u8>,
+) -> bool {
+    if !value_buffer.is_null() && value_buffer_size > 0 {
+        let slice = env.mem.bytes_at_mut(value_buffer, value_buffer_size);
+        slice.fill(0);
+    }
+    false
+}
+
+pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CTFontCreateWithName(_, _, _)),
     export_c_func!(CTFontGetSize(_)),
     export_c_func!(CTFontGetAscent(_)),
@@ -778,4 +1559,24 @@ const FUNCTIONS: FunctionExports = &[
     export_c_func!(CTFontGetBoundingRectsForGlyphs(_, _, _, _, _)),
     export_c_func!(CTFontGetAdvancesForGlyphs(_, _, _, _, _)),
     export_c_func!(CTFontDrawGlyphs(_, _, _, _, _)),
+    export_c_func!(CTFontCopyPostScriptName(_)),
+    export_c_func!(CTFontCreateCopyWithAttributes(_, _, _, _)),
+    export_c_func!(CTFontCreateWithFontDescriptor(_, _, _)),
+    export_c_func!(CTFontDescriptorCopyAttribute(_, _)),
+    export_c_func!(CTFontDescriptorCreateMatchingFontDescriptor(_, _)),
+    export_c_func!(CTFontDescriptorCreateMatchingFontDescriptors(_, _)),
+    export_c_func!(CTFontDescriptorCreateWithAttributes(_)),
+    export_c_func!(CTFontManagerRegisterGraphicsFont(_, _)),
+    export_c_func!(CTFrameDraw(_, _)),
+    export_c_func!(CTFrameGetLineOrigins(_, _, _)),
+    export_c_func!(CTFrameGetLines(_)),
+    export_c_func!(CTFrameGetStringRange(_)),
+    export_c_func!(CTFrameGetVisibleStringRange(_)),
+    export_c_func!(CTFramesetterCreateFrame(_, _, _, _)),
+    export_c_func!(CTFramesetterCreateWithAttributedString(_)),
+    export_c_func!(CTFramesetterSuggestFrameSizeWithConstraints(_, _, _, _, _)),
+    export_c_func!(CTLineGetImageBounds(_, _)),
+    export_c_func!(CTParagraphStyleCreate(_, _)),
+    export_c_func!(CTParagraphStyleCreateCopy(_)),
+    export_c_func!(CTParagraphStyleGetValueForSpecifier(_, _, _, _)),
 ];

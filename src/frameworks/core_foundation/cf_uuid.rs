@@ -12,6 +12,8 @@ use super::cf_string::CFStringRef;
 use super::CFTypeRef;
 use crate::abi::{impl_GuestRet_for_large_struct, GuestArg};
 use crate::dyld::{export_c_func, FunctionExports};
+use crate::frameworks::core_foundation::CFRelease;
+use crate::frameworks::core_foundation::CFRetain;
 use crate::frameworks::foundation::{ns_string, NSUInteger};
 use crate::mem::SafeRead;
 use crate::objc::{autorelease, id, msg, nil, objc_classes, retain, ClassExports, HostObject};
@@ -275,6 +277,20 @@ fn CFUUIDCreateString(
     ns_string::from_rust_string(env, uuid.hyphenated().to_string().to_uppercase())
 }
 
+pub fn CFUUIDRelease(env: &mut Environment, uuid: CFUUIDRef) {
+    if !uuid.is_null() {
+        CFRelease(env, uuid);
+    }
+}
+
+pub fn CFUUIDRetain(env: &mut Environment, uuid: CFUUIDRef) -> CFUUIDRef {
+    if !uuid.is_null() {
+        CFRetain(env, uuid)
+    } else {
+        uuid
+    }
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFUUIDCreate(_)),
     export_c_func!(CFUUIDCreateString(_, _)),
@@ -319,6 +335,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFUUIDCreateFromUUIDBytes(_, _)),
     export_c_func!(CFUUIDGetUUIDBytes(_)),
     export_c_func!(CFUUIDCreateFromString(_, _)),
+    export_c_func!(CFUUIDRelease(_)),
+    export_c_func!(CFUUIDRetain(_)),
 ];
 
 #[cfg(test)]

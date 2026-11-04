@@ -46,6 +46,37 @@ pub const kCGBlendModeDarken: CGBlendMode = 4;
 pub const kCGBlendModeLighten: CGBlendMode = 5;
 pub const kCGBlendModeCopy: CGBlendMode = 17;
 
+/// State for shadow operations. Stored verbatim on the host object so that
+/// `CGContextSaveGState`/`RestoreGState` can preserve it across drawing
+/// blocks, mirroring real Quartz behaviour.
+#[derive(Clone, Copy)]
+pub struct CGShadowState {
+    #[allow(dead_code)]
+    pub enabled: bool,
+    #[allow(dead_code)]
+    pub offset_x: CGFloat,
+    #[allow(dead_code)]
+    pub offset_y: CGFloat,
+    #[allow(dead_code)]
+    pub blur: CGFloat,
+    #[allow(dead_code)]
+    pub color: (CGFloat, CGFloat, CGFloat, CGFloat),
+}
+
+impl Default for CGShadowState {
+    fn default() -> Self {
+        // Apple defaults: black shadow, alpha 1/3, see
+        // <https://developer.apple.com/documentation/coregraphics/1455324-cgcontextsetshadow>.
+        CGShadowState {
+            enabled: false,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            blur: 0.0,
+            color: (0.0, 0.0, 0.0, 1.0 / 3.0),
+        }
+    }
+}
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
@@ -109,6 +140,14 @@ pub(super) struct CGContextHostObject {
     pub(super) alpha: CGFloat,
     pub(super) fill_color_model: i32,
     pub(super) stroke_color_model: i32,
+    pub(super) line_cap: i32,
+    pub(super) line_join: i32,
+    pub(super) miter_limit: CGFloat,
+    pub(super) flatness: CGFloat,
+    /// See `CGContextSetRenderingIntent`.
+    pub(super) rendering_intent: i32,
+    /// See `CGContextSetShadow`. Not drawn yet.
+    pub(super) shadow: CGShadowState,
 }
 impl HostObject for CGContextHostObject {}
 
@@ -308,7 +347,7 @@ pub fn CGContextClearRect(env: &mut Environment, context: CGContextRef, rect: CG
     cg_bitmap_context::fill_rect(env, context, rect, /* clear: */ true);
 }
 
-fn CGContextClipToRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
+pub fn CGContextClipToRect(env: &mut Environment, context: CGContextRef, rect: CGRect) {
     if rect.origin == CGPointZero
         && rect.size.height == CGBitmapContextGetHeight(env, context) as f32
         && rect.size.width == CGBitmapContextGetWidth(env, context) as f32
@@ -1234,6 +1273,215 @@ fn radial_gradient_t(
     }
 }
 
+fn CGContextClipToMask(
+    _env: &mut Environment,
+    _context: CGContextRef,
+    _rect: CGRect,
+    _mask: CGImageRef,
+) {
+    log!("CGContextClipToMask: stubbed");
+}
+
+fn CGContextSetAllowsFontSmoothing(_env: &mut Environment, _context: CGContextRef, _value: bool) {}
+fn CGContextSetShouldSubpixelPositionFonts(
+    _env: &mut Environment,
+    _context: CGContextRef,
+    _value: bool,
+) {
+}
+
+/// `void CGContextSetAllowsFontSubpixelPositioning(CGContextRef c, bool allow)`
+///
+/// Controls whether subpixel font positioning is used.  On the emulated
+/// screen there is no physical sub-pixel grid to exploit, so this is a
+/// no-op.  Exporting the symbol eliminates the "unimplemented function"
+/// warning produced by apps that call it unconditionally.
+///
+/// Reference: <https://developer.apple.com/documentation/coregraphics/1454839-cgcontextsetallowsfontsubpixelpo>
+fn CGContextSetAllowsFontSubpixelPositioning(
+    _env: &mut Environment,
+    _context: CGContextRef,
+    _allows: bool,
+) {
+}
+
+fn CGContextSetAllowsFontSubpixelQuantization(
+    _env: &mut Environment,
+    _context: CGContextRef,
+    _value: bool,
+) {
+}
+
+fn CGContextSetFlatness(env: &mut Environment, context: CGContextRef, flatness: CGFloat) {
+    if context.is_null() {
+        return;
+    }
+    env.objc.borrow_mut::<CGContextHostObject>(context).flatness = flatness;
+}
+
+fn CGContextSetLineCap(env: &mut Environment, context: CGContextRef, cap: i32) {
+    if context.is_null() {
+        return;
+    }
+    env.objc.borrow_mut::<CGContextHostObject>(context).line_cap = cap;
+}
+
+fn CGContextSetLineJoin(env: &mut Environment, context: CGContextRef, join: i32) {
+    if context.is_null() {
+        return;
+    }
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .line_join = join;
+}
+
+fn CGContextSetMiterLimit(env: &mut Environment, context: CGContextRef, limit: CGFloat) {
+    if context.is_null() {
+        return;
+    }
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .miter_limit = limit;
+}
+
+fn CGContextSetRenderingIntent(env: &mut Environment, context: CGContextRef, intent: i32) {
+    if context.is_null() {
+        return;
+    }
+    // Per Apple's "CGColorRenderingIntent" reference:
+    // https://developer.apple.com/documentation/coregraphics/cgcolorrenderingintent
+    // - kCGRenderingIntentDefault (0)
+    // - kCGRenderingIntentAbsoluteColorimetric (1)
+    // - kCGRenderingIntentRelativeColorimetric (2)
+    // - kCGRenderingIntentPerceptual (3)
+    // - kCGRenderingIntentSaturation (4)
+    // We don't perform any CMS, so just record the chosen intent so that
+    // round-tripping via CGContextGetState/RestoreState preserves it.
+    env.objc
+        .borrow_mut::<CGContextHostObject>(context)
+        .rendering_intent = intent;
+}
+
+fn CGContextSetShadow(
+    env: &mut Environment,
+    context: CGContextRef,
+    offset: super::CGSize,
+    blur: CGFloat,
+) {
+    if context.is_null() {
+        return;
+    }
+    // Per Apple's CGContext documentation:
+    // "Sets the shadow drawing parameters... Specify a positive blur value
+    // to draw the shadow with a blurred edge; a blur of 0.0 produces no
+    // blur." The default shadow color when no explicit color is passed is
+    // "black with 1/3 alpha".
+    // https://developer.apple.com/documentation/coregraphics/1454559-cgcontextsetshadow
+    let host = env.objc.borrow_mut::<CGContextHostObject>(context);
+    host.shadow = CGShadowState {
+        enabled: true,
+        offset_x: offset.width,
+        offset_y: offset.height,
+        blur,
+        color: (0.0, 0.0, 0.0, 1.0 / 3.0),
+    };
+}
+
+/// `void CGContextSetShouldSubpixelQuantizeFonts(CGContextRef c, bool should)`
+///
+/// Controls whether font glyph metrics are quantised to sub-pixel
+/// boundaries.  No-op for the same reasons as
+/// `CGContextSetAllowsFontSubpixelPositioning`.
+///
+/// Reference: <https://developer.apple.com/documentation/coregraphics/1455671-cgcontextsetshouldsub> pixelquanti
+fn CGContextSetShouldSubpixelQuantizeFonts(
+    _env: &mut Environment,
+    _context: CGContextRef,
+    _should: bool,
+) {
+}
+
+/// `void CGContextShowGlyphs(CGContextRef c, const CGGlyph *glyphs, size_t
+/// count)`
+///
+/// Draws glyphs at the current text position. Since we don't track text
+/// position fully yet, we draw at (0, 0).
+fn CGContextShowGlyphs(
+    env: &mut Environment,
+    context: CGContextRef,
+    glyphs: ConstPtr<CGGlyph>,
+    count: GuestUSize,
+) {
+    CGContextShowGlyphsAtPoint(env, context, 0.0, 0.0, glyphs, count);
+}
+
+/// `void CGContextShowGlyphsWithAdvances(CGContextRef c,
+///     const CGGlyph *glyphs, const CGSize *advances, size_t count)`
+///
+/// Draws glyphs with explicit advance widths/heights between each glyph.
+fn CGContextShowGlyphsWithAdvances(
+    env: &mut Environment,
+    context: CGContextRef,
+    glyphs: ConstPtr<CGGlyph>,
+    advances: ConstPtr<super::CGSize>,
+    count: GuestUSize,
+) {
+    if context.is_null() {
+        return;
+    }
+    let font = env.objc.borrow::<CGContextHostObject>(context).font;
+    if font.is_null() {
+        log!("Warning: CGContextShowGlyphsWithAdvances called with no font set");
+        return;
+    }
+    if !super::cg_font::is_data_provider_font(env, font) {
+        log!(
+            "TODO: CGContextShowGlyphsWithAdvances with non-data-provider font {:?}, skipping",
+            font
+        );
+        return;
+    }
+
+    let mut glyph_ids = Vec::with_capacity(count as usize);
+    let mut advance_vec = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let glyph_id: CGGlyph = env.mem.read(glyphs + i);
+        glyph_ids.push(rusttype::GlyphId(glyph_id));
+        let adv: super::CGSize = env.mem.read(advances + i);
+        advance_vec.push((adv.width, adv.height));
+    }
+
+    let font_size = env.objc.borrow::<CGContextHostObject>(context).font_size;
+
+    let mut drawer = CGBitmapContextDrawer::new(&env.objc, &mut env.mem, context);
+    let fill_color = drawer.rgb_fill_color();
+
+    let rusttype_font = &env.objc.borrow::<CGFontHostObject>(font).font;
+    rusttype_font.draw_glyphs_with_advances(
+        font_size,
+        &glyph_ids,
+        &advance_vec,
+        (0.0, 0.0),
+        |raster_glyph| {
+            uikit::ui_font::draw_font_glyph(
+                &mut drawer,
+                raster_glyph,
+                fill_color,
+                /* clip_x: */ None,
+                /* clip_y: */ None,
+            )
+        },
+    );
+}
+
+fn CGContextShowText(
+    _env: &mut Environment,
+    _context: CGContextRef,
+    _string: crate::mem::ConstPtr<u8>,
+    _length: u32,
+) {
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextRetain(_)),
     export_c_func!(CGContextRelease(_)),
@@ -1309,4 +1557,19 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGContextGetTextPosition(_)),
     export_c_func!(CGContextShowGlyphsAtPoint(_, _, _, _, _)),
     export_c_func!(CGContextShowGlyphsAtPositions(_, _, _, _)),
+    export_c_func!(CGContextClipToMask(_, _, _)),
+    export_c_func!(CGContextSetAllowsFontSmoothing(_, _)),
+    export_c_func!(CGContextSetAllowsFontSubpixelPositioning(_, _)),
+    export_c_func!(CGContextSetAllowsFontSubpixelQuantization(_, _)),
+    export_c_func!(CGContextSetFlatness(_, _)),
+    export_c_func!(CGContextSetLineCap(_, _)),
+    export_c_func!(CGContextSetLineJoin(_, _)),
+    export_c_func!(CGContextSetMiterLimit(_, _)),
+    export_c_func!(CGContextSetRenderingIntent(_, _)),
+    export_c_func!(CGContextSetShadow(_, _, _)),
+    export_c_func!(CGContextSetShouldSubpixelPositionFonts(_, _)),
+    export_c_func!(CGContextSetShouldSubpixelQuantizeFonts(_, _)),
+    export_c_func!(CGContextShowGlyphs(_, _, _)),
+    export_c_func!(CGContextShowGlyphsWithAdvances(_, _, _, _)),
+    export_c_func!(CGContextShowText(_, _, _)),
 ];

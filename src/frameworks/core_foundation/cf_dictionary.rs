@@ -245,13 +245,13 @@ fn CFDictionaryApplyFunction(
     }
 }
 
-fn CFDictionaryGetCount(env: &mut Environment, dict: CFDictionaryRef) -> CFIndex {
+pub fn CFDictionaryGetCount(env: &mut Environment, dict: CFDictionaryRef) -> CFIndex {
     let count: NSUInteger = msg![env; dict count];
     log_dbg!("CFDictionaryGetCount dict {:?} {}", dict, count);
     count.try_into().unwrap()
 }
 
-fn CFDictionaryGetKeysAndValues(
+pub fn CFDictionaryGetKeysAndValues(
     env: &mut Environment,
     dict: CFDictionaryRef,
     keys: ConstPtr<MutVoidPtr>,
@@ -400,6 +400,14 @@ pub const CONSTANTS: ConstantExports = &[
     ),
 ];
 
+fn CFDictionaryCreateWithCopy(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    dict: CFDictionaryRef,
+) -> CFDictionaryRef {
+    CFDictionaryCreateCopy(env, allocator, dict)
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFDictionaryRetain(_)),
     export_c_func!(CFDictionaryRelease(_)),
@@ -421,4 +429,5 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFDictionaryApplyFunction(_, _, _)),
     export_c_func!(CFDictionaryGetCount(_)),
     export_c_func!(CFDictionaryGetKeysAndValues(_, _, _)),
+    export_c_func!(CFDictionaryCreateWithCopy(_, _)),
 ];

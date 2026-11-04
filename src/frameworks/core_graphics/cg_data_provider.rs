@@ -18,6 +18,7 @@ use crate::frameworks::core_foundation::{CFRelease, CFRetain, CFTypeRef};
 use crate::frameworks::foundation::ns_string::to_rust_string;
 use crate::frameworks::foundation::NSUInteger;
 use crate::mem::{ConstPtr, ConstVoidPtr, GuestUSize, MutPtr, MutVoidPtr, SafeRead};
+use crate::objc::nil;
 use crate::objc::{id, msg, msg_class, objc_classes, ClassExports, HostObject};
 use crate::Environment;
 
@@ -57,6 +58,14 @@ enum CGDataProviderHostObject {
         info: MutVoidPtr,
         release_callback: CGDataProviderReleaseDataCallback,
     },
+    /// Created via `CGDataProviderCreateDirect`. The release callback only
+    /// takes `info`.
+    Direct {
+        data: ConstVoidPtr,
+        size: GuestUSize,
+        info: MutVoidPtr,
+        release_info_callback: GuestFunction,
+    },
     // TODO: Maybe we should store image data in guest memory so we don't
     // need a special variant for this.
     CGImage(CGImageRef),
@@ -92,6 +101,15 @@ pub const CLASSES: ClassExports = objc_classes! {
                 () = release_callback.call_from_host(env, args);
             }
         },
+        CGDataProviderHostObject::Direct {
+            info,
+            release_info_callback,
+            ..
+        } => {
+            if !release_info_callback.to_ptr().is_null() {
+                () = release_info_callback.call_from_host(env, (info,));
+            }
+        }
         CGDataProviderHostObject::CGImage(cg_image) => CGImageRelease(env, cg_image),
         CGDataProviderHostObject::CFData(cf_data) => CFRelease(env, cf_data),
     }
@@ -204,7 +222,8 @@ pub(super) fn from_cg_image(env: &mut Environment, cg_image: CGImageRef) -> CGDa
 /// Generic interface for host code.
 pub(super) fn borrow_bytes(env: &mut Environment, provider: CGDataProviderRef) -> &[u8] {
     match *env.objc.borrow(provider) {
-        CGDataProviderHostObject::DataWithSize { data, size, .. } => {
+        CGDataProviderHostObject::Direct { data, size, .. }
+        | CGDataProviderHostObject::DataWithSize { data, size, .. } => {
             env.mem.bytes_at(data.cast(), size)
         }
         CGDataProviderHostObject::CGImage(cg_image) => {
@@ -220,7 +239,8 @@ pub(super) fn borrow_bytes(env: &mut Environment, provider: CGDataProviderRef) -
 
 fn CGDataProviderCopyData(env: &mut Environment, provider: CGDataProviderRef) -> CFDataRef {
     match *env.objc.borrow(provider) {
-        CGDataProviderHostObject::DataWithSize { data, size, .. } => CFDataCreate(
+        CGDataProviderHostObject::Direct { data, size, .. }
+        | CGDataProviderHostObject::DataWithSize { data, size, .. } => CFDataCreate(
             env,
             kCFAllocatorDefault,
             data.cast(),
@@ -284,6 +304,105 @@ fn CGDataProviderCreateWithCFData(env: &mut Environment, data: CFDataRef) -> CGD
     )
 }
 
+fn CGDataProviderCreateDirect(
+    env: &mut Environment,
+    info: MutVoidPtr,
+    size: i64,
+    callbacks: ConstVoidPtr,
+) -> CGDataProviderRef {
+    // CGDataProviderDirectCallbacks struct layout (32-bit ARM):
+    //   offset 0: version (u32)
+    //   offset 4: getBytePointer (function pointer)
+    //   offset 8: releaseBytePointer (function pointer)
+    //   offset 12: getBytesAtPosition (function pointer)
+    //   offset 16: releaseInfo (function pointer)
+    //
+    // Strategy: if getBytePointer is non-NULL, call it to get a direct
+    // pointer to the data, then create a provider wrapping that pointer.
+    // If only getBytesAtPosition is available, allocate a buffer and
+    // read the full data into it.
+
+    if callbacks.is_null() || size <= 0 {
+        log!("Warning: CGDataProviderCreateDirect: null callbacks or invalid size ({}), returning null", size);
+        return nil;
+    }
+
+    let size_u: GuestUSize = size as GuestUSize;
+    let cb_base = callbacks.to_bits();
+
+    let get_byte_pointer_addr: u32 = env.mem.read(ConstPtr::<u32>::from_bits(cb_base + 4));
+    let get_bytes_at_position_addr: u32 = env.mem.read(ConstPtr::<u32>::from_bits(cb_base + 12));
+    let release_info_addr: u32 = env.mem.read(ConstPtr::<u32>::from_bits(cb_base + 16));
+
+    let data_ptr: ConstVoidPtr = if get_byte_pointer_addr != 0 {
+        // Call getBytePointer(info) to get direct data pointer
+        let get_byte_pointer = GuestFunction::from_addr_with_thumb_bit(get_byte_pointer_addr);
+        let ptr: MutVoidPtr = get_byte_pointer.call_from_host(env, (info,));
+        ptr.cast_const()
+    } else if get_bytes_at_position_addr != 0 {
+        // Allocate buffer and read data via getBytesAtPosition(info, buffer,
+        // position, count) Note: position is off_t (i64 on Darwin ARM32),
+        // passed in r2:r3 register pair
+        let buf: MutVoidPtr = env.mem.alloc(size_u).cast();
+        let get_bytes = GuestFunction::from_addr_with_thumb_bit(get_bytes_at_position_addr);
+        let _bytes_read: GuestUSize = get_bytes.call_from_host(env, (info, buf, 0i64, size_u));
+        buf.cast_const()
+    } else {
+        log!("Warning: CGDataProviderCreateDirect: no data access callback available, returning null");
+        return nil;
+    };
+
+    if data_ptr.is_null() {
+        log!("Warning: CGDataProviderCreateDirect: data callback returned NULL, returning null");
+        return nil;
+    }
+
+    // Build a release callback wrapper: we call releaseInfo(info) on dealloc.
+    let release_callback = if release_info_addr != 0 {
+        GuestFunction::from_addr_with_thumb_bit(release_info_addr)
+    } else {
+        GuestFunction::null_ptr()
+    };
+
+    log_dbg!(
+        "CGDataProviderCreateDirect: info={:?}, size={}, data={:?}",
+        info,
+        size,
+        data_ptr
+    );
+
+    let class = env
+        .objc
+        .get_known_class("_Podroid_CGDataProvider", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CGDataProviderHostObject::Direct {
+            info,
+            data: data_ptr,
+            size: size_u,
+            release_info_callback: release_callback,
+        }),
+        &mut env.mem,
+    )
+}
+
+fn CGDataProviderGetInfo(_env: &mut Environment, _provider: CGDataProviderRef) -> MutVoidPtr {
+    // Real API returns the `info` pointer passed at creation time.
+    // We don't expose it publicly; return null as a safe stub.
+    MutVoidPtr::null()
+}
+
+fn CGDataProviderGetSize(env: &mut Environment, provider: CGDataProviderRef) -> u64 {
+    match *env.objc.borrow(provider) {
+        CGDataProviderHostObject::DataWithSize { size, .. } => size as u64,
+        CGDataProviderHostObject::Direct { size, .. } => size as u64,
+        CGDataProviderHostObject::CGImage(cg_image) => {
+            cg_image::borrow_image(&env.objc, cg_image).pixels().len() as u64
+        }
+        CGDataProviderHostObject::CFData(cf_data) => CFDataGetLength(env, cf_data) as u64,
+    }
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGDataProviderRetain(_)),
     export_c_func!(CGDataProviderRelease(_)),
@@ -293,4 +412,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CGDataProviderCreateWithFilename(_)),
     export_c_func!(CGDataProviderCreateWithURL(_)),
     export_c_func!(CGDataProviderCreateWithCFData(_)),
+    export_c_func!(CGDataProviderCreateDirect(_, _, _)),
+    export_c_func!(CGDataProviderGetInfo(_)),
+    export_c_func!(CGDataProviderGetSize(_)),
 ];

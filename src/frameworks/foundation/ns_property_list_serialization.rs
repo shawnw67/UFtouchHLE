@@ -32,6 +32,31 @@ pub type NSPropertyListFormat = NSUInteger;
 pub const NSPropertyListXMLFormat_v1_0: NSPropertyListFormat = 100;
 pub const NSPropertyListBinaryFormat_v1_0: NSPropertyListFormat = 200;
 
+/// CF-level entry point for `CFPropertyListCreateFromXMLData`.
+///
+/// Parses `xml_data` (an `NSData` holding XML plist bytes) and returns the
+/// deserialized property list as an `id` (an NSArray/NSDictionary/etc.), or
+/// `nil` when parsing fails. `options` uses the same numeric values as
+/// `NSPropertyListMutabilityOptions` (0 = immutable, 1 = mutable containers,
+/// 2 = mutable containers and leaves), per Apple's documentation.
+pub(crate) fn cf_property_list_create_from_xml_data(
+    env: &mut Environment,
+    xml_data: id,
+    options: NSPropertyListMutabilityOptions,
+) -> id {
+    if xml_data.is_null() {
+        return nil;
+    }
+    let slice = ns_data::to_rust_slice(env, xml_data);
+    match Value::from_reader_xml(Cursor::new(slice)) {
+        Ok(root) => deserialize_plist(env, &root, options),
+        Err(err) => {
+            log_dbg!("CFPropertyListCreateFromXMLData: parse failed: {}", err);
+            nil
+        }
+    }
+}
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);

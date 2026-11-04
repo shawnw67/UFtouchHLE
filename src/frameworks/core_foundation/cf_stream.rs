@@ -9,8 +9,12 @@ use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
 use super::{CFIndex, CFTypeRef};
 use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
+use crate::frameworks::core_foundation::cf_string::CFStringRef;
+use crate::frameworks::core_foundation::CFRelease;
+use crate::frameworks::core_foundation::CFRetain;
 use crate::frameworks::foundation::{ns_run_loop, ns_string};
 use crate::fs::{GuestFile, GuestOpenOptions, GuestPath};
+use crate::mem::Ptr;
 use crate::mem::{ConstPtr, MutPtr, MutVoidPtr, SafeRead};
 use crate::objc::{
     id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
@@ -99,6 +103,113 @@ impl HostObject for MemoryWriteStream {}
 const DATA_WRITTEN: &str = "kCFStreamPropertyDataWritten";
 const APPEND_TO_FILE: &str = "kCFStreamPropertyAppendToFile";
 const FILE_OFFSET: &str = "kCFStreamPropertyFileCurrentOffset";
+fn alloc_read_stream(env: &mut Environment) -> CFReadStreamRef {
+    let class = env
+        .objc
+        .get_known_class("_Podroid_CFReadStream", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CFReadStreamHostObject {
+            status: kCFStreamStatusNotOpen,
+            offset: 0,
+            data: Vec::new(),
+            buffer: None,
+        }),
+        &mut env.mem,
+    )
+}
+
+fn alloc_write_stream(env: &mut Environment) -> CFWriteStreamRef {
+    let class = env
+        .objc
+        .get_known_class("_Podroid_CFWriteStream", &mut env.mem);
+    env.objc.alloc_object(
+        class,
+        Box::new(CFWriteStreamHostObject {
+            status: kCFStreamStatusNotOpen,
+            data: Vec::new(),
+            file_path: None,
+            append: false,
+            offset: 0,
+        }),
+        &mut env.mem,
+    )
+}
+
+const kCFStreamErrorDomainCustom: CFStreamErrorDomain = -1;
+
+#[derive(Default)]
+struct CFReadStreamHostObject {
+    #[allow(dead_code)]
+    status: CFStreamStatus,
+    #[allow(dead_code)]
+    offset: usize,
+    #[allow(dead_code)]
+    data: Vec<u8>,
+    #[allow(dead_code)]
+    buffer: Option<MutPtr<u8>>,
+}
+
+impl HostObject for CFReadStreamHostObject {}
+
+// CFStreamErrorDomain
+type CFStreamErrorDomain = i32;
+
+#[derive(Default)]
+struct CFWriteStreamHostObject {
+    #[allow(dead_code)]
+    status: CFStreamStatus,
+    #[allow(dead_code)]
+    data: Vec<u8>,
+    #[allow(dead_code)]
+    file_path: Option<String>,
+    #[allow(dead_code)]
+    append: bool,
+    #[allow(dead_code)]
+    offset: usize,
+}
+
+impl HostObject for CFWriteStreamHostObject {}
+
+const kCFStreamStatusNotOpen: CFStreamStatus = 0;
+
+// CFStreamStatus
+type CFStreamStatus = i32;
+
+/// Allocate a `_Podroid_CFReadStream` for CFNetwork's dummy handle.
+pub(crate) fn alloc_read_stream_for_cf_network(env: &mut Environment) -> u32 {
+    alloc_read_stream(env).to_bits() as _
+}
+
+#[allow(dead_code)]
+pub(crate) fn cf_network_read_stream_open(env: &mut Environment, stream: u32) -> bool {
+    CFReadStreamOpen(env, Ptr::from_bits(stream as _))
+}
+
+#[allow(dead_code)]
+pub(crate) fn cf_network_read_stream_has_bytes_available(
+    env: &mut Environment,
+    stream: u32,
+) -> bool {
+    // No real networking: report "no bytes" so app polling loops terminate.
+    CFReadStreamHasBytesAvailable(env, Ptr::from_bits(stream as _))
+}
+
+#[allow(dead_code)]
+pub(crate) fn cf_network_read_stream_read(
+    env: &mut Environment,
+    stream: u32,
+    buffer: MutPtr<u8>,
+    buffer_length: i32,
+) -> i32 {
+    CFReadStreamRead(env, Ptr::from_bits(stream as _), buffer, buffer_length)
+}
+
+#[allow(dead_code)]
+pub(crate) fn cf_network_read_stream_close(env: &mut Environment, stream: u32) {
+    CFReadStreamClose(env, Ptr::from_bits(stream as _))
+}
+
 pub const CONSTANTS: ConstantExports = &[
     (
         "_kCFStreamPropertyDataWritten",
@@ -853,6 +964,111 @@ fn CFReadStreamRead(
     count
 }
 
+fn CFReadStreamGetError(_env: &mut Environment, _stream: CFReadStreamRef) -> u64 {
+    // CFStreamError (two i32 fields packed)
+    // domain=kCFStreamErrorDomainCustom, error=-1
+    ((kCFStreamErrorDomainCustom as u64) & 0xFFFF_FFFF) | ((-1i32 as u32 as u64) << 32)
+}
+
+pub fn CFReadStreamRelease(env: &mut Environment, stream: CFReadStreamRef) {
+    if !stream.is_null() {
+        CFRelease(env, stream);
+    }
+}
+
+pub fn CFReadStreamRetain(env: &mut Environment, stream: CFReadStreamRef) -> CFReadStreamRef {
+    if !stream.is_null() {
+        CFRetain(env, stream)
+    } else {
+        stream
+    }
+}
+
+fn CFStreamCreatePairWithPeerSocketSignature(
+    env: &mut Environment,
+    _allocator: CFAllocatorRef,
+    _signature: crate::mem::ConstVoidPtr,
+    read_stream: MutPtr<CFReadStreamRef>,
+    write_stream: MutPtr<CFWriteStreamRef>,
+) {
+    log!("CFStreamCreatePairWithPeerSocketSignature: stubbed — streams set to null");
+    if !read_stream.is_null() {
+        env.mem.write(read_stream, nil);
+    }
+    if !write_stream.is_null() {
+        env.mem.write(write_stream, nil);
+    }
+}
+
+fn CFStreamCreatePairWithSocket(
+    env: &mut Environment,
+    _allocator: CFAllocatorRef,
+    _sock: i32, // CFSocketNativeHandle
+    read_stream: MutPtr<CFReadStreamRef>,
+    write_stream: MutPtr<CFWriteStreamRef>,
+) {
+    log!("CFStreamCreatePairWithSocket: stubbed — streams set to null");
+    if !read_stream.is_null() {
+        env.mem.write(read_stream, nil);
+    }
+    if !write_stream.is_null() {
+        env.mem.write(write_stream, nil);
+    }
+}
+
+fn CFStreamCreatePairWithSocketToHost(
+    env: &mut Environment,
+    _allocator: CFAllocatorRef,
+    host: CFStringRef,
+    port: u32,
+    read_stream: MutPtr<CFReadStreamRef>,
+    write_stream: MutPtr<CFWriteStreamRef>,
+) {
+    let host_str = if host.is_null() {
+        "<nil>".to_string()
+    } else {
+        ns_string::to_rust_string(env, host).into_owned()
+    };
+    log!(
+        "CFStreamCreatePairWithSocketToHost: {}:{} — stubbed, returning dummy streams",
+        host_str,
+        port
+    );
+    // Return valid (but non-functional) stream objects rather than NULL.
+    // Many apps do not nil-check the returned streams before calling
+    // CFReadStreamOpen / CFReadStreamSetProperty etc. Returning NULL causes
+    // the ObjC runtime to hit the phantom-object fallback path and produce
+    // "SUPER HACK! Faking borrow_mut" warnings. A stub stream that
+    // immediately reports "at end" (for reads) or "closed" (for writes)
+    // after open is a safer contract.
+    if !read_stream.is_null() {
+        let rs = alloc_read_stream(env);
+        env.mem.write(read_stream, rs);
+    }
+    if !write_stream.is_null() {
+        let ws = alloc_write_stream(env);
+        env.mem.write(write_stream, ws);
+    }
+}
+
+fn CFWriteStreamGetError(_env: &mut Environment, _stream: CFWriteStreamRef) -> u64 {
+    ((kCFStreamErrorDomainCustom as u64) & 0xFFFF_FFFF) | ((-1i32 as u32 as u64) << 32)
+}
+
+pub fn CFWriteStreamRelease(env: &mut Environment, stream: CFWriteStreamRef) {
+    if !stream.is_null() {
+        CFRelease(env, stream);
+    }
+}
+
+pub fn CFWriteStreamRetain(env: &mut Environment, stream: CFWriteStreamRef) -> CFWriteStreamRef {
+    if !stream.is_null() {
+        CFRetain(env, stream)
+    } else {
+        stream
+    }
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFReadStreamSetClient(_, _, _, _)),
     export_c_func!(CFReadStreamSetProperty(_, _, _)),
@@ -880,4 +1096,13 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFReadStreamHasBytesAvailable(_)),
     export_c_func!(CFReadStreamGetBuffer(_, _, _)),
     export_c_func!(CFReadStreamRead(_, _, _)),
+    export_c_func!(CFReadStreamGetError(_)),
+    export_c_func!(CFReadStreamRelease(_)),
+    export_c_func!(CFReadStreamRetain(_)),
+    export_c_func!(CFStreamCreatePairWithPeerSocketSignature(_, _, _, _)),
+    export_c_func!(CFStreamCreatePairWithSocket(_, _, _, _)),
+    export_c_func!(CFStreamCreatePairWithSocketToHost(_, _, _, _, _)),
+    export_c_func!(CFWriteStreamGetError(_)),
+    export_c_func!(CFWriteStreamRelease(_)),
+    export_c_func!(CFWriteStreamRetain(_)),
 ];

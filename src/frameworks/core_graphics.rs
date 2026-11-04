@@ -18,7 +18,10 @@ pub mod cg_font;
 pub mod cg_geometry;
 pub mod cg_gradient;
 pub mod cg_image;
+pub mod cg_layer;
 pub mod cg_path;
+pub mod cg_pattern;
+mod path_geometry;
 
 pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     path: "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
@@ -31,7 +34,9 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cg_font::CLASSES,
         cg_gradient::CLASSES,
         cg_image::CLASSES,
+        cg_layer::CLASSES,
         cg_path::CLASSES,
+        cg_pattern::CLASSES,
     ],
     constant_exports: &[
         cg_affine_transform::CONSTANTS,
@@ -49,7 +54,9 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         cg_geometry::FUNCTIONS,
         cg_gradient::FUNCTIONS,
         cg_image::FUNCTIONS,
+        cg_layer::FUNCTIONS,
         cg_path::FUNCTIONS,
+        cg_pattern::FUNCTIONS,
     ],
 };
 

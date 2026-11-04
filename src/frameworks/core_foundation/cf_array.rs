@@ -9,6 +9,7 @@
 //! implementation. Here they are the same types.
 
 use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
+use super::CFTypeRef;
 use super::{kCFNotFound, CFIndex, CFRange};
 use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
@@ -82,7 +83,7 @@ fn CFArrayCreate(
     cf_array_new_immutable(env, callbacks, values)
 }
 
-fn CFArrayCreateMutable(
+pub fn CFArrayCreateMutable(
     env: &mut Environment,
     allocator: CFAllocatorRef,
     capacity: CFIndex,
@@ -264,7 +265,7 @@ fn CFArrayGetCountOfValue(
     find_values(env, array, range, value).2
 }
 
-fn CFArrayAppendValue(env: &mut Environment, array: CFMutableArrayRef, value: ConstVoidPtr) {
+pub fn CFArrayAppendValue(env: &mut Environment, array: CFMutableArrayRef, value: ConstVoidPtr) {
     let value: id = value.cast().cast_mut();
     msg![env; array addObject:value]
 }
@@ -414,6 +415,12 @@ fn CFArrayRemoveValueAtIndex(env: &mut Environment, array: CFMutableArrayRef, id
     msg![env; array removeObjectAtIndex:idx]
 }
 
+pub fn CFMakeCollectable(_env: &mut Environment, cf: CFTypeRef) -> CFTypeRef {
+    // In garbage-collected environments, this makes the object collectable
+    // In ARC/manual retain-release, this is a no-op
+    cf
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFArrayRetain(_)),
     export_c_func!(CFArrayRelease(_)),
@@ -440,4 +447,5 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFArrayExchangeValuesAtIndices(_, _, _)),
     export_c_func!(CFArraySortValues(_, _, _, _)),
     export_c_func!(CFArrayRemoveValueAtIndex(_, _)),
+    export_c_func!(CFMakeCollectable(_)),
 ];

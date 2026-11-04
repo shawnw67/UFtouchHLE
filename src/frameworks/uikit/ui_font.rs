@@ -11,6 +11,7 @@ use crate::frameworks::core_graphics::cg_bitmap_context::CGBitmapContextDrawer;
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::ns_string::to_rust_string;
 use crate::frameworks::foundation::NSInteger;
+use crate::objc::autorelease;
 use crate::objc::{id, msg, objc_classes, ClassExports, HostObject};
 use crate::Environment;
 use std::collections::HashMap;
@@ -67,6 +68,8 @@ enum FontKind {
 struct UIFontHostObject {
     size: CGFloat,
     kind: FontKind,
+    /// A font face that `kind` can't represent, such as a Core Graphics font.
+    custom: Option<Font>,
 }
 impl HostObject for UIFontHostObject {}
 
@@ -79,7 +82,11 @@ fn get_font_instance(env: &mut Environment, kind: FontKind, size: CGFloat) -> id
         return font;
     }
     let class = env.objc.get_known_class("UIFont", &mut env.mem);
-    let host_object = UIFontHostObject { size, kind };
+    let host_object = UIFontHostObject {
+        size,
+        kind,
+        custom: None,
+    };
     let new = env
         .objc
         .alloc_object(class, Box::new(host_object), &mut env.mem);
@@ -110,6 +117,112 @@ pub type UITextAlignment = NSInteger;
 pub const UITextAlignmentLeft: UITextAlignment = 0;
 pub const UITextAlignmentCenter: UITextAlignment = 1;
 pub const UITextAlignmentRight: UITextAlignment = 2;
+
+/// Returns `true` if `obj` is a UIFont instance (backed by [UIFontHostObject]).
+pub fn is_uifont(env: &mut Environment, obj: crate::objc::id) -> bool {
+    if obj.is_null() {
+        return false;
+    }
+    let class = env.objc.get_known_class("UIFont", &mut env.mem);
+    let obj_class = crate::objc::ObjC::read_isa(obj, &env.mem);
+    obj_class == class || env.objc.class_is_subclass_of(obj_class, class)
+}
+
+/// Select the font used for a particular string, applying touchHLE's built-in
+/// Unicode fallbacks when the requested font cannot map the text.
+pub fn font_for_text(env: &mut Environment, obj: id, text: &str) -> Option<Font> {
+    if !is_uifont(env, obj) {
+        return None;
+    }
+    let (kind, custom) = {
+        let host = env.objc.borrow::<UIFontHostObject>(obj);
+        (host.kind, host.custom.clone())
+    };
+    if let Some(font) = custom {
+        if font_maps_text(&font, text) {
+            return Some(font);
+        }
+    }
+    Some(get_font(&mut env.framework_state.uikit.ui_font, kind, text).clone())
+}
+
+/// Create a UIFont using the shared resolver used by the Core Text and
+/// Core Graphics font-name entry points.
+pub fn new_uifont_with_name(env: &mut Environment, name: &str, size: CGFloat) -> id {
+    let (kind, custom) = resolve_font_name(env, name);
+    let host_object = UIFontHostObject { size, kind, custom };
+    let class = env.objc.get_known_class("UIFont", &mut env.mem);
+    let new = env
+        .objc
+        .alloc_object(class, Box::new(host_object), &mut env.mem);
+    autorelease(env, new)
+}
+
+/// Returns the [Font] backing a UIFont object.
+/// Returns `None` if `obj` is not a UIFont.
+pub fn font_from_uifont(env: &mut Environment, obj: crate::objc::id) -> Option<Font> {
+    if !is_uifont(env, obj) {
+        return None;
+    }
+    Some(host_font(env, obj).0)
+}
+
+fn font_maps_text(font: &Font, text: &str) -> bool {
+    text.chars()
+        .all(|c| c.is_control() || font.glyph_id_for_unicode(c).0 != 0)
+}
+
+/// The font a UIFont draws with and its point size: the app's own font if it
+/// has one, otherwise the built-in font of its kind.
+fn host_font(env: &mut Environment, this: id) -> (Font, CGFloat) {
+    let host_object = env.objc.borrow::<UIFontHostObject>(this);
+    let font = match &host_object.custom {
+        Some(font) => font.clone(),
+        None => env
+            .framework_state
+            .uikit
+            .ui_font
+            .get_font_by_kind(host_object.kind)
+            .clone(),
+    };
+    (font, host_object.size)
+}
+
+fn resolve_font_name(env: &mut Environment, name: &str) -> (FontKind, Option<Font>) {
+    match resolve_legacy_chinese_font_face(name) {
+        FontFace::BuiltIn(kind) => (kind, None),
+        FontFace::SimplifiedChinese => {
+            let font = env
+                .framework_state
+                .uikit
+                .ui_font
+                .sans_regular_sc
+                .get_or_insert_with(Font::sans_regular_zh)
+                .clone();
+            (FontKind::SansRegular, Some(font))
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum FontFace {
+    BuiltIn(FontKind),
+    SimplifiedChinese,
+}
+
+/// Resolve legacy iOS font names used by the Chinese-text compatibility fix.
+/// These CJK/Unicode aliases are routed to touchHLE's Simplified Chinese
+/// fallback; other names keep the existing built-in font substitutions. This
+/// shared mapping keeps UIKit, Core Text, and Core Graphics on the same font
+/// data and Unicode cmap.
+fn resolve_legacy_chinese_font_face(name: &str) -> FontFace {
+    match name {
+        "ArialUnicodeMS" | "Arial Unicode MS" | "STHeitiSC-Light" | "STHeitiSC-Medium"
+        | "STHeitiSC-Regular" | "STHeitiTC-Light" | "STHeitiTC-Medium" | "STHeiti-Light"
+        | "STHeiti-Medium" => FontFace::SimplifiedChinese,
+        _ => FontFace::BuiltIn(get_equivalent_font(name).unwrap_or(FontKind::SansRegular)),
+    }
+}
 
 pub const CLASSES: ClassExports = objc_classes! {
 

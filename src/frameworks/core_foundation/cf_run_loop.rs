@@ -10,7 +10,13 @@
 
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::core_foundation::time::CFTimeInterval;
+use crate::frameworks::core_foundation::CFRelease;
+use crate::frameworks::core_foundation::CFRetain;
+use crate::frameworks::core_foundation::CFTypeRef;
 use crate::frameworks::foundation::ns_run_loop;
+use crate::frameworks::foundation::ns_string;
+use crate::mem::MutVoidPtr;
+use crate::objc::nil;
 use crate::objc::{id, msg, msg_class, release, retain};
 use crate::Environment;
 
@@ -87,6 +93,15 @@ fn CFRunLoopRunInMode(
 pub const kCFRunLoopCommonModes: &str = "kCFRunLoopCommonModes";
 pub const kCFRunLoopDefaultMode: &str = "kCFRunLoopDefaultMode";
 
+// CFRunLoopActivity flags
+type CFRunLoopActivity = u32;
+
+pub type CFRunLoopObserverRef = CFTypeRef;
+
+pub type CFRunLoopTimerRef = CFTypeRef;
+
+const kCFRunLoopAllActivities: CFRunLoopActivity = 0x0FFFFFFF;
+
 pub const CONSTANTS: ConstantExports = &[
     (
         "_kCFRunLoopCommonModes",
@@ -98,6 +113,108 @@ pub const CONSTANTS: ConstantExports = &[
     ),
 ];
 
+fn CFRunLoopAddObserver(
+    _env: &mut Environment,
+    _rl: CFRunLoopRef,
+    _observer: CFRunLoopObserverRef,
+    _mode: CFRunLoopMode,
+) {
+    log!("CFRunLoopAddObserver: stubbed");
+}
+
+fn CFRunLoopContainsObserver(
+    _env: &mut Environment,
+    _rl: CFRunLoopRef,
+    _observer: CFRunLoopObserverRef,
+    _mode: CFRunLoopMode,
+) -> bool {
+    false
+}
+
+fn CFRunLoopContainsTimer(
+    _env: &mut Environment,
+    _rl: CFRunLoopRef,
+    _timer: CFRunLoopTimerRef,
+    _mode: CFRunLoopMode,
+) -> bool {
+    false
+}
+
+fn CFRunLoopCopyAllModes(env: &mut Environment, _rl: CFRunLoopRef) -> CFTypeRef {
+    // Return an array containing only the default mode.
+    let mode = ns_string::get_static_str(env, kCFRunLoopDefaultMode);
+    let arr: id = msg_class![env; NSArray arrayWithObject:mode];
+    arr
+}
+
+fn CFRunLoopCopyCurrentMode(env: &mut Environment, _rl: CFRunLoopRef) -> CFRunLoopMode {
+    // We only support the default mode.
+    let s = ns_string::from_rust_string(env, kCFRunLoopDefaultMode.to_string());
+    crate::objc::autorelease(env, s)
+}
+
+fn CFRunLoopObserverCreate(
+    _env: &mut Environment,
+    _allocator: CFTypeRef,
+    _activities: CFRunLoopActivity,
+    _repeats: bool,
+    _order: i32,
+    _callout: MutVoidPtr, // CFRunLoopObserverCallBack
+    _context: MutVoidPtr, // CFRunLoopObserverContext*
+) -> CFRunLoopObserverRef {
+    log!("CFRunLoopObserverCreate: stubbed, returning null");
+    nil
+}
+
+fn CFRunLoopObserverDoesRepeat(_env: &mut Environment, _observer: CFRunLoopObserverRef) -> bool {
+    false
+}
+
+fn CFRunLoopObserverGetActivities(
+    _env: &mut Environment,
+    _observer: CFRunLoopObserverRef,
+) -> CFRunLoopActivity {
+    kCFRunLoopAllActivities
+}
+
+fn CFRunLoopObserverGetOrder(_env: &mut Environment, _observer: CFRunLoopObserverRef) -> i32 {
+    0
+}
+
+fn CFRunLoopObserverInvalidate(_env: &mut Environment, _observer: CFRunLoopObserverRef) {
+    log_dbg!("CFRunLoopObserverInvalidate: stubbed");
+}
+
+fn CFRunLoopObserverIsValid(_env: &mut Environment, observer: CFRunLoopObserverRef) -> bool {
+    !observer.is_null()
+}
+
+fn CFRunLoopObserverRelease(env: &mut Environment, observer: CFRunLoopObserverRef) {
+    if !observer.is_null() {
+        CFRelease(env, observer);
+    }
+}
+
+fn CFRunLoopObserverRetain(
+    env: &mut Environment,
+    observer: CFRunLoopObserverRef,
+) -> CFRunLoopObserverRef {
+    if !observer.is_null() {
+        CFRetain(env, observer)
+    } else {
+        observer
+    }
+}
+
+fn CFRunLoopRemoveObserver(
+    _env: &mut Environment,
+    _rl: CFRunLoopRef,
+    _observer: CFRunLoopObserverRef,
+    _mode: CFRunLoopMode,
+) {
+    log!("CFRunLoopRemoveObserver: stubbed");
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFRunLoopGetCurrent()),
     export_c_func!(CFRunLoopGetMain()),
@@ -108,4 +225,18 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFRunLoopWakeUp(_)),
     export_c_func!(CFRunLoopIsWaiting(_)),
     export_c_func!(CFRunLoopRunInMode(_, _, _)),
+    export_c_func!(CFRunLoopAddObserver(_, _, _)),
+    export_c_func!(CFRunLoopContainsObserver(_, _, _)),
+    export_c_func!(CFRunLoopContainsTimer(_, _, _)),
+    export_c_func!(CFRunLoopCopyAllModes(_)),
+    export_c_func!(CFRunLoopCopyCurrentMode(_)),
+    export_c_func!(CFRunLoopObserverCreate(_, _, _, _, _, _)),
+    export_c_func!(CFRunLoopObserverDoesRepeat(_)),
+    export_c_func!(CFRunLoopObserverGetActivities(_)),
+    export_c_func!(CFRunLoopObserverGetOrder(_)),
+    export_c_func!(CFRunLoopObserverInvalidate(_)),
+    export_c_func!(CFRunLoopObserverIsValid(_)),
+    export_c_func!(CFRunLoopObserverRelease(_)),
+    export_c_func!(CFRunLoopObserverRetain(_)),
+    export_c_func!(CFRunLoopRemoveObserver(_, _, _)),
 ];

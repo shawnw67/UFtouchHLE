@@ -3,15 +3,537 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-//! The CoreFoundation Network framework.
+//! Stub for `CFNetwork.framework/CFNetwork`.
+//!
+//! Purpose:
+//! - satisfy symbol lookup so apps that depend on CFNetwork don't crash
+//! - avoid crashes on simple create/open checks
+//! - behave safely when the game polls streams or hosts
 
-pub mod cf_host;
-pub mod cf_http_message;
+//!
+//! Note: CFHost* functions are implemented in
+//! [crate::frameworks::core_foundation::cf_host] and are registered with
+//! CoreFoundation's HostDylib. On a real device they live in CFNetwork, but
+//! touchHLE's dyld searches all frameworks so the binding resolves regardless
+//! of which framework the app links against. Keeping them only in one place
+//! avoids `no_duplicate_functions` test failures.
+
+use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
+use crate::frameworks::core_foundation::cf_array::CFArrayRef;
+use crate::frameworks::core_foundation::cf_dictionary::CFDictionaryRef;
+use crate::frameworks::core_foundation::CFTypeRef;
+use crate::frameworks::foundation::ns_array;
+use crate::frameworks::foundation::ns_dictionary::dict_from_keys_and_objects;
+use crate::frameworks::foundation::ns_string::get_static_str;
+use crate::mem::MutPtr;
+use crate::objc::{id, msg_class};
+use crate::Environment;
+
+fn CFReadStreamCreateForHTTPRequest(env: &mut Environment, _alloc: u32, _request: u32) -> u32 {
+    // Return a real (non-functional) stream object from cf_stream so later
+    // CFReadStream* calls hit registered host objects instead of the
+    // phantom-object fallback path ("SUPER HACK! Faking borrow" warnings).
+    crate::frameworks::core_foundation::cf_stream::alloc_read_stream_for_cf_network(env)
+}
+
+/// `CFReadStreamRef CFReadStreamCreateForStreamedHTTPRequest(
+///     CFAllocatorRef alloc, CFHTTPRequestRef request, CFReadStreamRef body)`
+///
+/// Apple docs: like `CFReadStreamCreateForHTTPRequest`, but the request body
+/// is streamed from `body` (used for large uploads). We have no real HTTP
+/// stack, so we hand back the same kind of placeholder read stream used by
+/// `CFReadStreamCreateForHTTPRequest` — a real registered host object (so
+/// later `CFReadStream*` calls behave) whose contents are empty.
+fn CFReadStreamCreateForStreamedHTTPRequest(
+    env: &mut Environment,
+    _alloc: u32,
+    _request: u32,
+    _body: u32,
+) -> u32 {
+    crate::frameworks::core_foundation::cf_stream::alloc_read_stream_for_cf_network(env)
+}
+
+#[allow(dead_code)]
+fn CFReadStreamOpen(env: &mut Environment, stream: u32) -> bool {
+    crate::frameworks::core_foundation::cf_stream::cf_network_read_stream_open(env, stream)
+}
+
+#[allow(dead_code)]
+fn CFReadStreamHasBytesAvailable(env: &mut Environment, stream: u32) -> bool {
+    crate::frameworks::core_foundation::cf_stream::cf_network_read_stream_has_bytes_available(
+        env, stream,
+    )
+}
+
+#[allow(dead_code)]
+fn CFReadStreamRead(
+    env: &mut Environment,
+    stream: u32,
+    buffer: MutPtr<u8>,
+    buffer_length: i32,
+) -> i32 {
+    use crate::frameworks::core_foundation::cf_stream;
+    cf_stream::cf_network_read_stream_read(env, stream, buffer, buffer_length)
+}
+
+#[allow(dead_code)]
+fn CFReadStreamClose(env: &mut Environment, stream: u32) {
+    use crate::frameworks::core_foundation::cf_stream;
+    cf_stream::cf_network_read_stream_close(env, stream)
+}
+
+#[allow(dead_code)]
+fn CFReadStreamSetProperty(
+    _env: &mut Environment,
+    _stream: u32,
+    _property: u32,
+    _value: u32,
+) -> bool {
+    true
+}
+
+#[allow(dead_code)]
+fn CFReadStreamCopyProperty(_env: &mut Environment, _stream: u32, _property: u32) -> u32 {
+    0
+}
+
+#[allow(dead_code)]
+fn CFReadStreamScheduleWithRunLoop(
+    _env: &mut Environment,
+    _stream: u32,
+    _run_loop: u32,
+    _run_loop_mode: u32,
+) {
+}
+
+#[allow(dead_code)]
+fn CFReadStreamUnscheduleFromRunLoop(
+    _env: &mut Environment,
+    _stream: u32,
+    _run_loop: u32,
+    _run_loop_mode: u32,
+) {
+}
+
+#[allow(dead_code)]
+fn CFReadStreamSetClient(
+    _env: &mut Environment,
+    _stream: u32,
+    _callback_types: u32,
+    _client_cb: u32,
+    _client_context: u32,
+) -> bool {
+    true
+}
+
+#[allow(dead_code)]
+fn CFReadStreamGetStatus(_env: &mut Environment, _stream: u32) -> u32 {
+    // kCFStreamStatusOpen
+    2
+}
+
+fn CFReadStreamCopyError(_env: &mut Environment, _stream: u32) -> u32 {
+    0
+}
+
+/// `CFDictionaryRef CFNetworkCopySystemProxySettings(void)`
+///
+/// Apple documentation: returns a dictionary describing the current system
+/// proxy configuration (see the `kCFNetworkProxies*` keys). touchHLE has no
+/// host-side proxy configuration, which is exactly the situation a real device
+/// is in when the user has not configured a proxy in Settings. We faithfully
+/// reproduce that state by returning a dictionary whose `*Enable` keys are all
+/// the number `0`, so callers that inspect the settings correctly conclude
+/// that no proxy should be used.
+///
+/// This is an ownership-transferring ("Copy") function: the caller is
+/// responsible for releasing the returned dictionary.
+fn CFNetworkCopySystemProxySettings(env: &mut Environment) -> CFDictionaryRef {
+    let zero: id = msg_class![env; NSNumber numberWithInt:(0i32)];
+
+    // Key strings here intentionally use the same literal values as the
+    // exported `kCFNetworkProxies*` constants, so a guest that looks the value
+    // up via `CFDictionaryGetValue(settings, kCFNetworkProxiesHTTPEnable)`
+    // matches by string equality.
+    let http_enable = get_static_str(env, "HTTPEnable");
+    let https_enable = get_static_str(env, "HTTPSEnable");
+    let pac_enable = get_static_str(env, "ProxyAutoConfigEnable");
+
+    dict_from_keys_and_objects(
+        env,
+        &[
+            (http_enable, zero),
+            (https_enable, zero),
+            (pac_enable, zero),
+        ],
+    )
+}
+
+/// `CFArrayRef CFNetworkCopyProxiesForURL(CFURLRef url, CFDictionaryRef
+/// proxySettings)`
+///
+/// Apple documentation: returns an array of dictionaries, each describing a
+/// proxy that should be tried (in order) for the supplied URL. When no proxy
+/// applies, the documented return value is an array containing a single
+/// dictionary whose `kCFProxyTypeKey` is `kCFProxyTypeNone`, meaning "connect
+/// directly". touchHLE never routes traffic through a proxy, so that is
+/// precisely what we return regardless of the URL or settings passed in.
+///
+/// This is an ownership-transferring ("Copy") function: the caller is
+/// responsible for releasing the returned array.
+fn CFNetworkCopyProxiesForURL(
+    env: &mut Environment,
+    _url: CFTypeRef,
+    _proxy_settings: CFDictionaryRef,
+) -> CFArrayRef {
+    let proxy_type_key = get_static_str(env, "kCFProxyTypeKey");
+    let proxy_type_none = get_static_str(env, "kCFProxyTypeNone");
+    let direct = dict_from_keys_and_objects(env, &[(proxy_type_key, proxy_type_none)]);
+    ns_array::from_vec(env, vec![direct])
+}
 
 pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
     path: "/System/Library/Frameworks/CFNetwork.framework/CFNetwork",
     aliases: &[],
-    class_exports: &[],
-    constant_exports: &[cf_http_message::CONSTANTS],
-    function_exports: &[cf_host::FUNCTIONS, cf_http_message::FUNCTIONS],
+    class_exports: &[super::cf_http_message::CLASSES],
+    constant_exports: &[CONSTANTS],
+    function_exports: &[FUNCTIONS, super::cf_http_message::FUNCTIONS],
 };
+
+pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFReadStreamCreateForHTTPRequest(_, _)),
+    export_c_func!(CFReadStreamCreateForStreamedHTTPRequest(_, _, _)),
+    // Other CFReadStream* helpers are exported from
+    // core_foundation::cf_stream; not duplicated here.
+    export_c_func!(CFReadStreamCopyError(_)),
+    export_c_func!(CFNetworkCopySystemProxySettings()),
+    export_c_func!(CFNetworkCopyProxiesForURL(_, _)),
+];
+
+// CFNetwork & related non-lazy NSString constants.
+//
+// Every entry below is a constant `CFStringRef` exported by CFNetwork (or, in
+// the case of the kCFErrorDomain* / kUTTagClass* ones, by CoreServices /
+// CoreFoundation but pulled in transitively by CFNetwork). Apps include them
+// in `__nl_symbol_ptr` even when the actual networking code is never reached
+// (e.g. Authenticate-Anything boilerplate baked into Game Center / Mono / ARC
+// runtimes), so missing them prints a `Warning: unhandled non-lazy symbol …`
+// and zero-fills the slot — which then later trips up `CFEqual` /
+// NSDictionary keying with `0x0`. Exporting them as plain unique NSStrings is
+// enough to silence the warnings and keep the dictionary keys distinct.
+//
+// Values are the documented CFString contents from the Apple SDK headers.
+// Where the runtime doesn't observe the literal value (purely sentinel CFTypes)
+// we still pick the conventional spelling for readability.
+pub const CONSTANTS: ConstantExports = &[
+    // NSURLAuthenticationChallenge / NSURLProtectionSpace authentication-method
+    // names.
+    (
+        "_NSURLAuthenticationMethodDefault",
+        HostConstant::NSString("NSURLAuthenticationMethodDefault"),
+    ),
+    (
+        "_NSURLAuthenticationMethodHTTPBasic",
+        HostConstant::NSString("NSURLAuthenticationMethodHTTPBasic"),
+    ),
+    (
+        "_NSURLAuthenticationMethodHTTPDigest",
+        HostConstant::NSString("NSURLAuthenticationMethodHTTPDigest"),
+    ),
+    (
+        "_NSURLAuthenticationMethodHTMLForm",
+        HostConstant::NSString("NSURLAuthenticationMethodHTMLForm"),
+    ),
+    (
+        "_NSURLAuthenticationMethodNTLM",
+        HostConstant::NSString("NSURLAuthenticationMethodNTLM"),
+    ),
+    (
+        "_NSURLAuthenticationMethodNegotiate",
+        HostConstant::NSString("NSURLAuthenticationMethodNegotiate"),
+    ),
+    (
+        "_NSURLAuthenticationMethodClientCertificate",
+        HostConstant::NSString("NSURLAuthenticationMethodClientCertificate"),
+    ),
+    (
+        "_NSURLAuthenticationMethodServerTrust",
+        HostConstant::NSString("NSURLAuthenticationMethodServerTrust"),
+    ),
+    // NSURLProtectionSpace proxy-type identifiers.
+    (
+        "_NSURLProtectionSpaceHTTP",
+        HostConstant::NSString("NSURLProtectionSpaceHTTP"),
+    ),
+    (
+        "_NSURLProtectionSpaceHTTPS",
+        HostConstant::NSString("NSURLProtectionSpaceHTTPS"),
+    ),
+    (
+        "_NSURLProtectionSpaceFTP",
+        HostConstant::NSString("NSURLProtectionSpaceFTP"),
+    ),
+    (
+        "_NSURLProtectionSpaceHTTPProxy",
+        HostConstant::NSString("NSURLProtectionSpaceHTTPProxy"),
+    ),
+    (
+        "_NSURLProtectionSpaceHTTPSProxy",
+        HostConstant::NSString("NSURLProtectionSpaceHTTPSProxy"),
+    ),
+    (
+        "_NSURLProtectionSpaceFTPProxy",
+        HostConstant::NSString("NSURLProtectionSpaceFTPProxy"),
+    ),
+    (
+        "_NSURLProtectionSpaceSOCKSProxy",
+        HostConstant::NSString("NSURLProtectionSpaceSOCKSProxy"),
+    ),
+    // CFNetwork errors.
+    (
+        "_kCFErrorDomainCFNetwork",
+        HostConstant::NSString("kCFErrorDomainCFNetwork"),
+    ),
+    // CFHost.h: userInfo keys carried by errors returned by
+    // CFHostStartInfoResolution() / CFHostStartReachabilityInfo().
+    (
+        "_kCFGetAddrInfoFailureKey",
+        HostConstant::NSString("kCFGetAddrInfoFailureKey"),
+    ),
+    (
+        "_kCFSOCKSStatusErrorKey",
+        HostConstant::NSString("kCFSOCKSStatusErrorKey"),
+    ),
+    (
+        "_kCFSOCKSVersionKey",
+        HostConstant::NSString("kCFSOCKSVersionKey"),
+    ),
+    (
+        "_kCFFTPStatusCodeKey",
+        HostConstant::NSString("kCFFTPStatusCodeKey"),
+    ),
+    (
+        "_kCFFTPResourceModDate",
+        HostConstant::NSString("kCFFTPResourceModDate"),
+    ),
+    (
+        "_kCFFTPResourceName",
+        HostConstant::NSString("kCFFTPResourceName"),
+    ),
+    (
+        "_kCFFTPResourceType",
+        HostConstant::NSString("kCFFTPResourceType"),
+    ),
+    (
+        "_kCFFTPResourceSize",
+        HostConstant::NSString("kCFFTPResourceSize"),
+    ),
+    (
+        "_kCFFTPResourceMode",
+        HostConstant::NSString("kCFFTPResourceMode"),
+    ),
+    (
+        "_kCFFTPResourceOwner",
+        HostConstant::NSString("kCFFTPResourceOwner"),
+    ),
+    (
+        "_kCFFTPResourceGroup",
+        HostConstant::NSString("kCFFTPResourceGroup"),
+    ),
+    (
+        "_kCFFTPResourceLink",
+        HostConstant::NSString("kCFFTPResourceLink"),
+    ),
+    // CFHTTPMessage / CFHTTPAuthentication property keys (kCFHTTP*).
+    ("_kCFHTTPVersion1_0", HostConstant::NSString("HTTP/1.0")),
+    ("_kCFHTTPVersion1_1", HostConstant::NSString("HTTP/1.1")),
+    (
+        "_kCFHTTPAuthenticationSchemeBasic",
+        HostConstant::NSString("Basic"),
+    ),
+    (
+        "_kCFHTTPAuthenticationSchemeDigest",
+        HostConstant::NSString("Digest"),
+    ),
+    (
+        "_kCFHTTPAuthenticationSchemeNTLM",
+        HostConstant::NSString("NTLM"),
+    ),
+    (
+        "_kCFHTTPAuthenticationSchemeNegotiate",
+        HostConstant::NSString("Negotiate"),
+    ),
+    (
+        "_kCFHTTPAuthenticationUsername",
+        HostConstant::NSString("kCFHTTPAuthenticationUsername"),
+    ),
+    (
+        "_kCFHTTPAuthenticationPassword",
+        HostConstant::NSString("kCFHTTPAuthenticationPassword"),
+    ),
+    (
+        "_kCFHTTPAuthenticationAccountDomain",
+        HostConstant::NSString("kCFHTTPAuthenticationAccountDomain"),
+    ),
+    // CFProxy lookup-result dictionary keys.
+    (
+        "_kCFProxyAutoConfigurationURLKey",
+        HostConstant::NSString("kCFProxyAutoConfigurationURLKey"),
+    ),
+    (
+        "_kCFProxyHostNameKey",
+        HostConstant::NSString("kCFProxyHostNameKey"),
+    ),
+    (
+        "_kCFProxyPortNumberKey",
+        HostConstant::NSString("kCFProxyPortNumberKey"),
+    ),
+    (
+        "_kCFProxyTypeKey",
+        HostConstant::NSString("kCFProxyTypeKey"),
+    ),
+    (
+        "_kCFProxyTypeNone",
+        HostConstant::NSString("kCFProxyTypeNone"),
+    ),
+    (
+        "_kCFProxyTypeHTTP",
+        HostConstant::NSString("kCFProxyTypeHTTP"),
+    ),
+    (
+        "_kCFProxyTypeHTTPS",
+        HostConstant::NSString("kCFProxyTypeHTTPS"),
+    ),
+    (
+        "_kCFProxyTypeSOCKS",
+        HostConstant::NSString("kCFProxyTypeSOCKS"),
+    ),
+    (
+        "_kCFProxyTypeFTP",
+        HostConstant::NSString("kCFProxyTypeFTP"),
+    ),
+    (
+        "_kCFProxyTypeAutoConfigurationURL",
+        HostConstant::NSString("kCFProxyTypeAutoConfigurationURL"),
+    ),
+    // CFStream property names.
+    (
+        "_kCFStreamPropertyHTTPProxy",
+        HostConstant::NSString("kCFStreamPropertyHTTPProxy"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPProxyHost",
+        HostConstant::NSString("kCFStreamPropertyHTTPProxyHost"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPProxyPort",
+        HostConstant::NSString("kCFStreamPropertyHTTPProxyPort"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPSProxyHost",
+        HostConstant::NSString("kCFStreamPropertyHTTPSProxyHost"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPSProxyPort",
+        HostConstant::NSString("kCFStreamPropertyHTTPSProxyPort"),
+    ),
+    (
+        "_kCFStreamPropertySOCKSProxy",
+        HostConstant::NSString("kCFStreamPropertySOCKSProxy"),
+    ),
+    (
+        "_kCFStreamPropertySOCKSProxyHost",
+        HostConstant::NSString("kCFStreamPropertySOCKSProxyHost"),
+    ),
+    (
+        "_kCFStreamPropertySOCKSProxyPort",
+        HostConstant::NSString("kCFStreamPropertySOCKSProxyPort"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPAttemptPersistentConnection",
+        HostConstant::NSString("kCFStreamPropertyHTTPAttemptPersistentConnection"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPRequestBytesWrittenCount",
+        HostConstant::NSString("kCFStreamPropertyHTTPRequestBytesWrittenCount"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPResponseHeader",
+        HostConstant::NSString("kCFStreamPropertyHTTPResponseHeader"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPShouldAutoredirect",
+        HostConstant::NSString("kCFStreamPropertyHTTPShouldAutoredirect"),
+    ),
+    (
+        "_kCFStreamPropertyHTTPFinalURL",
+        HostConstant::NSString("kCFStreamPropertyHTTPFinalURL"),
+    ),
+    // CFStream error-domain identifiers (also exposed by CoreServices).
+    (
+        "_kCFStreamErrorDomainHTTP",
+        HostConstant::NSString("kCFStreamErrorDomainHTTP"),
+    ),
+    (
+        "_kCFStreamErrorDomainSSL",
+        HostConstant::NSString("kCFStreamErrorDomainSSL"),
+    ),
+    (
+        "_kCFStreamErrorDomainSOCKS",
+        HostConstant::NSString("kCFStreamErrorDomainSOCKS"),
+    ),
+    (
+        "_kCFStreamErrorDomainSystemConfiguration",
+        HostConstant::NSString("kCFStreamErrorDomainSystemConfiguration"),
+    ),
+    (
+        "_kCFStreamErrorDomainNetServices",
+        HostConstant::NSString("kCFStreamErrorDomainNetServices"),
+    ),
+    (
+        "_kCFStreamErrorDomainMach",
+        HostConstant::NSString("kCFStreamErrorDomainMach"),
+    ),
+    // kCFStreamErrorDomainNetDB is an integer constant (value 12 per Apple
+    // CFNetwork headers).
+    (
+        "_kCFStreamErrorDomainNetDB",
+        HostConstant::Custom(|env| env.mem.alloc_and_write(12i32).cast().cast_const()),
+    ),
+    // -----------------------------------------------------------------
+    // CFNetwork proxy-settings dictionary keys, per
+    // <https://developer.apple.com/documentation/cfnetwork/kcfnetworkproxieshttpenable>.
+    // -----------------------------------------------------------------
+    (
+        "_kCFNetworkProxiesHTTPEnable",
+        HostConstant::NSString("HTTPEnable"),
+    ),
+    (
+        "_kCFNetworkProxiesHTTPProxy",
+        HostConstant::NSString("HTTPProxy"),
+    ),
+    (
+        "_kCFNetworkProxiesHTTPPort",
+        HostConstant::NSString("HTTPPort"),
+    ),
+    (
+        "_kCFNetworkProxiesHTTPSEnable",
+        HostConstant::NSString("HTTPSEnable"),
+    ),
+    (
+        "_kCFNetworkProxiesHTTPSProxy",
+        HostConstant::NSString("HTTPSProxy"),
+    ),
+    (
+        "_kCFNetworkProxiesHTTPSPort",
+        HostConstant::NSString("HTTPSPort"),
+    ),
+    (
+        "_kCFNetworkProxiesProxyAutoConfigEnable",
+        HostConstant::NSString("ProxyAutoConfigEnable"),
+    ),
+    (
+        "_kCFNetworkProxiesProxyAutoConfigURLString",
+        HostConstant::NSString("ProxyAutoConfigURLString"),
+    ),
+];

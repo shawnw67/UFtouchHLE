@@ -7,6 +7,8 @@
 
 use super::ns_notification::NSNotificationName;
 use super::ns_string;
+use crate::abi::{CallFromHost, GuestFunction};
+use crate::Environment;
 
 use crate::objc::{
     id, msg, msg_class, msg_send, nil, objc_classes, release, retain, ClassExports, HostObject,
@@ -29,8 +31,60 @@ struct Observer {
 
 struct NSNotificationCenterHostObject {
     observers: HashMap<Option<Cow<'static, str>>, Vec<Observer>>,
+    cf_observers: Vec<CfObserver>,
 }
 impl HostObject for NSNotificationCenterHostObject {}
+
+/// An observer registered with `CFNotificationCenterAddObserver`. Neither
+/// `observer` nor `object` is retained, and delivery calls `callback`.
+#[derive(Clone)]
+pub struct CfObserver {
+    pub observer: id,
+    /// `CFNotificationCallback`.
+    pub callback: GuestFunction,
+    /// Notification name to observe; `None` means any name.
+    pub name: Option<Cow<'static, str>>,
+    /// Object filter; `nil` means any object.
+    pub object: id,
+}
+
+/// Register a CF-style observer on `center`. Called from
+/// `crate::frameworks::core_foundation::cf_notification_center`.
+/// `center` must not be nil (the caller guards against that).
+pub fn add_cf_observer(env: &mut Environment, center: id, cf_observer: CfObserver) {
+    let host_obj = env
+        .objc
+        .borrow_mut::<NSNotificationCenterHostObject>(center);
+    host_obj.cf_observers.push(cf_observer);
+}
+
+/// Remove CF-style observers matching `observer`, `name` and `object` from
+/// `center` (see `CFNotificationCenterRemoveObserver`). Per CF semantics
+/// nothing was retained at registration time, so there is nothing to
+/// release here either.
+pub fn remove_cf_observer(
+    env: &mut Environment,
+    center: id,
+    observer: id,
+    name: Option<Cow<'static, str>>,
+    object: id,
+) {
+    let host_obj = env
+        .objc
+        .borrow_mut::<NSNotificationCenterHostObject>(center);
+    host_obj.cf_observers.retain(|cf| {
+        !(cf.observer == observer && cf.name == name && (object == nil || object == cf.object))
+    });
+}
+
+/// Remove every CF-style observer registered for `observer` from `center`
+/// (see `CFNotificationCenterRemoveEveryObserver`).
+pub fn remove_every_cf_observer(env: &mut Environment, center: id, observer: id) {
+    let host_obj = env
+        .objc
+        .borrow_mut::<NSNotificationCenterHostObject>(center);
+    host_obj.cf_observers.retain(|cf| cf.observer != observer);
+}
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -41,6 +95,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(NSNotificationCenterHostObject {
         observers: HashMap::new(),
+        cf_observers: Vec::new(),
     });
     env.objc.alloc_object(this, host_object, &mut env.mem)
 }
@@ -168,15 +223,21 @@ pub const CLASSES: ClassExports = objc_classes! {
         notification,
     );
 
-    let name: id = msg![env; notification name];
+    let cf_name_id: id = msg![env; notification name];
     // Usually a static string, so no real copy will happen
-    let name = ns_string::to_rust_string(env, name);
+    let name = ns_string::to_rust_string(env, cf_name_id);
 
     let notification_poster: id = msg![env; notification object];
 
     log_dbg!("Notification is a {:?} posted by {:?}", name, notification_poster);
 
     let host_obj = env.objc.borrow_mut::<NSNotificationCenterHostObject>(this);
+    let cf_observers: Vec<CfObserver> = host_obj
+        .cf_observers
+        .iter()
+        .filter(|cf| cf.name.as_ref().is_none_or(|cf_name| *cf_name == name))
+        .cloned()
+        .collect();
     let mut observers = host_obj.observers.get(&Some(name)).cloned().unwrap_or_default();
     if let Some(nameless_observers) = host_obj.observers.get(&None) {
         observers.extend(nameless_observers.iter().cloned());
@@ -203,6 +264,19 @@ pub const CLASSES: ClassExports = objc_classes! {
         // Signature should be `- (void)notification:(NSNotification *)notif`.
         let _: () = msg_send(env, (observer, selector, notification));
         release(env, observer);
+    }
+
+    if !cf_observers.is_empty() {
+        let user_info: id = msg![env; notification userInfo];
+        for CfObserver { observer, callback, name: _, object } in cf_observers {
+            if object != nil && notification_poster != object {
+                continue;
+            }
+            let _: () = callback.call_from_host(
+                env,
+                (this, observer, cf_name_id, notification_poster, user_info),
+            );
+        }
     }
 }
 - (())postNotificationName:(NSNotificationName)name
