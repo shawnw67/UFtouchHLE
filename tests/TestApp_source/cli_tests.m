@@ -7237,6 +7237,38 @@ int test_CFString_bulk_replace_and_pad(void) {
   return passed ? 0 : -1;
 }
 
+int test_CFString_nocopy_buffers(void) {
+  const UInt8 external[] = {0xfe, 0xff, 0, 0x41, 0xd8, 0x3d, 0xde, 0};
+  CFStringRef string = CFStringCreateWithBytesNoCopy(
+      NULL, external, sizeof(external), kCFStringEncodingUnicode, true,
+      kCFAllocatorNull);
+  int passed = string && CFStringGetLength(string) == 3 &&
+               CFStringGetCharacterAtIndex(string, 0) == 0x41 &&
+               CFStringGetCharacterAtIndex(string, 1) == 0xd83d;
+  CFRelease(string);
+  UniChar *characters = malloc(6);
+  characters[0] = 0x41;
+  characters[1] = 0;
+  characters[2] = 0xd83d;
+  string = CFStringCreateWithCharactersNoCopy(NULL, characters, 3,
+                                              kCFAllocatorDefault);
+  passed = passed && string && CFStringGetLength(string) == 3 &&
+           CFStringGetCharacterAtIndex(string, 1) == 0 &&
+           CFStringGetCharacterAtIndex(string, 2) == 0xd83d;
+  CFRelease(string);
+  char *cstring = malloc(6);
+  memcpy(cstring, "hello", 6);
+  string = CFStringCreateWithCStringNoCopy(
+      NULL, cstring, kCFStringEncodingASCII, kCFAllocatorDefault);
+  passed = passed && string && CFStringGetLength(string) == 5;
+  CFRelease(string);
+  UInt8 invalid[] = {0xff};
+  passed = passed && !CFStringCreateWithBytesNoCopy(NULL, invalid, 1,
+                                                    kCFStringEncodingUTF8,
+                                                    false, kCFAllocatorNull);
+  return passed ? 0 : -1;
+}
+
 int test_CFString_external_bytes(void) {
   UniChar characters[] = {0x41, 0xe9, 0xd83d, 0xde00};
   CFStringRef string = CFStringCreateWithCharacters(NULL, characters, 4);
@@ -12156,6 +12188,7 @@ struct {
     FUNC_DEF(test_CFStringFind),
     FUNC_DEF(test_CFString_range_and_trim),
     FUNC_DEF(test_CFString_external_bytes),
+    FUNC_DEF(test_CFString_nocopy_buffers),
     FUNC_DEF(test_CFString_bulk_replace_and_pad),
     FUNC_DEF(test_strcspn),
     FUNC_DEF(test_mbstowcs),

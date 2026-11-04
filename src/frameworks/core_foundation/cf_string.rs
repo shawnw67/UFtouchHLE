@@ -17,7 +17,7 @@ use crate::abi::{DotDotDot, VaList};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::foundation::{ns_string, unichar, NSRange, NSUInteger};
 use crate::libc::string::strlen;
-use crate::mem::{ConstPtr, GuestUSize, MutPtr};
+use crate::mem::{ConstPtr, ConstVoidPtr, GuestUSize, MutPtr};
 use crate::objc::{id, msg, msg_class, release, retain};
 use crate::Environment;
 
@@ -297,11 +297,60 @@ fn CFStringCreateWithBytes(
     is_external: bool,
 ) -> CFStringRef {
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
-    assert!(!is_external); // TODO
-    let encoding = CFStringConvertEncodingToNSStringEncoding(env, encoding);
-    let length: NSUInteger = num_bytes.try_into().unwrap();
-    let ns_string: id = msg_class![env; NSString alloc];
-    msg![env; ns_string initWithBytes:bytes length:length encoding:encoding]
+    let Ok(length) = u32::try_from(num_bytes) else {
+        return crate::objc::nil;
+    };
+    if length != 0 && bytes.is_null() {
+        return crate::objc::nil;
+    }
+    let mut input = env.mem.bytes_at(bytes, length);
+    match encoding {
+        kCFStringEncodingUTF16 | kCFStringEncodingUTF16BE | kCFStringEncodingUTF16LE => {
+            if !length.is_multiple_of(2) {
+                return crate::objc::nil;
+            }
+            let mut big = encoding == kCFStringEncodingUTF16BE;
+            if is_external && encoding == kCFStringEncodingUTF16 {
+                if input.starts_with(&[0xfe, 0xff]) {
+                    big = true;
+                    input = &input[2..];
+                } else if input.starts_with(&[0xff, 0xfe]) {
+                    input = &input[2..];
+                }
+            }
+            let units = input
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| {
+                    if big {
+                        u16::from_be_bytes(*pair)
+                    } else {
+                        u16::from_le_bytes(*pair)
+                    }
+                })
+                .collect();
+            ns_string::from_u16_vec(env, units)
+        }
+        kCFStringEncodingUTF8 => {
+            if is_external && input.starts_with(&[0xef, 0xbb, 0xbf]) {
+                input = &input[3..];
+            }
+            let Ok(text) = std::str::from_utf8(input) else {
+                return crate::objc::nil;
+            };
+            let text = text.to_owned();
+            ns_string::from_rust_string(env, text)
+        }
+        kCFStringEncodingASCII | kCFStringEncodingMacRoman | kCFStringEncodingISOLatin1 => {
+            if encoding != kCFStringEncodingISOLatin1 && !input.is_ascii() {
+                return crate::objc::nil;
+            }
+            let units = input.iter().map(|&b| u16::from(b)).collect();
+            ns_string::from_u16_vec(env, units)
+        }
+        _ => crate::objc::nil,
+    }
 }
 
 fn CFStringCreateWithCString(
@@ -324,14 +373,79 @@ fn CFStringCreateWithCStringNoCopy(
     deallocator: CFAllocatorRef,
 ) -> CFStringRef {
     assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
-    assert!(env.mem.read(deallocator).is_null()); // unimplemented
-    let encoding = CFStringConvertEncodingToNSStringEncoding(env, encoding);
+    if !valid_string_deallocator(env, deallocator) {
+        return crate::objc::nil;
+    }
     let c_len: GuestUSize = strlen(env, c_string);
-    let ns_string: id = msg_class![env; NSString alloc];
     // Docs of CFStringCreateWithCStringNoCopy says caller should never assume
     // that the object is using the external buffer (it could be copied or even
     // dumped). So we can "safely" invoke a method which does copy!
-    msg![env; ns_string initWithBytes:c_string length:c_len encoding:encoding]
+    let Ok(length) = CFIndex::try_from(c_len) else {
+        return crate::objc::nil;
+    };
+    let result = CFStringCreateWithBytes(env, allocator, c_string, length, encoding, false);
+    if !result.is_null() {
+        dispose_string_buffer(env, c_string.cast_void(), deallocator);
+    }
+    result
+}
+
+fn valid_string_deallocator(env: &Environment, allocator: CFAllocatorRef) -> bool {
+    allocator == kCFAllocatorDefault || {
+        let allocator = env.mem.read(allocator);
+        allocator.is_null() || allocator.is_system_default()
+    }
+}
+
+fn dispose_string_buffer(env: &mut Environment, buffer: ConstVoidPtr, allocator: CFAllocatorRef) {
+    if !buffer.is_null()
+        && (allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default())
+    {
+        env.mem.free(buffer.cast_mut());
+    }
+}
+
+fn CFStringCreateWithCharactersNoCopy(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    characters: ConstPtr<unichar>,
+    length: CFIndex,
+    deallocator: CFAllocatorRef,
+) -> CFStringRef {
+    if length < 0
+        || (length > 0 && characters.is_null())
+        || !valid_string_deallocator(env, deallocator)
+    {
+        return crate::objc::nil;
+    }
+    let result = CFStringCreateWithCharacters(env, allocator, characters, length);
+    if !result.is_null() {
+        dispose_string_buffer(env, characters.cast_void(), deallocator);
+    }
+    result
+}
+
+fn CFStringCreateWithBytesNoCopy(
+    env: &mut Environment,
+    allocator: CFAllocatorRef,
+    bytes: ConstPtr<u8>,
+    length: CFIndex,
+    encoding: CFStringEncoding,
+    external: bool,
+    deallocator: CFAllocatorRef,
+) -> CFStringRef {
+    if length < 0
+        || (length > 0 && bytes.is_null())
+        || !CFStringIsEncodingAvailable(env, encoding)
+        || !valid_string_deallocator(env, deallocator)
+    {
+        return crate::objc::nil;
+    }
+    let result = CFStringCreateWithBytes(env, allocator, bytes, length, encoding, external);
+    if !result.is_null() {
+        dispose_string_buffer(env, bytes.cast_void(), deallocator);
+    }
+    result
 }
 
 fn CFStringCreateWithFormat(
@@ -919,6 +1033,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(CFStringCreateWithBytes(_, _, _, _, _)),
     export_c_func!(CFStringCreateWithCString(_, _, _)),
     export_c_func!(CFStringCreateWithCStringNoCopy(_, _, _, _)),
+    export_c_func!(CFStringCreateWithCharactersNoCopy(_, _, _, _)),
+    export_c_func!(CFStringCreateWithBytesNoCopy(_, _, _, _, _, _)),
     export_c_func!(CFStringCreateWithCharacters(_, _, _)),
     export_c_func!(CFStringCreateWithFormat(_, _, _, _)),
     export_c_func!(CFStringCreateWithFormatAndArguments(_, _, _, _)),
