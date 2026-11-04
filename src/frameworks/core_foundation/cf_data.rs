@@ -20,6 +20,28 @@ use crate::Environment;
 pub type CFDataRef = super::CFTypeRef;
 pub type CFMutableDataRef = super::CFTypeRef;
 
+fn CFDataRetain(env: &mut Environment, data: CFDataRef) -> CFDataRef {
+    if data.is_null() {
+        data
+    } else {
+        super::CFRetain(env, data)
+    }
+}
+
+fn CFDataRelease(env: &mut Environment, data: CFDataRef) {
+    super::CFRelease(env, data);
+}
+
+fn CFDataIsEqual(env: &mut Environment, a: CFDataRef, b: CFDataRef) -> bool {
+    if a == b {
+        return true;
+    }
+    if a.is_null() || b.is_null() {
+        return false;
+    }
+    msg![env; a isEqualToData:b]
+}
+
 pub fn CFDataCreate(
     env: &mut Environment,
     allocator: CFAllocatorRef,
@@ -189,6 +211,9 @@ fn CFDataGetBytes(env: &mut Environment, data: CFDataRef, range: CFRange, buffer
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(CFDataRetain(_)),
+    export_c_func!(CFDataRelease(_)),
+    export_c_func!(CFDataIsEqual(_, _)),
     export_c_func!(CFDataCreate(_, _, _)),
     export_c_func!(CFDataCreateCopy(_, _)),
     export_c_func!(CFDataCreateMutable(_, _)),

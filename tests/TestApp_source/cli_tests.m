@@ -2780,10 +2780,21 @@ int test_cfdata_equality_and_dictionary_keys() {
   return 0;
 }
 
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+extern CFDataRef CFDataRetain(CFDataRef data);
+extern void CFDataRelease(CFDataRef data);
+extern bool CFDataIsEqual(CFDataRef a, CFDataRef b);
+#endif
 int test_cfdata_mutable_copy_and_length() {
   unsigned char original[] = {1, 2, 3};
   CFDataRef source = CFDataCreate(NULL, original, 3);
   CFMutableDataRef data = CFDataCreateMutableCopy(NULL, 0, source);
+#ifndef DEFINE_ME_WHEN_BUILDING_ON_MACOS
+  if (!CFDataIsEqual(source, data) || CFDataIsEqual(source, NULL) ||
+      CFDataRetain(source) != source || CFDataRetain(NULL) != NULL)
+    return 4;
+  CFDataRelease(source);
+#endif
   CFDataSetLength(data, 6);
   UInt8 *bytes = CFDataGetMutableBytePtr(data);
   if (CFDataGetLength(data) != 6 || memcmp(bytes, original, 3) != 0 ||
