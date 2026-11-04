@@ -174,7 +174,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (())setLineWidth:(CGFloat)width { env.objc.borrow_mut::<UIBezierPathHostObject>(this).line_width = width; }
 - (CGFloat)lineWidth { env.objc.borrow::<UIBezierPathHostObject>(this).line_width }
 - (())setLineDash:(ConstPtr<CGFloat>)pattern count:(i32)count phase:(CGFloat)phase {
-    if count < 0 || count > 4096 || (count != 0 && pattern.is_null()) || !phase.is_finite() { return; }
+    if !(0..=4096).contains(&count) || (count != 0 && pattern.is_null()) || !phase.is_finite() { return; }
     let values: Vec<_> = (0..count).map(|i| env.mem.read(pattern + i as u32)).collect();
     if values.iter().any(|value| !value.is_finite() || *value < 0.0) { return; }
     let object = env.objc.borrow_mut::<UIBezierPathHostObject>(this);

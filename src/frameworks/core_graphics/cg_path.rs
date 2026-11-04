@@ -113,7 +113,7 @@ pub(crate) fn dashed_path(path: &Path, dash: &[CGFloat], phase: CGFloat) -> Path
         return path.clone();
     }
     let mut pattern = dash.to_vec();
-    if pattern.len() % 2 != 0 {
+    if !pattern.len().is_multiple_of(2) {
         pattern.extend_from_slice(dash);
     }
     let total: f64 = pattern.iter().map(|&x| f64::from(x)).sum();
@@ -159,7 +159,7 @@ pub(crate) fn dashed_path(path: &Path, dash: &[CGFloat], phase: CGFloat) -> Path
                 if next <= position {
                     break;
                 }
-                if index % 2 == 0 {
+                if index.is_multiple_of(2) {
                     let point = |p: f64| CGPoint {
                         x: (f64::from(a.x) + dx * p / distance) as CGFloat,
                         y: (f64::from(a.y) + dy * p / distance) as CGFloat,
