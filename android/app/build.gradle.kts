@@ -229,7 +229,7 @@ cargoNdk {
         "--lib",
         "--no-default-features",
         "--features",
-        "Podroid_openal_soft_wrapper/static,sdl2/bundled"
+        "Podroid_openal_soft_wrapper/static,Podroid_libxml2_wrapper/static,sdl2/bundled"
     )
 }
 

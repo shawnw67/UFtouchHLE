@@ -30,7 +30,7 @@ path = "src/bin.rs"
 
 [features]
 default = ["static"]
-static = ["sdl2/bundled", "sdl2/static-link", "Podroid_openal_soft_wrapper/static"]
+static = ["sdl2/bundled", "sdl2/static-link", "Podroid_openal_soft_wrapper/static", "Podroid_libxml2_wrapper/static"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -90,6 +90,7 @@ sdl2-sys = { git = "https://github.com/touchHLE/rust-sdl2", tag = "touchHLE-3" }
 Podroid_dynarmic_wrapper = { path = "src/cpu/dynarmic_wrapper" }
 Podroid_gl_bindings = { path = "src/gles/gl_bindings" }
 Podroid_openal_soft_wrapper = { path = "src/audio/openal_soft_wrapper" }
+Podroid_libxml2_wrapper = { path = "src/frameworks/libxml2_wrapper" }
 Podroid_pvrt_decompress_wrapper = { path = "src/image/pvrt_decompress_wrapper" }
 Podroid_stb_image_wrapper = { path = "src/image/stb_image_wrapper" }
 Podroid_version = { path = "src/version" }

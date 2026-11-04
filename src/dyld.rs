@@ -1135,7 +1135,7 @@ impl Dyld {
 
     /// Internal [Self::create_proc_address] that doesn't invalidate the cache.
     /// For use before a [Cpu] is available.
-    fn create_proc_address_no_inval(
+    pub fn create_proc_address_no_inval(
         &mut self,
         mem: &mut Mem,
         symbol: &str,

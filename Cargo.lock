@@ -8,6 +8,7 @@ version = "0.3.0"
 dependencies = [
  "Podroid_dynarmic_wrapper",
  "Podroid_gl_bindings",
+ "Podroid_libxml2_wrapper",
  "Podroid_openal_soft_wrapper",
  "Podroid_pvrt_decompress_wrapper",
  "Podroid_stb_image_wrapper",
@@ -64,6 +65,14 @@ name = "Podroid_gl_bindings"
 version = "0.3.0"
 dependencies = [
  "gl_generator",
+]
+
+[[package]]
+name = "Podroid_libxml2_wrapper"
+version = "0.3.0"
+dependencies = [
+ "cc",
+ "cmake",
 ]
 
 [[package]]

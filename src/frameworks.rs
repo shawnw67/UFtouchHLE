@@ -49,6 +49,7 @@ pub mod image_io;
 pub mod libbz2;
 pub mod libicucore;
 pub mod libsqlite3;
+pub mod libxml2;
 pub mod localytics;
 pub mod media_player;
 pub mod media_toolbox;
