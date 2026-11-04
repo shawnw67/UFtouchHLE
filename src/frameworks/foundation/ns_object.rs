@@ -17,6 +17,7 @@
 use super::ns_string::{from_rust_string, to_rust_string};
 use super::{NSTimeInterval, NSUInteger};
 use crate::abi::CallFromHost;
+use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::foundation::ns_run_loop::{add_perform_request, cancel_perform_requests};
 use crate::frameworks::foundation::ns_thread::detach_new_thread_inner;
 use crate::libc::semaphore::{host_destroy_semaphore, sem_wait};
@@ -63,6 +64,32 @@ fn cxx_destruct(env: &mut Environment, object: id) {
         let () = imp.call_from_host(env, (object, sel));
     }
 }
+
+/// `NSCopyObject(id object, NSUInteger extraBytes, NSZone *zone)`.
+///
+/// Per Apple's Objective-C Runtime Utilities documentation, NSCopyObject
+/// "Creates an exact copy of an object." It allocates a new instance of the
+/// same class as `object` (plus `extraBytes` of trailing storage) and copies
+/// the original instance's bytes into it, returning the new instance. The
+/// copy is shallow — object-pointer ivars are duplicated as raw pointers —
+/// so classes that build their `-copyWithZone:` on top of NSCopyObject are
+/// responsible for retaining any owned ivars themselves. The `zone` argument is
+/// obsolete on modern runtimes and is ignored. NSCopyObject is deprecated but
+/// plenty of shipping iPhone OS apps still call it from their `-copyWithZone:`
+/// implementations.
+fn NSCopyObject(
+    env: &mut Environment,
+    object: id,
+    extra_bytes: NSUInteger,
+    _zone: NSZonePtr,
+) -> id {
+    env.objc.object_copy(object, extra_bytes, &mut env.mem)
+}
+
+/// Exports `NSCopyObject` for the dynamic linker. `NSAllocateObject` is
+/// already exported from `ns_file_manager::FUNCTIONS` — do not duplicate it
+/// here or the linker will see two definitions for the same symbol.
+pub const FUNCTIONS: FunctionExports = &[export_c_func!(NSCopyObject(_, _, _))];
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -406,25 +433,5 @@ forUndefinedKey:(id)key { // NSString*
 
 @end
 
+
 };
-/// `NSCopyObject(id object, NSUInteger extraBytes, NSZone *zone)`.
-///
-/// Per Apple's Objective-C Runtime Utilities documentation, NSCopyObject
-/// "Creates an exact copy of an object." It allocates a new instance of the
-/// same class as `object` (plus `extraBytes` of trailing storage) and copies
-/// the original instance's bytes into it, returning the new instance. The
-/// copy is shallow — object-pointer ivars are duplicated as raw pointers —
-/// so classes that build their `-copyWithZone:` on top of NSCopyObject are
-/// responsible for retaining any owned ivars themselves. The `zone` argument is
-/// obsolete on modern runtimes and is ignored. NSCopyObject is deprecated but
-/// plenty of shipping iPhone OS apps still call it from their `-copyWithZone:`
-/// implementations.
-#[allow(dead_code)]
-fn NSCopyObject(
-    env: &mut Environment,
-    object: id,
-    extra_bytes: NSUInteger,
-    _zone: NSZonePtr,
-) -> id {
-    env.objc.object_copy(object, extra_bytes, &mut env.mem)
-}

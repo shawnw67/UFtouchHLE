@@ -11,14 +11,14 @@
 
 use super::audio_file::{
     kAudioFileBadPropertySizeError, kAudioFilePropertyDataFormat, kAudioFileReadPermission,
-    property_size, AudioFileClose, AudioFileGetProperty, AudioFileID, AudioFileOpenURL,
-    AudioFileReadBytes,
+    property_size, AudioFileClose, AudioFileCreateWithURL, AudioFileGetProperty, AudioFileID,
+    AudioFileOpenURL, AudioFileReadBytes,
 };
 use super::audio_queue::is_supported_audio_format;
 use super::audio_unit::AudioBufferList;
 use crate::audio::decode_ima4;
 use crate::dyld::{export_c_func, FunctionExports};
-use crate::frameworks::carbon_core::{eofErr, OSStatus};
+use crate::frameworks::carbon_core::{eofErr, paramErr, OSStatus};
 use crate::frameworks::core_audio_types::{
     debug_fourcc, fourcc, kAudioFormatAppleIMA4, kAudioFormatLinearPCM, AudioStreamBasicDescription,
 };
@@ -40,6 +40,8 @@ impl State {
 
 pub struct ExtAudioFileHostObject {
     guest_audio_file: AudioFileID,
+    /// The guest owns [Self::guest_audio_file], so don't close it on dispose.
+    wrapped: bool,
     client_data_format: Option<AudioStreamBasicDescription>,
     /// Position in the data in the client format.
     current_bytes_read: i64,
@@ -61,12 +63,12 @@ const kExtAudioFileProperty_FileDataFormat: ExtAudioFilePropertyID = fourcc(b"ff
 const kExtAudioFileProperty_ClientDataFormat: ExtAudioFilePropertyID = fourcc(b"cfmt");
 const kExtAudioFileProperty_FileLengthFrames: ExtAudioFilePropertyID = fourcc(b"#frm");
 
+const kExtAudioFileError_InvalidProperty: OSStatus = fourcc(b"pty?") as _;
+
 fn file_data_format(env: &mut Environment, file: ExtAudioFileRef) -> AudioStreamBasicDescription {
     let guest_audio_file =
         State::get(&mut env.framework_state).extended_audio_files[&file].guest_audio_file;
-    let audio_file =
-        &env.framework_state.audio_toolbox.audio_file.audio_files[&guest_audio_file].audio_file;
-    AudioStreamBasicDescription::from_audio_description(audio_file.audio_description())
+    env.framework_state.audio_toolbox.audio_file.audio_files[&guest_audio_file].data_format()
 }
 
 /// Format the app reads data in.
@@ -88,7 +90,8 @@ fn decode_ima4_file(env: &mut Environment, file: ExtAudioFileRef, channels: u32)
         .audio_files
         .get_mut(&guest_audio_file)
         .unwrap()
-        .audio_file;
+        .as_real_mut()
+        .unwrap();
     let mut data = vec![0u8; audio_file.byte_count() as usize];
     let read = audio_file.read_bytes(0, &mut data).unwrap();
     data.truncate(read);
@@ -135,21 +138,7 @@ fn ExtAudioFileOpenURL(
         return res;
     }
 
-    let host_object = ExtAudioFileHostObject {
-        guest_audio_file,
-        client_data_format: None,
-        current_bytes_read: 0,
-        decoded: None,
-    };
-
-    let guest_extended_audio_file = env.mem.alloc_and_write(OpaqueExtAudioFile { _filler: 0 });
-    State::get(&mut env.framework_state)
-        .extended_audio_files
-        .insert(guest_extended_audio_file, host_object);
-
-    env.mem.write(out_ext_audio_file, guest_extended_audio_file);
-
-    0 // success
+    register_ext_audio_file(env, guest_audio_file, false, out_ext_audio_file)
 }
 
 fn ExtAudioFileGetProperty(
@@ -169,8 +158,10 @@ fn ExtAudioFileGetProperty(
         let guest_audio_file = State::get(&mut env.framework_state).extended_audio_files
             [&in_ext_audio_file]
             .guest_audio_file;
-        let audio_file =
-            &env.framework_state.audio_toolbox.audio_file.audio_files[&guest_audio_file].audio_file;
+        let audio_file = &env.framework_state.audio_toolbox.audio_file.audio_files
+            [&guest_audio_file]
+            .as_real()
+            .unwrap();
         let frames = if format.format_id == kAudioFormatAppleIMA4 {
             // Both channels' packets count as one frame.
             audio_file.packet_count() as i64 * 64 / format.channels_per_frame as i64
@@ -264,7 +255,7 @@ fn ExtAudioFileSetProperty(
         .get(&host_object.guest_audio_file)
         .unwrap();
     let audio_desc = AudioStreamBasicDescription::from_audio_description(
-        other_host_object.audio_file.audio_description(),
+        other_host_object.as_real().unwrap().audio_description(),
     );
     if audio_desc == client_audio_desc {
         return 0; // success
@@ -398,6 +389,114 @@ fn ExtAudioFileSeek(
     0 // success
 }
 
+fn register_ext_audio_file(
+    env: &mut Environment,
+    guest_audio_file: AudioFileID,
+    wrapped: bool,
+    out_ext_audio_file: MutPtr<ExtAudioFileRef>,
+) -> OSStatus {
+    let host_object = ExtAudioFileHostObject {
+        guest_audio_file,
+        wrapped,
+        client_data_format: None,
+        current_bytes_read: 0,
+        decoded: None,
+    };
+
+    let guest_extended_audio_file = env.mem.alloc_and_write(OpaqueExtAudioFile { _filler: 0 });
+    State::get(&mut env.framework_state)
+        .extended_audio_files
+        .insert(guest_extended_audio_file, host_object);
+
+    env.mem.write(out_ext_audio_file, guest_extended_audio_file);
+
+    0 // success
+}
+
+fn ExtAudioFileCreateWithURL(
+    env: &mut Environment,
+    in_url: CFURLRef,
+    file_type: u32,
+    in_format: ConstPtr<AudioStreamBasicDescription>,
+    _in_channel_layout: ConstVoidPtr,
+    in_flags: u32,
+    out_ext_audio_file: MutPtr<ExtAudioFileRef>,
+) -> OSStatus {
+    if out_ext_audio_file.is_null() {
+        return paramErr;
+    }
+    let audio_file_ptr: MutPtr<AudioFileID> = env.mem.alloc(guest_size_of::<AudioFileID>()).cast();
+    let res = AudioFileCreateWithURL(env, in_url, file_type, in_format, in_flags, audio_file_ptr);
+    let guest_audio_file = env.mem.read(audio_file_ptr);
+    env.mem.free(audio_file_ptr.cast());
+    if res != 0 {
+        return res;
+    }
+    register_ext_audio_file(env, guest_audio_file, false, out_ext_audio_file)
+}
+
+fn ExtAudioFileWrapAudioFileID(
+    env: &mut Environment,
+    in_audio_file: AudioFileID,
+    _in_for_writing: bool,
+    out_ext_audio_file: MutPtr<ExtAudioFileRef>,
+) -> OSStatus {
+    return_if_null!(in_audio_file);
+    register_ext_audio_file(env, in_audio_file, true, out_ext_audio_file)
+}
+
+fn ExtAudioFileGetPropertyInfo(
+    env: &mut Environment,
+    in_ext_audio_file: ExtAudioFileRef,
+    in_property_id: ExtAudioFilePropertyID,
+    out_size: MutPtr<u32>,
+    out_writable: MutPtr<u32>,
+) -> OSStatus {
+    return_if_null!(in_ext_audio_file);
+    let (size, writable) = match in_property_id {
+        kExtAudioFileProperty_FileDataFormat => {
+            (guest_size_of::<AudioStreamBasicDescription>(), false)
+        }
+        kExtAudioFileProperty_ClientDataFormat => {
+            (guest_size_of::<AudioStreamBasicDescription>(), true)
+        }
+        kExtAudioFileProperty_FileLengthFrames => (guest_size_of::<i64>(), false),
+        _ => {
+            log!(
+                "Warning: ExtAudioFileGetPropertyInfo() unknown property {}",
+                debug_fourcc(in_property_id)
+            );
+            return kExtAudioFileError_InvalidProperty;
+        }
+    };
+    if !out_size.is_null() {
+        env.mem.write(out_size, size);
+    }
+    if !out_writable.is_null() {
+        env.mem.write(out_writable, writable as u32);
+    }
+    0 // success
+}
+
+fn ExtAudioFileTell(
+    env: &mut Environment,
+    in_ext_audio_file: ExtAudioFileRef,
+    out_frame_offset: MutPtr<i64>,
+) -> OSStatus {
+    return_if_null!(in_ext_audio_file);
+    let format = file_data_format(env, in_ext_audio_file);
+    let host_object =
+        &State::get(&mut env.framework_state).extended_audio_files[&in_ext_audio_file];
+    let bytes_per_frame = host_object
+        .client_data_format
+        .unwrap_or(format)
+        .bytes_per_frame;
+    assert!(bytes_per_frame != 0, "TODO: telling in a compressed file");
+    let offset = host_object.current_bytes_read / i64::from(bytes_per_frame);
+    env.mem.write(out_frame_offset, offset);
+    0 // success
+}
+
 fn ExtAudioFileDispose(env: &mut Environment, in_ext_audio_file: ExtAudioFileRef) -> OSStatus {
     return_if_null!(in_ext_audio_file);
 
@@ -409,8 +508,10 @@ fn ExtAudioFileDispose(env: &mut Environment, in_ext_audio_file: ExtAudioFileRef
         .get(&in_ext_audio_file)
         .unwrap();
 
-    let res = AudioFileClose(env, host_object.guest_audio_file);
-    assert_eq!(res, 0); // success
+    if !host_object.wrapped {
+        let res = AudioFileClose(env, host_object.guest_audio_file);
+        assert_eq!(res, 0); // success
+    }
 
     let _host_object = env
         .framework_state
@@ -425,7 +526,11 @@ fn ExtAudioFileDispose(env: &mut Environment, in_ext_audio_file: ExtAudioFileRef
 }
 
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(ExtAudioFileCreateWithURL(_, _, _, _, _, _)),
     export_c_func!(ExtAudioFileOpenURL(_, _)),
+    export_c_func!(ExtAudioFileWrapAudioFileID(_, _, _)),
+    export_c_func!(ExtAudioFileGetPropertyInfo(_, _, _, _)),
+    export_c_func!(ExtAudioFileTell(_, _)),
     export_c_func!(ExtAudioFileGetProperty(_, _, _, _)),
     export_c_func!(ExtAudioFileSetProperty(_, _, _, _)),
     export_c_func!(ExtAudioFileSeek(_, _)),

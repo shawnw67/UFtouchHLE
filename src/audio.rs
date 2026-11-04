@@ -13,6 +13,7 @@
 //! - [Apple Core Audio Format Specification 1.0](https://developer.apple.com/library/archive/documentation/MusicAudio/Reference/CAFSpec/CAF_intro/CAF_intro.html)
 
 mod ima4;
+pub mod mic;
 pub mod openal;
 mod symphonia_formats;
 
@@ -293,6 +294,15 @@ impl AudioFile {
                 Ok(bytes_to_read)
             }
         }
+    }
+
+    /// Compressed packets aren't exposed yet: every file is decoded to PCM.
+    pub fn read_mp3_packets_from_vec(_bytes: Vec<u8>) -> Option<Self> {
+        None
+    }
+
+    pub fn compressed_packets(&self) -> Option<&CompressedPackets> {
+        None
     }
 
     pub fn estimated_duration(&self) -> f64 {

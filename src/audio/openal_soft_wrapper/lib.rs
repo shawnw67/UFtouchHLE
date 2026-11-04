@@ -65,10 +65,30 @@ pub mod alc_defines {
     pub const ALC_INVALID_ENUM: ALCenum = 0xA003;
     pub const ALC_INVALID_VALUE: ALCenum = 0xA004;
     pub const ALC_OUT_OF_MEMORY: ALCenum = 0xA005;
+
+    // Capture (alc.h "Capture extension")
+    pub const ALC_CAPTURE_SAMPLES: ALCenum = 0x312;
 }
 
 extern "C" {
     pub fn alcOpenDevice(devicename: *const ALCchar) -> *mut ALCdevice;
+    pub fn alcGetIntegerv(
+        device: *mut ALCdevice,
+        param: ALCenum,
+        size: ALCsizei,
+        values: *mut ALCint,
+    );
+    // === alc.h "Capture extension" ===
+    pub fn alcCaptureOpenDevice(
+        devicename: *const ALCchar,
+        frequency: ALCuint,
+        format: ALCenum,
+        buffersize: ALCsizei,
+    ) -> *mut ALCdevice;
+    pub fn alcCaptureCloseDevice(device: *mut ALCdevice) -> ALCboolean;
+    pub fn alcCaptureStart(device: *mut ALCdevice);
+    pub fn alcCaptureStop(device: *mut ALCdevice);
+    pub fn alcCaptureSamples(device: *mut ALCdevice, buffer: *mut ALCvoid, samples: ALCsizei);
     pub fn alcCloseDevice(device: *mut ALCdevice) -> ALCboolean;
 
     pub fn alcCreateContext(device: *mut ALCdevice, attrlist: *const ALCint) -> *mut ALCcontext;

@@ -1690,6 +1690,11 @@ impl Drand48State {
 
 const MKTEMP_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
+fn dladdr(_env: &mut Environment, _addr: ConstVoidPtr, _info: MutVoidPtr) -> i32 {
+    // FakeDladdr
+    0
+}
+
 pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(__stack_chk_fail()),
     export_c_func!(posix_memalign(_, _, _)),
@@ -1779,6 +1784,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(strtoll(_, _, _)),
     export_c_func!(strtoll_l(_, _, _, _)),
     export_c_func!(strtoull_l(_, _, _, _)),
+    export_c_func!(dladdr(_, _)),
 ];
 
 /// A simple wrapper around [atof_inner_generic] for the case of C string.

@@ -30,6 +30,7 @@ mod log;
 mod abi;
 #[cfg(target_os = "android")]
 mod android_launcher;
+mod android_media;
 mod audio;
 mod bundle;
 mod cpu;

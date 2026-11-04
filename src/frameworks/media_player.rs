@@ -14,6 +14,7 @@ mod media_query;
 pub mod mf_mail_compose_view_controller;
 pub(crate) mod movie_decoder;
 mod movie_player;
+pub(crate) mod movie_video;
 mod mp_volume_view;
 mod music_player;
 

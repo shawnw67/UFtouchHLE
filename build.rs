@@ -12,6 +12,14 @@ fn rerun_if_changed(path: &Path) {
 }
 
 pub fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
+        println!("cargo:rerun-if-changed=src/audio/mic_macos.c");
+        cc::Build::new()
+            .file("src/audio/mic_macos.c")
+            .compile("touchhle_mic_macos");
+        println!("cargo:rustc-link-lib=framework=CoreAudio");
+    }
+
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let package_root = Path::new(env!("CARGO_MANIFEST_DIR"));
 

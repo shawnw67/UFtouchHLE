@@ -5,6 +5,7 @@
  */
 //! `UIImage`.
 
+use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::core_graphics::cg_context::CGContextDrawImage;
 use crate::frameworks::core_graphics::cg_image::{
     self, CGImageGetHeight, CGImageGetWidth, CGImageRef, CGImageRelease, CGImageRetain,
@@ -15,9 +16,10 @@ use crate::frameworks::foundation::{ns_data, ns_string, NSInteger};
 use crate::frameworks::uikit::ui_graphics::UIGraphicsGetCurrentContext;
 use crate::fs::GuestPath;
 use crate::image::Image;
+use crate::mem::MutVoidPtr;
 use crate::objc::{
-    autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
-    NSZonePtr,
+    autorelease, id, msg, msg_class, msg_send, nil, objc_classes, release, retain, ClassExports,
+    HostObject, NSZonePtr, SEL,
 };
 use crate::Environment;
 use std::collections::HashMap;
@@ -217,3 +219,177 @@ pub const CLASSES: ClassExports = objc_classes! {
 @end
 
 };
+
+/// `void UIImageWriteToSavedPhotosAlbum(UIImage *image, id completionTarget,
+///     SEL completionSelector, void *contextInfo);`
+///
+/// Apple documentation:
+/// <https://developer.apple.com/documentation/uikit/1619125-uiimagewritetosavedphotosalbum>
+///
+/// Adds the specified image to the user's Camera Roll album. In the emulator
+/// we persist the PNG data into the app's sandboxed Documents directory (since
+/// there is no real photo library). After saving, the optional completion
+/// callback is invoked with a nil error to signal success.
+///
+/// The completion selector signature expected by Apple is:
+/// `- (void)image:(UIImage *)image didFinishSavingWithError:(NSError *)error
+///               contextInfo:(void *)contextInfo;`
+fn UIImageWriteToSavedPhotosAlbum(
+    env: &mut Environment,
+    image: id,
+    completion_target: id,
+    completion_selector: SEL,
+    context_info: MutVoidPtr,
+) {
+    if image == nil {
+        log!("UIImageWriteToSavedPhotosAlbum: nil image, ignoring.");
+        // Still invoke callback if requested, with nil error
+        invoke_save_completion(
+            env,
+            completion_target,
+            completion_selector,
+            image,
+            nil,
+            context_info,
+        );
+        return;
+    }
+
+    // Get the CGImage backing the UIImage
+    let cg_image_ref: CGImageRef = msg![env; image CGImage];
+
+    let save_success = if !cg_image_ref.is_null() {
+        let img = cg_image::borrow_image(&env.objc, cg_image_ref);
+        let (w, h) = img.dimensions();
+        let rgba = img.pixels();
+        let stride = w as usize * 4;
+
+        let mut png_data: Vec<u8> = Vec::new();
+        let ctx_ptr: *mut std::ffi::c_void = (&mut png_data as *mut Vec<u8>).cast();
+        let ok = img.write_png_image(ctx_ptr, w as i32, h as i32, rgba, stride as i32);
+
+        if ok != 0 && !png_data.is_empty() {
+            // Generate a unique filename based on timestamp
+            let filename = format!(
+                "SavedPhoto_{}.png",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis())
+                    .unwrap_or(0)
+            );
+
+            // Save to the app's Documents directory
+            let docs_path = format!("/Documents/{}", filename);
+            let guest_path = GuestPath::new(&docs_path);
+            match env.fs.write(guest_path, &png_data) {
+                Ok(()) => {
+                    log!(
+                        "UIImageWriteToSavedPhotosAlbum: saved {}x{} image to {}",
+                        w,
+                        h,
+                        docs_path
+                    );
+                    true
+                }
+                Err(e) => {
+                    log!(
+                        "UIImageWriteToSavedPhotosAlbum: failed to write {}: {:?}",
+                        docs_path,
+                        e
+                    );
+                    false
+                }
+            }
+        } else {
+            log!("UIImageWriteToSavedPhotosAlbum: PNG encoding failed.");
+            false
+        }
+    } else {
+        log!("UIImageWriteToSavedPhotosAlbum: image has nil CGImage.");
+        false
+    };
+
+    // Invoke the completion callback if provided.
+    // We pass nil for the error on success and a generic NSError on failure
+    // (most apps only check whether the error is nil).
+    let error: id = if save_success {
+        nil
+    } else {
+        let domain = ns_string::get_static_str(env, "UIImageWriteToSavedPhotosAlbumErrorDomain");
+        let error: id = msg_class![env; NSError errorWithDomain:domain
+                                                           code:(-1 as NSInteger)
+                                                       userInfo:nil];
+        error
+    };
+    invoke_save_completion(
+        env,
+        completion_target,
+        completion_selector,
+        image,
+        error,
+        context_info,
+    );
+}
+
+fn UIImagePNGRepresentation(env: &mut Environment, image: id) -> id {
+    if image == nil {
+        return nil;
+    }
+    let cg_image: CGImageRef = msg![env; image CGImage];
+    if cg_image.is_null() {
+        return nil;
+    }
+
+    let img = cg_image::borrow_image(&env.objc, cg_image);
+    let (w, h) = img.dimensions();
+    let rgba = img.pixels();
+    let stride = w as usize * 4;
+
+    let mut png_data: Vec<u8> = Vec::new();
+    let ctx_ptr: *mut std::ffi::c_void = (&mut png_data as *mut Vec<u8>).cast();
+    let ok = img.write_png_image(ctx_ptr, w as i32, h as i32, rgba, stride as i32);
+    if ok == 0 {
+        return nil;
+    }
+
+    let len = png_data.len() as crate::frameworks::foundation::NSUInteger;
+    let buf: crate::mem::MutVoidPtr = env.mem.alloc(len as u32).cast();
+    env.mem
+        .bytes_at_mut(buf.cast(), len as u32)
+        .copy_from_slice(&png_data);
+    msg_class![env; NSData dataWithBytesNoCopy:buf length:len]
+}
+
+fn UIImageJPEGRepresentation(
+    env: &mut Environment,
+    image: id,
+    _compression_quality: CGFloat,
+) -> id {
+    // В эмуляторе пока фоллбек на PNG, если нет
+    // JPEG энкодера
+    UIImagePNGRepresentation(env, image)
+}
+
+/// Invokes the `UIImageWriteToSavedPhotosAlbum` completion callback. Per
+/// Apple's documentation the selector must have this signature:
+/// `- (void)image:(UIImage *)image didFinishSavingWithError:(NSError *)error
+///               contextInfo:(void *)contextInfo;`
+fn invoke_save_completion(
+    env: &mut Environment,
+    target: id,
+    selector: SEL,
+    image: id,
+    error: id,
+    context_info: MutVoidPtr,
+) {
+    if target == nil || selector.is_null() {
+        return;
+    }
+    let _: () = msg_send(env, (target, selector, image, error, context_info));
+}
+
+pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(UIImageWriteToSavedPhotosAlbum(_, _, _, _)),
+    export_c_func!(UIImagePNGRepresentation(_)),
+    export_c_func!(UIImageJPEGRepresentation(_, _)),
+];

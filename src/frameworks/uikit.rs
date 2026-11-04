@@ -9,7 +9,7 @@
 //! likely to use UIKit in very simple and limited ways, so this implementation
 //! will probably take a lot of shortcuts.
 
-use crate::dyld::{ConstantExports, HostConstant};
+use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::{msg, Environment};
 use std::time::Instant;
 
@@ -37,6 +37,13 @@ const CONSTANTS: ConstantExports = &[
     // From UIKit's additions to `NSAttributedString`.
     ("_NSFontAttributeName", HostConstant::NSString("NSFont")),
 ];
+
+/// Podroid doesn't emulate an active Guided Access session.
+fn UIAccessibilityIsGuidedAccessEnabled(_env: &mut Environment) -> bool {
+    false
+}
+
+const FUNCTIONS: FunctionExports = &[export_c_func!(UIAccessibilityIsGuidedAccessEnabled())];
 
 pub mod ns_paragraph_style;
 pub mod ui_accelerometer;
@@ -157,7 +164,10 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         ui_view::ui_window::CONSTANTS,
     ],
     function_exports: &[
+        FUNCTIONS,
         ui_application::FUNCTIONS,
+        ui_image::FUNCTIONS,
+        ui_image_picker_controller::FUNCTIONS,
         ui_geometry::FUNCTIONS,
         ui_graphics::FUNCTIONS,
     ],

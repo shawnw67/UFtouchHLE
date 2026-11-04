@@ -14,10 +14,13 @@ use crate::audio::openal::al_types::*;
 use crate::audio::openal::{
     AL_BUFFER, AL_FORMAT_MONO16, AL_FORMAT_STEREO16, AL_SOURCE_STATE, AL_STOPPED,
 };
-use crate::frameworks::core_graphics::{cg_image, CGRect};
+use crate::frameworks::core_graphics::{cg_image, CGRect, CGSize};
 use crate::frameworks::core_media::{kCMTimeFlags_Valid, CMTime};
 use crate::frameworks::foundation::{ns_array, ns_string, ns_url, NSInteger};
 use crate::frameworks::media_player::movie_decoder::{Audio, MovieDecoder};
+use crate::frameworks::media_player::movie_video::{
+    media_tracks, MovieMediaTrackInfo, MovieMediaType, MovieVideo, MovieVideoInfo,
+};
 use crate::image::Image;
 use crate::objc::{
     autorelease, id, msg, msg_class, msg_super, nil, objc_classes, release, retain, ClassExports,
@@ -400,6 +403,21 @@ pub const CLASSES: ClassExports = objc_classes! {
     autorelease(env, item)
 }
 
++ (id)playerItemWithAsset:(id)asset { // AVAsset*
+    let item: id = msg![env; this alloc];
+    let item: id = msg![env; item initWithAsset:asset];
+    autorelease(env, item)
+}
+
+- (id)initWithAsset:(id)asset { // AVAsset*
+    let url = if asset == nil {
+        nil
+    } else {
+        env.objc.borrow::<AVAssetHostObject>(asset).url
+    };
+    msg![env; this initWithURL:url]
+}
+
 - (id)initWithURL:(id)url { // NSURL*
     retain(env, url);
     env.objc.borrow_mut::<AVPlayerItemHostObject>(this).url = url;
@@ -691,4 +709,226 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 @end
 
+@implementation AVAsset: NSObject
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let host = Box::new(AVAssetHostObject::default());
+    env.objc.alloc_object(this, host, &mut env.mem)
+}
+
+- (())dealloc {
+    let url = env.objc.borrow::<AVAssetHostObject>(this).url;
+    release(env, url);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+
+- (id)tracks {
+    asset_tracks(env, this, None)
+}
+- (id)commonMetadata {
+    msg_class![env; NSArray array]
+}
+- (CMTime)duration {
+    env.objc.borrow::<AVAssetHostObject>(this).duration
+}
+- (bool)isPlayable { true }
+- (bool)isReadable { true }
+- (bool)isExportable { false }
+- (bool)hasProtectedContent { false }
+
+- (id)tracksWithMediaType:(id)media_type {
+    match ns_string::to_rust_string(env, media_type).as_ref() {
+        "vide" => asset_tracks(env, this, Some(MovieMediaType::Video)),
+        "soun" => asset_tracks(env, this, Some(MovieMediaType::Audio)),
+        _ => msg_class![env; NSArray array],
+    }
+}
+
+- (id)tracksWithMediaCharacteristic:(id)characteristic {
+    match ns_string::to_rust_string(env, characteristic).as_ref() {
+        "public.visual" => asset_tracks(env, this, Some(MovieMediaType::Video)),
+        "public.audible" => asset_tracks(env, this, Some(MovieMediaType::Audio)),
+        _ => msg_class![env; NSArray array],
+    }
+}
+
+- (())loadValuesAsynchronouslyForKeys:(id)_keys
+                    completionHandler:(id)handler {
+    // Report completion immediately so apps that gate startup on the
+    // callback don't wait forever.
+    if handler != nil {
+        () = msg![env; handler invoke];
+    }
+}
+
+- (i32)statusOfValueForKey:(id)_key error:(crate::mem::MutPtr<id>)_error {
+    // AVKeyValueStatusLoaded = 2
+    2
+}
+
+@end
+
+@implementation AVURLAsset: AVAsset
+
++ (id)URLAssetWithURL:(id)url options:(id)_options { // NSURL*, NSDictionary*
+    let new: id = msg![env; this alloc];
+    let new: id = msg![env; new initWithURL:url options:_options];
+    autorelease(env, new)
+}
+
+- (id)initWithURL:(id)url options:(id)_options {
+    let this: id = msg_super![env; this init];
+    if url != nil {
+        retain(env, url);
+    }
+    let (duration, video_info, tracks) = if url != nil {
+        let path = ns_url::to_rust_path(env, url);
+        match env.fs.read(&path) {
+            Ok(bytes) => {
+                let duration = crate::frameworks::media_player::mp4_duration(&bytes)
+                    .filter(|duration| duration.is_finite() && *duration > 0.0)
+                    .map(CMTime::from_seconds_f64)
+                    .unwrap_or_default();
+                (
+                    duration,
+                    MovieVideo::probe(&bytes),
+                    media_tracks(&bytes),
+                )
+            }
+            Err(_) => (CMTime::default(), None, Vec::new()),
+        }
+    } else {
+        (CMTime::default(), None, Vec::new())
+    };
+    let host = env.objc.borrow_mut::<AVAssetHostObject>(this);
+    host.url = url;
+    host.duration = duration;
+    host.video_info = video_info;
+    host.tracks = tracks;
+    this
+}
+
+- (id)URL {
+    env.objc.borrow::<AVAssetHostObject>(this).url
+}
+
+@end
+
+@implementation AVAssetTrack: NSObject
+
++ (id)allocWithZone:(NSZonePtr)_zone {
+    let host = Box::new(AVAssetTrackHostObject::default());
+    env.objc.alloc_object(this, host, &mut env.mem)
+}
+
+- (id)initWithAsset:(id)asset trackID:(u32)track_id mediaType:(id)media_type {
+    let this: id = msg_super![env; this init];
+    if asset != nil {
+        retain(env, asset);
+    }
+    let media_type = match ns_string::to_rust_string(env, media_type).as_ref() {
+        "vide" => MovieMediaType::Video,
+        _ => MovieMediaType::Audio,
+    };
+    let host = env.objc.borrow_mut::<AVAssetTrackHostObject>(this);
+    host.asset = asset;
+    host.track_id = track_id;
+    host.media_type = media_type;
+    this
+}
+
+- (())dealloc {
+    let asset = env.objc.borrow::<AVAssetTrackHostObject>(this).asset;
+    release(env, asset);
+    env.objc.dealloc_object(this, &mut env.mem)
+}
+
+- (id)asset {
+    env.objc.borrow::<AVAssetTrackHostObject>(this).asset
+}
+- (u32)trackID {
+    env.objc.borrow::<AVAssetTrackHostObject>(this).track_id
+}
+- (id)mediaType {
+    let media_type = env.objc.borrow::<AVAssetTrackHostObject>(this).media_type;
+    let media_type = match media_type {
+        MovieMediaType::Audio => "soun",
+        MovieMediaType::Video => "vide",
+    };
+    ns_string::get_static_str(env, media_type)
+}
+- (CGSize)naturalSize {
+    let host = env.objc.borrow::<AVAssetTrackHostObject>(this);
+    if host.media_type == MovieMediaType::Video && host.asset != nil {
+        if let Some(video) = env.objc.borrow::<AVAssetHostObject>(host.asset).video_info {
+            return CGSize {
+                width: video.width as f32,
+                height: video.height as f32,
+            };
+        }
+    }
+    CGSize::default()
+}
+- (CMTime)duration {
+    let asset = env.objc.borrow::<AVAssetTrackHostObject>(this).asset;
+    if asset == nil {
+        CMTime::default()
+    } else {
+        env.objc.borrow::<AVAssetHostObject>(asset).duration
+    }
+}
+- (bool)isPlayable { true }
+- (bool)isEnabled { true }
+
+@end
+
 };
+#[derive(Default)]
+struct AVAssetHostObject {
+    url: id,
+    duration: CMTime,
+    video_info: Option<MovieVideoInfo>,
+    tracks: Vec<MovieMediaTrackInfo>,
+}
+
+impl HostObject for AVAssetHostObject {}
+
+struct AVAssetTrackHostObject {
+    asset: id,
+    track_id: u32,
+    media_type: MovieMediaType,
+}
+
+impl Default for AVAssetTrackHostObject {
+    fn default() -> Self {
+        Self {
+            asset: nil,
+            track_id: 0,
+            media_type: MovieMediaType::Audio,
+        }
+    }
+}
+
+impl HostObject for AVAssetTrackHostObject {}
+
+fn asset_tracks(env: &mut Environment, asset: id, media_type_filter: Option<MovieMediaType>) -> id {
+    let tracks = env.objc.borrow::<AVAssetHostObject>(asset).tracks.clone();
+    let result: id = msg_class![env; NSMutableArray array];
+    for track_info in tracks {
+        if media_type_filter.is_some_and(|media_type| media_type != track_info.media_type) {
+            continue;
+        }
+        let media_type = match track_info.media_type {
+            MovieMediaType::Audio => ns_string::get_static_str(env, "soun"),
+            MovieMediaType::Video => ns_string::get_static_str(env, "vide"),
+        };
+        let track_id = track_info.track_id;
+        let track: id = msg_class![env; AVAssetTrack alloc];
+        let track: id = msg![env; track initWithAsset:asset trackID:track_id mediaType:media_type];
+        if track != nil {
+            () = msg![env; result addObject:track];
+            release(env, track);
+        }
+    }
+    result
+}

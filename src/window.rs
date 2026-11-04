@@ -825,6 +825,11 @@ impl Window {
             }
         }
 
+        // Resolve the camera/microphone bridge's JNI class and method IDs here:
+        // FindClass needs the app class loader, which is only reachable from
+        // this stack before guest code starts running on a coroutine stack.
+        crate::android_media::populate_jni_cache();
+
         #[cfg(target_os = "macos")]
         let max_height = window.size().1;
 

@@ -414,11 +414,31 @@ pub const CONSTANTS: ConstantExports = &[
 
 /// This exception handler is supposed to do last-minute logging before the
 /// program terminates. For our purposes, it's completely safe to ignore that.
-fn NSSetUncaughtExceptionHandler(_env: &mut Environment, handler: MutVoidPtr) {
+fn NSSetUncaughtExceptionHandler(env: &mut Environment, handler: MutVoidPtr) {
     log!(
         "TODO: Ignoring uncaught exception handler at address {:?}",
         handler
     );
+    env.framework_state
+        .foundation
+        .ns_exception
+        .uncaught_exception_handler = handler;
 }
 
-pub const FUNCTIONS: FunctionExports = &[export_c_func!(NSSetUncaughtExceptionHandler(_))];
+/// Returns what was last passed to `NSSetUncaughtExceptionHandler`.
+fn NSGetUncaughtExceptionHandler(env: &mut Environment) -> MutVoidPtr {
+    env.framework_state
+        .foundation
+        .ns_exception
+        .uncaught_exception_handler
+}
+
+pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(NSSetUncaughtExceptionHandler(_)),
+    export_c_func!(NSGetUncaughtExceptionHandler()),
+];
+
+#[derive(Default)]
+pub struct State {
+    uncaught_exception_handler: MutVoidPtr,
+}

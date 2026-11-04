@@ -125,6 +125,7 @@ pub const kAudioQueueProperty_IsRunning: AudioQueuePropertyID = fourcc(b"aqrn");
 type AudioQueuePropertyListenerProc = GuestFunction;
 
 const kAudioQueueErr_InvalidBuffer: OSStatus = -66687;
+const kAudioQueueErr_InvalidOfflineMode: OSStatus = -66626;
 const kAudioQueueErr_InvalidPropertySize: OSStatus = -66683;
 const kAudioQueueErr_CannotStart: OSStatus = -66681;
 const kAudioQueueErr_InvalidDevice: OSStatus = -66680;
@@ -1299,7 +1300,48 @@ pub fn AudioQueueDispose(
     0 // success
 }
 
+/// Offline rendering isn't implemented: the decoded audio goes straight to
+/// OpenAL.
+fn AudioQueueSetOfflineRenderFormat(
+    _env: &mut Environment,
+    in_aq: AudioQueueRef,
+    _in_format: ConstVoidPtr,
+    _in_layout: ConstVoidPtr,
+) -> OSStatus {
+    log!("TODO: AudioQueueSetOfflineRenderFormat({:?})", in_aq);
+    kAudioQueueErr_InvalidOfflineMode
+}
+
+fn AudioQueueOfflineRender(
+    _env: &mut Environment,
+    in_aq: AudioQueueRef,
+    _in_timestamp: ConstVoidPtr,
+    _io_buffer: AudioQueueBufferRef,
+    _in_number_frames: u32,
+) -> OSStatus {
+    log!("TODO: AudioQueueOfflineRender({:?})", in_aq);
+    kAudioQueueErr_InvalidOfflineMode
+}
+
+/// Input queues aren't implemented, so apps see no recording device.
+fn AudioQueueNewInput(
+    _env: &mut Environment,
+    _in_format: ConstVoidPtr,
+    _in_callback_proc: GuestFunction,
+    _in_user_data: MutVoidPtr,
+    _in_callback_run_loop: MutVoidPtr,
+    _in_callback_run_loop_mode: MutVoidPtr,
+    _in_flags: u32,
+    _out_aq: MutPtr<AudioQueueRef>,
+) -> OSStatus {
+    log!("TODO: AudioQueueNewInput()");
+    kAudioQueueErr_InvalidDevice
+}
+
 pub const FUNCTIONS: FunctionExports = &[
+    export_c_func!(AudioQueueSetOfflineRenderFormat(_, _, _)),
+    export_c_func!(AudioQueueOfflineRender(_, _, _, _)),
+    export_c_func!(AudioQueueNewInput(_, _, _, _, _, _, _)),
     export_c_func!(AudioQueueNewOutput(_, _, _, _, _, _, _)),
     export_c_func!(AudioQueueGetParameter(_, _, _)),
     export_c_func!(AudioQueueSetParameter(_, _, _)),
