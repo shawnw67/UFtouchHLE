@@ -6,10 +6,11 @@
 //! AudioConverter entry points based on HyperHLE's LPCM conversion support.
 //! Currently accepts packed interleaved LPCM at matching sample rates.
 
+use crate::abi::{CallFromHost, GuestFunction};
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::frameworks::carbon_core::{paramErr, OSStatus};
 use crate::frameworks::core_audio_types::{fourcc, AudioStreamBasicDescription};
-use crate::mem::{guest_size_of, ConstPtr, MutPtr, MutVoidPtr};
+use crate::mem::{guest_size_of, ConstPtr, MutPtr, MutVoidPtr, SafeRead};
 use crate::Environment;
 use std::collections::HashMap;
 
@@ -18,6 +19,31 @@ const INPUT_SIZE: OSStatus = fourcc(b"insz") as OSStatus;
 const OUTPUT_SIZE: OSStatus = fourcc(b"otsz") as OSStatus;
 const PROPERTY: OSStatus = fourcc(b"prop") as OSStatus;
 const PROPERTY_SIZE: OSStatus = fourcc(b"!siz") as OSStatus;
+
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+struct Buffer {
+    channels: u32,
+    size: u32,
+    data: MutVoidPtr,
+}
+unsafe impl SafeRead for Buffer {}
+
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+struct BufferList {
+    count: u32,
+    buffer: Buffer,
+}
+unsafe impl SafeRead for BufferList {}
+
+#[repr(C, packed)]
+struct PacketDescription {
+    offset: i64,
+    frames: u32,
+    size: u32,
+}
+unsafe impl SafeRead for PacketDescription {}
 
 #[derive(Clone, Copy, PartialEq)]
 struct Shape {
@@ -269,6 +295,209 @@ fn AudioConverterConvertBuffer(
     0
 }
 
+fn write_list(
+    env: &mut Environment,
+    converter: Converter,
+    frames: u32,
+    input: BufferList,
+    output_pointer: MutPtr<BufferList>,
+    mut output: BufferList,
+    descriptions: MutPtr<PacketDescription>,
+) -> OSStatus {
+    if input.count != 1
+        || output.count != 1
+        || input.buffer.channels != converter.input.channels
+        || output.buffer.channels != converter.output.channels
+    {
+        return FORMAT;
+    }
+    let Some(input_size) = frames.checked_mul(converter.input.frame_bytes()) else {
+        return INPUT_SIZE;
+    };
+    let Some(output_size) = frames.checked_mul(converter.output.frame_bytes()) else {
+        return OUTPUT_SIZE;
+    };
+    if input.buffer.size < input_size {
+        return INPUT_SIZE;
+    }
+    if output.buffer.size < output_size {
+        return OUTPUT_SIZE;
+    }
+    let source = input.buffer.data;
+    let destination = output.buffer.data;
+    if frames != 0 && (source.is_null() || destination.is_null()) {
+        return paramErr;
+    }
+    if frames != 0 {
+        let converted = convert(
+            env.mem.bytes_at(source.cast_const().cast(), input_size),
+            converter.input,
+            converter.output,
+        );
+        env.mem
+            .bytes_at_mut(destination.cast(), output_size)
+            .copy_from_slice(&converted);
+    }
+    output.buffer.size = output_size;
+    env.mem.write(output_pointer, output);
+    if !descriptions.is_null() {
+        for index in 0..frames {
+            env.mem.write(
+                descriptions + index,
+                PacketDescription {
+                    offset: i64::from(index) * i64::from(converter.output.frame_bytes()),
+                    frames: 0,
+                    size: converter.output.frame_bytes(),
+                },
+            );
+        }
+    }
+    0
+}
+
+fn AudioConverterConvertComplexBuffer(
+    env: &mut Environment,
+    handle: MutVoidPtr,
+    frames: u32,
+    input: ConstPtr<BufferList>,
+    output: MutPtr<BufferList>,
+) -> OSStatus {
+    if input.is_null() || output.is_null() {
+        return paramErr;
+    }
+    let Some(converter) = env
+        .framework_state
+        .audio_toolbox
+        .audio_converter
+        .converters
+        .get(&handle)
+        .copied()
+    else {
+        return paramErr;
+    };
+    let input = env.mem.read(input);
+    let output_list = env.mem.read(output);
+    write_list(
+        env,
+        converter,
+        frames,
+        input,
+        output,
+        output_list,
+        MutPtr::null(),
+    )
+}
+
+fn AudioConverterFillComplexBuffer(
+    env: &mut Environment,
+    handle: MutVoidPtr,
+    callback: GuestFunction,
+    context: MutVoidPtr,
+    output_packets: MutPtr<u32>,
+    output: MutPtr<BufferList>,
+    descriptions: MutPtr<PacketDescription>,
+) -> OSStatus {
+    if output_packets.is_null() || output.is_null() || callback.to_ptr().is_null() {
+        return paramErr;
+    }
+    let Some(converter) = env
+        .framework_state
+        .audio_toolbox
+        .audio_converter
+        .converters
+        .get(&handle)
+        .copied()
+    else {
+        return paramErr;
+    };
+    let output_list = env.mem.read(output);
+    if output_list.count != 1 || output_list.buffer.channels != converter.output.channels {
+        return FORMAT;
+    }
+    let frames = env
+        .mem
+        .read(output_packets)
+        .min(output_list.buffer.size / converter.output.frame_bytes());
+    env.mem.write(output_packets, 0);
+    if frames == 0 {
+        let mut empty = output_list;
+        empty.buffer.size = 0;
+        env.mem.write(output, empty);
+        return 0;
+    }
+    let destination = output_list.buffer.data;
+    if destination.is_null() {
+        return paramErr;
+    }
+    let Some(input_size) = frames.checked_mul(converter.input.frame_bytes()) else {
+        return INPUT_SIZE;
+    };
+    let Some(aligned) = input_size.checked_add(3).map(|n| n & !3) else {
+        return INPUT_SIZE;
+    };
+    let Some(total) = aligned.checked_add(guest_size_of::<BufferList>() + 8) else {
+        return INPUT_SIZE;
+    };
+    let Some(allocation) = env.mem.try_alloc(total) else {
+        return -108;
+    };
+    let bytes: MutPtr<u8> = allocation.cast();
+    let input_list: MutPtr<BufferList> = (bytes + aligned).cast();
+    let packets: MutPtr<u32> = (bytes + aligned + guest_size_of::<BufferList>()).cast();
+    let packet_pointer: MutPtr<MutPtr<PacketDescription>> = (packets + 1).cast();
+    env.mem.write(
+        input_list,
+        BufferList {
+            count: 1,
+            buffer: Buffer {
+                channels: converter.input.channels,
+                size: input_size,
+                data: allocation,
+            },
+        },
+    );
+    env.mem.write(packets, frames);
+    env.mem
+        .write(packet_pointer, MutPtr::<PacketDescription>::null());
+    let status: OSStatus =
+        callback.call_from_host(env, (handle, packets, input_list, packet_pointer, context));
+    let status = if status != 0 {
+        status
+    } else if !env
+        .framework_state
+        .audio_toolbox
+        .audio_converter
+        .converters
+        .contains_key(&handle)
+    {
+        paramErr
+    } else {
+        let returned = env.mem.read(packets);
+        if returned > frames {
+            INPUT_SIZE
+        } else {
+            // Input callbacks may replace both the buffer pointer and byte
+            // count. Read the returned list instead of the staging defaults.
+            let input = env.mem.read(input_list);
+            let status = write_list(
+                env,
+                converter,
+                returned,
+                input,
+                output,
+                output_list,
+                descriptions,
+            );
+            if status == 0 {
+                env.mem.write(output_packets, returned);
+            }
+            status
+        }
+    };
+    env.mem.free(allocation);
+    status
+}
+
 fn property_size(property: u32) -> Option<u32> {
     if property == fourcc(b"acid") || property == fourcc(b"acod") {
         Some(guest_size_of::<AudioStreamBasicDescription>())
@@ -432,6 +661,8 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(AudioConverterDispose(_)),
     export_c_func!(AudioConverterReset(_)),
     export_c_func!(AudioConverterConvertBuffer(_, _, _, _, _)),
+    export_c_func!(AudioConverterConvertComplexBuffer(_, _, _, _)),
+    export_c_func!(AudioConverterFillComplexBuffer(_, _, _, _, _, _)),
     export_c_func!(AudioConverterGetPropertyInfo(_, _, _, _)),
     export_c_func!(AudioConverterGetProperty(_, _, _, _)),
     export_c_func!(AudioConverterSetProperty(_, _, _, _)),

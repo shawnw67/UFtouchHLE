@@ -11945,6 +11945,81 @@ struct TestAudioBufferList {
   uint32_t count;
   struct TestAudioBuffer buffers[2];
 };
+struct TestConverterPacket {
+  int64_t offset;
+  uint32_t frames, size;
+};
+typedef int (*TestConverterInput)(void *, uint32_t *,
+                                  struct TestAudioBufferList *, void **,
+                                  void *);
+extern int
+AudioConverterConvertComplexBuffer(void *, uint32_t,
+                                   const struct TestAudioBufferList *,
+                                   struct TestAudioBufferList *);
+extern int AudioConverterFillComplexBuffer(void *, TestConverterInput, void *,
+                                           uint32_t *,
+                                           struct TestAudioBufferList *,
+                                           struct TestConverterPacket *);
+struct TestConverterState {
+  int16_t *samples;
+  int mode;
+};
+static int test_converter_input(void *converter, uint32_t *packets,
+                                struct TestAudioBufferList *list,
+                                void **descriptions, void *context) {
+  struct TestConverterState *state = context;
+  if (*packets != 2 || !descriptions || *descriptions)
+    return -10;
+  if (state->mode == 1)
+    return -77;
+  if (state->mode == 2)
+    return AudioConverterDispose(converter);
+  list->count = 1;
+  list->buffers[0] = (struct TestAudioBuffer){1, 4, state->samples};
+  *packets = 2;
+  return 0;
+}
+int test_audio_converter_lists_and_callback(void) {
+  const struct TestStreamFormat source = {44100, 0x6c70636d, 12, 2, 1,
+                                          2,     1,          16, 0};
+  const struct TestStreamFormat destination = {44100, 0x6c70636d, 9,  8, 1,
+                                               8,     2,          32, 0};
+  int16_t samples[] = {-32768, 32767};
+  float output[4] = {0};
+  struct TestAudioBufferList input = {1, {{1, sizeof(samples), samples}, {0}}};
+  struct TestAudioBufferList result = {1, {{2, sizeof(output), output}, {0}}};
+  struct TestConverterPacket descriptions[2] = {{0}};
+  struct TestConverterState state = {samples, 0};
+  void *converter = NULL;
+  uint32_t packets = 2;
+  if (AudioConverterNew(&source, &destination, &converter) ||
+      AudioConverterConvertComplexBuffer(converter, 2, &input, &result) ||
+      result.buffers[0].size != sizeof(output) || output[0] != -1 ||
+      output[1] != -1 || output[2] != output[3] ||
+      fabsf(output[2] - 32767.0f / 32768.0f) > 0.00001f)
+    return -1;
+  output[0] = output[2] = 99;
+  if (AudioConverterFillComplexBuffer(converter, test_converter_input, &state,
+                                      &packets, &result, descriptions) ||
+      packets != 2 || output[0] != -1 ||
+      fabsf(output[2] - 32767.0f / 32768.0f) > 0.00001f ||
+      descriptions[1].offset != 8 || descriptions[1].size != 8)
+    return -2;
+  state.mode = 1;
+  packets = 2;
+  output[0] = 99;
+  if (AudioConverterFillComplexBuffer(converter, test_converter_input, &state,
+                                      &packets, &result, NULL) != -77 ||
+      packets != 0 || output[0] != 99)
+    return -3;
+  state.mode = 2;
+  packets = 2;
+  if (!AudioConverterFillComplexBuffer(converter, test_converter_input, &state,
+                                       &packets, &result, NULL) ||
+      packets != 0 || !AudioConverterReset(converter))
+    return -4;
+  return 0;
+}
 struct TestRenderState {
   int pre, render, post, bad;
 };
@@ -12681,6 +12756,7 @@ struct {
     FUNC_DEF(test_audio_component_enumeration),
     FUNC_DEF(test_cfcollection_ownership_exports),
     FUNC_DEF(test_audio_converter_pcm),
+    FUNC_DEF(test_audio_converter_lists_and_callback),
 #endif
     FUNC_DEF(test_address_book_virtual_records),
     FUNC_DEF(test_address_book_multivalue),
