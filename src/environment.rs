@@ -612,8 +612,10 @@ impl Environment {
             true => Some(&mut mem),
             false => None,
         });
-        let jit_pool = (options.parallel_guest && options.direct_memory_access)
-            .then(|| crate::parallel_jit::Pool::new(&mut mem, 3, options.ignore_gl_errors));
+        let jit_pool = options
+            .parallel_guest
+            .filter(|_| options.direct_memory_access)
+            .map(|count| crate::parallel_jit::Pool::new(&mut mem, count, options.ignore_gl_errors));
 
         let main_thread_init_routine = Coroutine::new(move |yielder, mut env: Environment| {
             let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -2002,6 +2004,7 @@ impl Environment {
                     }
                     ThreadBlock::GuestJit(worker) => {
                         if self.jit_pool.as_ref().unwrap().is_done(worker) {
+                            self.jit_pool.as_mut().unwrap().reset_wait();
                             self.threads[thread_id].blocked_by = ThreadBlock::NotBlocked;
                             return thread_id;
                         }
@@ -2027,7 +2030,7 @@ impl Environment {
             }
 
             if guest_code_running {
-                std::hint::spin_loop();
+                self.jit_pool.as_mut().unwrap().wait_for_worker();
                 continue;
             }
 

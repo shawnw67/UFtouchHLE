@@ -11,14 +11,14 @@
 //! ticks. The guest thread's coroutine is blocked meanwhile, so other guest
 //! threads can run, and the host call is then handled as usual.
 //!
-//! Workers spin while they're waiting, since host calls are far too frequent
-//! to sleep between them.
+//! Both sides spin briefly while they're waiting, since host calls are far too
+//! frequent to sleep between them, and sleep if the wait goes on for longer.
 
 use crate::cpu::{Cpu, CpuContext, CpuState};
 use crate::mem::Mem;
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// Charged for each host call handled by a worker.
 const LEAF_CALL_TICKS: u64 = 100;
@@ -107,7 +107,7 @@ pub fn set_fast_mutex_kind(id: u64, valid: bool, recursive: bool) {
 
 /// Get a mutex's ID from guest memory, if a worker can use it.
 unsafe fn fast_mutex_id(base: *mut u8, mutex: u32) -> Option<usize> {
-    if mutex < NULL_LIMIT || mutex > u32::MAX - 12 {
+    if !(NULL_LIMIT..=u32::MAX - 12).contains(&mutex) {
         return None;
     }
     let ptr = base.add(mutex as usize);
@@ -119,12 +119,12 @@ unsafe fn fast_mutex_id(base: *mut u8, mutex: u32) -> Option<usize> {
 }
 
 /// Host functions that workers can run themselves, instead of asking the main
-/// thread. These need to be simple, and must not touch the [Environment].
+/// thread. These need to be simple, and must not touch the `Environment`.
 #[derive(Clone, Copy, PartialEq)]
 #[repr(u8)]
 enum Leaf {
     Unknown = 0,
-    NotLeaf,
+    HostOnly,
     ToUpper,
     GetSpecific,
     SetSpecific,
@@ -170,14 +170,14 @@ pub fn note_svc(svc: u32, symbol: &str) {
         "_pthread_mutex_unlock" => Leaf::MutexUnlock,
         "_glGetError" if IGNORE_GL_ERRORS.load(Ordering::Relaxed) => Leaf::GlGetError,
         "_memcmp" => Leaf::Memcmp,
-        _ => Leaf::NotLeaf,
+        _ => Leaf::HostOnly,
     };
     slot.store(leaf as u8, Ordering::Relaxed);
 }
 
 fn leaf_for_svc(svc: u32) -> Leaf {
     let Some(slot) = LEAVES.get(svc as usize) else {
-        return Leaf::NotLeaf;
+        return Leaf::HostOnly;
     };
     match slot.load(Ordering::Relaxed) {
         x if x == Leaf::ToUpper as u8 => Leaf::ToUpper,
@@ -195,7 +195,7 @@ fn leaf_for_svc(svc: u32) -> Leaf {
         x if x == Leaf::MutexUnlock as u8 => Leaf::MutexUnlock,
         x if x == Leaf::GlGetError as u8 => Leaf::GlGetError,
         x if x == Leaf::Memcmp as u8 => Leaf::Memcmp,
-        _ => Leaf::NotLeaf,
+        _ => Leaf::HostOnly,
     }
 }
 
@@ -331,7 +331,7 @@ unsafe fn run_leaf(leaf: Leaf, regs: &mut [u32; 16], base: *mut u8, thread: usiz
         }
         Leaf::Ceilf => regs[0] = f32::from_bits(a).ceil().to_bits(),
         Leaf::Floorf => regs[0] = f32::from_bits(a).floor().to_bits(),
-        Leaf::Unknown | Leaf::NotLeaf => return false,
+        Leaf::Unknown | Leaf::HostOnly => return false,
     }
     true
 }
@@ -347,10 +347,43 @@ struct Job {
 struct Worker {
     phase: AtomicU8,
     job: UnsafeCell<Option<Job>>,
+    /// Set by the worker thread before it looks at `phase`.
+    sleeper: OnceLock<Sleeper>,
 }
 // SAFETY: `phase` decides which thread may access `job`.
 unsafe impl Sync for Worker {}
 unsafe impl Send for Worker {}
+
+/// How long to spin for an event before sleeping. Most host calls are far
+/// shorter than this, but waiting for a long one shouldn't cost a CPU core.
+const SPIN_LIMIT: u32 = 4000;
+
+/// Lets a spinning thread sleep until the other side has something for it.
+struct Sleeper {
+    thread: std::thread::Thread,
+    sleeping: AtomicBool,
+}
+impl Sleeper {
+    fn current() -> Sleeper {
+        Sleeper {
+            thread: std::thread::current(),
+            sleeping: AtomicBool::new(false),
+        }
+    }
+    /// Sleep unless `ready` becomes true. This can return early.
+    fn sleep(&self, ready: impl Fn() -> bool, timeout: std::time::Duration) {
+        self.sleeping.store(true, Ordering::SeqCst);
+        if !ready() {
+            std::thread::park_timeout(timeout);
+        }
+        self.sleeping.store(false, Ordering::SeqCst);
+    }
+    fn wake(&self) {
+        if self.sleeping.load(Ordering::SeqCst) {
+            self.thread.unpark();
+        }
+    }
+}
 
 struct WorkerCpu(Cpu);
 // SAFETY: only the worker thread uses this after creating it.
@@ -358,32 +391,41 @@ unsafe impl Send for WorkerCpu {}
 
 pub struct Pool {
     workers: Vec<Arc<Worker>>,
+    main_thread: Arc<Sleeper>,
+    idle_spins: u32,
 }
 
 impl Pool {
     pub fn new(mem: &mut Mem, count: usize, ignore_gl_errors: bool) -> Pool {
         ACTIVE.store(true, Ordering::Relaxed);
         IGNORE_GL_ERRORS.store(ignore_gl_errors, Ordering::Relaxed);
+        let main_thread = Arc::new(Sleeper::current());
         let workers = (0..count)
             .map(|i| {
                 let worker = Arc::new(Worker {
                     phase: AtomicU8::new(IDLE),
                     job: UnsafeCell::new(None),
+                    sleeper: OnceLock::new(),
                 });
                 // The main CPU has processor ID 0.
                 let cpu = WorkerCpu(Cpu::new_with_processor_id(Some(&mut *mem), i + 1));
                 let thread_worker = worker.clone();
+                let thread_main = main_thread.clone();
                 std::thread::Builder::new()
                     .name(format!("GuestJit{i}"))
-                    .spawn(move || worker_main(cpu, thread_worker))
+                    .spawn(move || worker_main(cpu, thread_worker, thread_main))
                     .unwrap();
                 worker
             })
             .collect();
-        Pool { workers }
+        Pool {
+            workers,
+            main_thread,
+            idle_spins: 0,
+        }
     }
 
-    /// Start running guest code. Gives the context back if all workers are busy.
+    /// Start running guest code. Gives the context back if no worker is free.
     pub fn submit(
         &self,
         thread: usize,
@@ -410,11 +452,35 @@ impl Pool {
             });
         }
         worker.phase.store(JOB_READY, Ordering::Release);
+        if let Some(sleeper) = worker.sleeper.get() {
+            sleeper.wake();
+        }
         Ok(index)
     }
 
     pub fn is_done(&self, index: usize) -> bool {
         self.workers[index].phase.load(Ordering::Acquire) == DONE
+    }
+
+    fn any_done(&self) -> bool {
+        (0..self.workers.len()).any(|index| self.is_done(index))
+    }
+
+    /// Wait a moment for a worker to finish. The scheduler needs to look again
+    /// soon even then, because other threads could become ready meanwhile.
+    pub fn wait_for_worker(&mut self) {
+        self.idle_spins += 1;
+        if self.idle_spins < SPIN_LIMIT {
+            std::hint::spin_loop();
+        } else {
+            let timeout = std::time::Duration::from_micros(500);
+            self.main_thread.sleep(|| self.any_done(), timeout);
+        }
+    }
+
+    /// A worker finished, or the scheduler has something else to do.
+    pub fn reset_wait(&mut self) {
+        self.idle_spins = 0;
     }
 
     pub fn take_result(&self, index: usize) -> (Box<CpuContext>, u64, CpuState) {
@@ -427,17 +493,20 @@ impl Pool {
     }
 }
 
-fn worker_main(cpu: WorkerCpu, worker: Arc<Worker>) {
+fn worker_main(cpu: WorkerCpu, worker: Arc<Worker>, main_thread: Arc<Sleeper>) {
     let WorkerCpu(mut cpu) = cpu;
     let mut applied_invalidations = 0;
     let mut idle_spins = 0u32;
+    worker.sleeper.set(Sleeper::current()).ok().unwrap();
+    let sleeper = worker.sleeper.get().unwrap();
+    let job_ready = || worker.phase.load(Ordering::Acquire) == JOB_READY;
     loop {
-        if worker.phase.load(Ordering::Acquire) != JOB_READY {
+        if !job_ready() {
             idle_spins += 1;
-            if idle_spins > 20_000 {
-                std::thread::yield_now();
-            } else {
+            if idle_spins < SPIN_LIMIT {
                 std::hint::spin_loop();
+            } else {
+                sleeper.sleep(job_ready, std::time::Duration::from_millis(5));
             }
             continue;
         }
@@ -477,5 +546,6 @@ fn worker_main(cpu: WorkerCpu, worker: Arc<Worker>) {
         cpu.swap_context(&mut job.context);
         job.state = Some(state);
         worker.phase.store(DONE, Ordering::Release);
+        main_thread.wake();
     }
 }

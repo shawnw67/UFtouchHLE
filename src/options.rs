@@ -145,8 +145,8 @@ pub struct Options {
     pub preferred_languages: Option<Vec<String>>,
     pub headless: bool,
     pub print_fps: bool,
-    /// Experimental: see [crate::parallel_jit].
-    pub parallel_guest: bool,
+    /// Experimental: number of workers for [crate::parallel_jit], if any.
+    pub parallel_guest: Option<usize>,
     pub performance_test: Option<crate::performance::Mode>,
     pub audio_test: Option<crate::audio::sound_test::Mode>,
     pub fps_limit: Option<f64>,
@@ -230,7 +230,7 @@ impl Default for Options {
             preferred_languages: None,
             headless: false,
             print_fps: false,
-            parallel_guest: false,
+            parallel_guest: None,
             performance_test: None,
             audio_test: None,
             fps_limit: Some(60.0), // Original iPhone is 60Hz and uses v-sync,
@@ -523,7 +523,14 @@ impl Options {
         } else if arg == "--print-fps" {
             self.print_fps = true;
         } else if arg == "--parallel-guest" {
-            self.parallel_guest = true;
+            self.parallel_guest = Some(3);
+        } else if let Some(value) = arg.strip_prefix("--parallel-guest=") {
+            let count = value
+                .parse()
+                .ok()
+                .filter(|count| (1..=7).contains(count))
+                .ok_or_else(|| "Invalid value for --parallel-guest=".to_string())?;
+            self.parallel_guest = Some(count);
         } else if let Some(value) = arg.strip_prefix("--fps-limit=") {
             if value == "off" {
                 self.fps_limit = None;
