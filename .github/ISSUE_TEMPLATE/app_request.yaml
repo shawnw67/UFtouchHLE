@@ -1,15 +1,53 @@
 name: Request support for a specific app
-description: We do not take these requests. Please do not make them.
-labels: ["issue does not meet guidelines"]
+description: If an app doesn't run in Podroid yet and you'd like it to, choose this option.
+labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        We do not take requests to add support for specific apps.
-        Please do not make such requests.
+        Podroid only runs 32-bit (armv6/armv7) apps from the iPhone OS era, so
+        64-bit-only apps can't be supported. Requests are welcome, but there's
+        no promise that any app will be added. Please don't attach IPA files
+        or link to them.
+  - type: input
+    attributes:
+      label: App name
+      placeholder: Super Monkey Ball
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: App version
+      placeholder: '1.0'
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Bundle identifier
+      description: This is shown in Podroid_log.txt as “Identifier”, if the app gets that far.
+      placeholder: com.example.app
+  - type: input
+    attributes:
+      label: Podroid version
+      description: This is shown at the bottom of the app list.
+      placeholder: 'v0.3.27'
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What happens when you try to run the app?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: If Podroid crashed, please paste the log output.
+      description: This is the Podroid_log.txt file.
+      render: 'text'
   - type: checkboxes
     attributes:
       label: By submitting this issue, I certify that…
       options:
-        - label: I understand my issue will be immediately rejected.
+        - label: I understand that linking to, discussing or asking for pirated content is not permitted, and will lead to an immediate ban.
+          required: true
+        - label: I understand that “Abandonware” and illegal copies of free games are also pirated content.
           required: true

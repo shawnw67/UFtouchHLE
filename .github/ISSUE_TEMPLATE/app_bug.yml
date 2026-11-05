@@ -1,6 +1,6 @@
 name: Report a bug or regression for an app
 description: If an app runs at least partly in Podroid and has a problem, or used to work and no longer does, choose this option.
-labels: ["bug (supported app)"]
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
