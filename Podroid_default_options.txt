@@ -266,3 +266,8 @@ jp.co.capcom.mhp2gjp: --system-version=7.0 --allow-network-access --gamekit-auto
 # Monster Hunter Freedom Unite (P2G's Western release, same engine)
 # Its local multiplayer works over the LAN like P2G's.
 jp.co.capcom.mhp2gwd: --system-version=7.0 --allow-network-access --gamekit-auto
+
+# BioShock
+# It's a 32-bit Unreal Engine 3 game whose threads are all busy, so it needs them
+# to run in parallel. It only uses glGetError() for logging.
+com.2k.bioshock: --parallel-guest --ignore-gl-errors --fastmem
