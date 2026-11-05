@@ -618,6 +618,7 @@ impl Environment {
             .map(|count| {
                 crate::parallel_jit::Pool::new(
                     &mut mem,
+                    &mut dyld,
                     count,
                     options.ignore_gl_errors,
                     options.fastmem,

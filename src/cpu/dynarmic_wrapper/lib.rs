@@ -56,6 +56,7 @@ extern "C" {
         fastmem: bool,
     ) -> *mut Podroid_DynarmicWrapper;
     pub fn Podroid_DynarmicWrapper_delete(cpu: *mut Podroid_DynarmicWrapper);
+    pub fn Podroid_DynarmicWrapper_set_thread_id(cpu: *mut Podroid_DynarmicWrapper, thread_id: u32);
     pub fn Podroid_DynarmicWrapper_regs_const(cpu: *const Podroid_DynarmicWrapper) -> *const u32;
     pub fn Podroid_DynarmicWrapper_regs_mut(cpu: *mut Podroid_DynarmicWrapper) -> *mut u32;
     pub fn Podroid_DynarmicWrapper_cpsr(cpu: *const Podroid_DynarmicWrapper) -> u32;

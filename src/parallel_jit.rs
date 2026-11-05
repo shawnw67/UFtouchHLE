@@ -15,9 +15,12 @@
 //! frequent to sleep between them, and sleep if the wait goes on for longer.
 
 use crate::cpu::{Cpu, CpuContext, CpuState};
-use crate::mem::Mem;
+use crate::dyld::Dyld;
+use crate::mem::{Mem, MutPtr};
 use std::cell::UnsafeCell;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{
+    AtomicBool, AtomicPtr, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering,
+};
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Charged for each host call handled by a worker.
@@ -44,31 +47,45 @@ pub fn invalidate_cache_range(base: u32, size: u32) {
     }
 }
 
-/// Thread-specific data for keys and threads with low numbers, shared with
-/// `pthread_getspecific` etc so that worker threads can access it.
+/// Thread-specific data for keys and threads with low numbers, which guest
+/// routines and workers can access directly. This is in guest memory if there
+/// are workers, and otherwise in [FALLBACK_TLS].
 pub const FAST_TLS_THREADS: usize = 64;
 pub const FAST_TLS_KEYS: usize = 64;
+const FAST_TLS_SIZE: usize = FAST_TLS_THREADS * FAST_TLS_KEYS;
 #[allow(clippy::declare_interior_mutable_const)]
 const TLS_ZERO: AtomicU32 = AtomicU32::new(0);
-#[allow(clippy::declare_interior_mutable_const)]
-const TLS_ROW_ZERO: [AtomicU32; FAST_TLS_KEYS] = [TLS_ZERO; FAST_TLS_KEYS];
-static FAST_TLS: [[AtomicU32; FAST_TLS_KEYS]; FAST_TLS_THREADS] = [TLS_ROW_ZERO; FAST_TLS_THREADS];
+static FALLBACK_TLS: [AtomicU32; FAST_TLS_SIZE] = [TLS_ZERO; FAST_TLS_SIZE];
+/// Null means [FALLBACK_TLS].
+static FAST_TLS: AtomicPtr<AtomicU32> = AtomicPtr::new(std::ptr::null_mut());
 static FAST_TLS_KEY_VALID: [AtomicBool; FAST_TLS_KEYS] = {
     #[allow(clippy::declare_interior_mutable_const)]
     const FALSE: AtomicBool = AtomicBool::new(false);
     [FALSE; FAST_TLS_KEYS]
 };
 
+fn fast_tls_slot(thread: usize, key_index: usize) -> &'static AtomicU32 {
+    let index = thread * FAST_TLS_KEYS + key_index;
+    let table = FAST_TLS.load(Ordering::Relaxed);
+    if table.is_null() {
+        &FALLBACK_TLS[index]
+    } else {
+        assert!(index < FAST_TLS_SIZE);
+        // SAFETY: this is guest memory that's allocated once and never freed.
+        unsafe { &*table.add(index) }
+    }
+}
+
 pub fn fast_tls_get(thread: usize, key_index: usize) -> u32 {
-    FAST_TLS[thread][key_index].load(Ordering::Relaxed)
+    fast_tls_slot(thread, key_index).load(Ordering::Relaxed)
 }
 pub fn fast_tls_set(thread: usize, key_index: usize, value: u32) {
-    FAST_TLS[thread][key_index].store(value, Ordering::Relaxed);
+    fast_tls_slot(thread, key_index).store(value, Ordering::Relaxed);
 }
 /// Set up a key slot, or clear it if the key was deleted.
 pub fn fast_tls_reset_key(key_index: usize, valid: bool) {
-    for thread in &FAST_TLS {
-        thread[key_index].store(0, Ordering::Relaxed);
+    for thread in 0..FAST_TLS_THREADS {
+        fast_tls_set(thread, key_index, 0);
     }
     FAST_TLS_KEY_VALID[key_index].store(valid, Ordering::Relaxed);
 }
@@ -493,6 +510,86 @@ pub struct JobResult {
     pub gl_data: Vec<u8>,
 }
 
+/// Write a guest routine, which can only use r0-r3, r12 and the flags.
+fn write_guest_routine(mem: &mut Mem, instructions: &[u32]) -> u32 {
+    let routine: MutPtr<u32> = mem.alloc(instructions.len() as u32 * 4).cast();
+    for (i, &instruction) in instructions.iter().enumerate() {
+        mem.write(routine + i as u32, instruction);
+    }
+    routine.to_bits()
+}
+
+/// Set up functions that are implemented in guest code. These are the most
+/// frequent host calls, and even if a worker handles them, leaving and
+/// re-entering generated code each time adds up.
+///
+/// `pthread_setspecific` doesn't check here that the key is valid, so it won't
+/// give the error it should for a key that was never created.
+fn write_guest_routines(mem: &mut Mem, dyld: &mut Dyld) {
+    const MRC_THREAD_ID_R1: u32 = 0xee1d1f70; // mrc p15, 0, r1, c13, c0, 3
+    const MRC_THREAD_ID_R2: u32 = 0xee1d2f70; // mrc p15, 0, r2, c13, c0, 3
+    const SUB_KEY: u32 = 0xe2400001; // sub r0, r0, #1
+    const ADD_KEY: u32 = 0xe2800001; // add r0, r0, #1
+    const CMP_KEY: u32 = 0xe3500040; // cmp r0, #64
+    const LDR_PC: u32 = 0xe51ff004; // ldr pc, [pc, #-4]
+    const BXNE_LR: u32 = 0x112fff1e; // bxne lr
+    const _: () = assert!(FAST_TLS_KEYS == 64);
+
+    let to_upper = write_guest_routine(
+        mem,
+        &[
+            0xe2401061, // sub r1, r0, #'a'
+            0xe3510019, // cmp r1, #('z' - 'a')
+            0x92400020, // subls r0, r0, #32
+            0xe12fff1e, // bx lr
+        ],
+    );
+    dyld.add_guest_export("___toupper", to_upper);
+
+    let get_host = dyld
+        .create_proc_address_no_inval(mem, "_pthread_getspecific")
+        .unwrap();
+    let get = write_guest_routine(
+        mem,
+        &[
+            MRC_THREAD_ID_R1,
+            SUB_KEY,
+            CMP_KEY,
+            0x2a000002, // bhs host_version
+            0xe3510000, // cmp r1, #0
+            0x17910100, // ldrne r0, [r1, r0, lsl #2]
+            BXNE_LR,
+            // host_version:
+            ADD_KEY,
+            LDR_PC,
+            get_host.addr_with_thumb_bit(),
+        ],
+    );
+    dyld.add_guest_export("_pthread_getspecific", get);
+
+    let set_host = dyld
+        .create_proc_address_no_inval(mem, "_pthread_setspecific")
+        .unwrap();
+    let set = write_guest_routine(
+        mem,
+        &[
+            MRC_THREAD_ID_R2,
+            SUB_KEY,
+            CMP_KEY,
+            0x2a000003, // bhs host_version
+            0xe3520000, // cmp r2, #0
+            0x17821100, // strne r1, [r2, r0, lsl #2]
+            0x13a00000, // movne r0, #0
+            BXNE_LR,
+            // host_version:
+            ADD_KEY,
+            LDR_PC,
+            set_host.addr_with_thumb_bit(),
+        ],
+    );
+    dyld.add_guest_export("_pthread_setspecific", set);
+}
+
 struct Job {
     thread: usize,
     gl_calls: Vec<QueuedGlCall>,
@@ -545,7 +642,7 @@ impl Sleeper {
     }
 }
 
-struct WorkerCpu(Cpu);
+struct WorkerCpu(Cpu, u32);
 // SAFETY: only the worker thread uses this after creating it.
 unsafe impl Send for WorkerCpu {}
 
@@ -556,11 +653,23 @@ pub struct Pool {
 }
 
 impl Pool {
-    pub fn new(mem: &mut Mem, count: usize, ignore_gl_errors: bool, fastmem: bool) -> Pool {
+    pub fn new(
+        mem: &mut Mem,
+        dyld: &mut Dyld,
+        count: usize,
+        ignore_gl_errors: bool,
+        fastmem: bool,
+    ) -> Pool {
         if fastmem {
             mem.protect_null_segment();
         }
         ACTIVE.store(true, Ordering::Relaxed);
+        let tls: MutPtr<u32> = mem.alloc(FAST_TLS_SIZE as u32 * 4).cast();
+        let tls_size = FAST_TLS_SIZE as u32 * 4;
+        mem.bytes_at_mut(tls.cast(), tls_size).fill(0);
+        let tls_host = mem.bytes_at_mut(tls.cast(), tls_size).as_mut_ptr();
+        FAST_TLS.store(tls_host.cast(), Ordering::Relaxed);
+        write_guest_routines(mem, dyld);
         IGNORE_GL_ERRORS.store(ignore_gl_errors, Ordering::Relaxed);
         let main_thread = Arc::new(Sleeper::current());
         let workers = (0..count)
@@ -571,7 +680,8 @@ impl Pool {
                     sleeper: OnceLock::new(),
                 });
                 // The main CPU has processor ID 0.
-                let cpu = WorkerCpu(Cpu::new_for_parallel_use(Some(&mut *mem), i + 1, fastmem));
+                let cpu = Cpu::new_for_parallel_use(Some(&mut *mem), i + 1, fastmem);
+                let cpu = WorkerCpu(cpu, tls.to_bits());
                 let thread_worker = worker.clone();
                 let thread_main = main_thread.clone();
                 std::thread::Builder::new()
@@ -671,7 +781,7 @@ impl Pool {
 }
 
 fn worker_main(cpu: WorkerCpu, worker: Arc<Worker>, main_thread: Arc<Sleeper>) {
-    let WorkerCpu(mut cpu) = cpu;
+    let WorkerCpu(mut cpu, tls) = cpu;
     let mut applied_invalidations = 0;
     let mut idle_spins = 0u32;
     worker.sleeper.set(Sleeper::current()).ok().unwrap();
@@ -701,6 +811,12 @@ fn worker_main(cpu: WorkerCpu, worker: Arc<Worker>, main_thread: Arc<Sleeper>) {
         // SAFETY: the main thread doesn't touch this until it sees DONE.
         let job = unsafe { (*worker.job.get()).as_mut().unwrap() };
         cpu.swap_context(&mut job.context);
+        // Without this the guest routines will use the host functions.
+        cpu.set_thread_id(if job.thread < FAST_TLS_THREADS {
+            tls + (job.thread * FAST_TLS_KEYS * 4) as u32
+        } else {
+            0
+        });
         // SAFETY: guest memory stays mapped, and generated code only uses the
         // direct access pointer. Guest code on different threads racing with
         // each other is the same as on a real multi-core device.

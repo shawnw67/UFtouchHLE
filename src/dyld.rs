@@ -1114,6 +1114,13 @@ impl Dyld {
         panic!("Call to unimplemented function {symbol}");
     }
 
+    /// Make `symbol` link to guest code at `address`, in place of a host
+    /// function with the same name. This only affects lazily-linked symbols.
+    pub fn add_guest_export(&mut self, symbol: &str, address: u32) {
+        self.guest_cxxabi_exports
+            .insert(symbol.to_string(), address);
+    }
+
     /// Creates a guest function that will call a host function with the name
     /// `symbol`. This can be used to implement "get proc address" functions.
     /// Note that no attempt is made to deduplicate or deallocate these, so

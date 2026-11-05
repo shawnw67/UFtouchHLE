@@ -328,6 +328,11 @@ impl Cpu {
 
     /// Swap the current state of the CPU (registers etc) with the state stored
     /// in the context object.
+    /// Set the value guest code gets from the TPIDRURO register.
+    pub fn set_thread_id(&mut self, thread_id: u32) {
+        unsafe { Podroid_DynarmicWrapper_set_thread_id(self.dynarmic_wrapper, thread_id) }
+    }
+
     pub fn swap_context(&mut self, context: &mut CpuContext) {
         unsafe { Podroid_DynarmicWrapper_swap_context(self.dynarmic_wrapper, context) }
     }

@@ -173,6 +173,9 @@ class ArmDynarmicCP15 : public Dynarmic::A32::Coprocessor {
   std::uint32_t addr = 0;
 
 public:
+  /// TPIDRURO, the user read-only thread ID register.
+  std::uint32_t thread_id = 0;
+
   using CoprocReg = Dynarmic::A32::CoprocReg;
 
   CallbackOrAccessOneWord CompileSendOneWord(bool two, unsigned opc1,
@@ -198,8 +201,14 @@ public:
                                                CoprocReg) override {
     return CallbackOrAccessTwoWords{};
   }
-  CallbackOrAccessOneWord CompileGetOneWord(bool, unsigned, CoprocReg,
-                                            CoprocReg, unsigned) override {
+  CallbackOrAccessOneWord CompileGetOneWord(bool two, unsigned opc1,
+                                            CoprocReg CRn, CoprocReg CRm,
+                                            unsigned opc2) override {
+    // `mrc p15, 0, rN, c13, c0, 3`
+    if (!two && CRn == CoprocReg::C13 && opc1 == 0 && CRm == CoprocReg::C0 &&
+        opc2 == 3) {
+      return &thread_id;
+    }
     return CallbackOrAccessOneWord{};
   }
   CallbackOrAccessTwoWords CompileGetTwoWords(bool, unsigned,
@@ -220,6 +229,7 @@ public:
 
 class DynarmicWrapper {
   Environment env;
+  std::shared_ptr<ArmDynarmicCP15> cp15;
   std::unique_ptr<Dynarmic::A32::Jit> cpu;
   std::array<std::uint8_t *, Dynarmic::A32::UserConfig::NUM_PAGE_TABLE_ENTRIES>
       page_table;
@@ -229,7 +239,8 @@ public:
                   size_t processor_id, bool fastmem) {
     Dynarmic::A32::UserConfig user_config;
     user_config.callbacks = &env;
-    user_config.coprocessors[15] = std::make_shared<ArmDynarmicCP15>();
+    cp15 = std::make_shared<ArmDynarmicCP15>();
+    user_config.coprocessors[15] = cp15;
     // Shared by all instances, since guest threads can run in parallel.
     static Dynarmic::ExclusiveMonitor monitor(8);
     user_config.global_monitor = &monitor;
@@ -282,6 +293,8 @@ public:
   void invalidate_cache_range(VAddr start, std::uint32_t size) {
     cpu->InvalidateCacheRange(start, size);
   }
+
+  void set_thread_id(std::uint32_t thread_id) { cp15->thread_id = thread_id; }
 
   void swap_context(Podroid_DynarmicContext *context) {
     Podroid_DynarmicContext tmp = {cpu->Regs(), cpu->ExtRegs(), cpu->Cpsr(),
@@ -362,6 +375,11 @@ void Podroid_DynarmicWrapper_set_fpscr(DynarmicWrapper *cpu,
 void Podroid_DynarmicWrapper_swap_context(DynarmicWrapper *cpu,
                                           Podroid_DynarmicContext *context) {
   cpu->swap_context(context);
+}
+
+void Podroid_DynarmicWrapper_set_thread_id(DynarmicWrapper *cpu,
+                                           std::uint32_t thread_id) {
+  cpu->set_thread_id(thread_id);
 }
 
 void Podroid_DynarmicWrapper_invalidate_cache_range(DynarmicWrapper *cpu,
