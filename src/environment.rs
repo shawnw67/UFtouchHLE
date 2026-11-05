@@ -1810,10 +1810,15 @@ impl Environment {
                 Ok(worker) => {
                     self.yield_thread(ThreadBlock::GuestJit(worker));
                     let pool = self.jit_pool.as_ref().unwrap();
-                    let (mut context, ticks, state) = pool.take_result(worker);
-                    self.cpu.swap_context(&mut context);
-                    self.remaining_ticks = Some(ticks);
-                    return state;
+                    let mut result = pool.take_result(worker);
+                    self.cpu.swap_context(&mut result.context);
+                    self.remaining_ticks = Some(result.ticks);
+                    crate::frameworks::opengles::run_queued_calls(
+                        self,
+                        &result.gl_calls,
+                        &result.gl_data,
+                    );
+                    return result.state;
                 }
                 Err(returned_context) => {
                     // Other guest threads need to finish with the workers.

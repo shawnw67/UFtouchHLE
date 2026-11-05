@@ -154,6 +154,10 @@ pub fn note_svc(svc: u32, symbol: &str) {
     if slot.load(Ordering::Relaxed) != Leaf::Unknown as u8 {
         return;
     }
+    if let Some(index) = GL_CALLS.iter().position(|(name, ..)| *name == symbol) {
+        slot.store(LEAF_GL_BASE + index as u8, Ordering::Relaxed);
+        return;
+    }
     let leaf = match symbol {
         "___toupper" => Leaf::ToUpper,
         "_pthread_getspecific" => Leaf::GetSpecific,
@@ -336,8 +340,163 @@ unsafe fn run_leaf(leaf: Leaf, regs: &mut [u32; 16], base: *mut u8, thread: usiz
     true
 }
 
+/// OpenGL ES functions which just change state and return nothing. Workers
+/// queue these, and the main thread runs them, in order, before it next does
+/// anything for that guest thread.
+#[derive(Clone, Copy, Debug)]
+pub enum GlCall {
+    ActiveTexture,
+    BindBuffer,
+    BindTexture,
+    BlendColor,
+    BlendEquationSeparate,
+    BlendFunc,
+    BlendFuncSeparate,
+    ColorMask,
+    CullFace,
+    DepthFunc,
+    DepthMask,
+    Disable,
+    DisableVertexAttribArray,
+    Enable,
+    EnableVertexAttribArray,
+    FrontFace,
+    PolygonOffset,
+    StencilFunc,
+    StencilMask,
+    StencilOp,
+    TexParameteri,
+    Uniform1f,
+    Uniform1fv,
+    Uniform1i,
+    Uniform2fv,
+    Uniform3fv,
+    Uniform4fv,
+    UniformMatrix3fv,
+    UniformMatrix4fv,
+    UseProgram,
+    VertexAttribPointer,
+}
+
+/// For a function with an array of values: which argument is the pointer, and
+/// the size of one element. The argument after `location` is the count.
+type GlArray = Option<(usize, u32)>;
+
+const GL_CALLS: &[(&str, GlCall, GlArray)] = &[
+    ("_glActiveTexture", GlCall::ActiveTexture, None),
+    ("_glBindBuffer", GlCall::BindBuffer, None),
+    ("_glBindTexture", GlCall::BindTexture, None),
+    ("_glBlendColor", GlCall::BlendColor, None),
+    (
+        "_glBlendEquationSeparate",
+        GlCall::BlendEquationSeparate,
+        None,
+    ),
+    ("_glBlendFunc", GlCall::BlendFunc, None),
+    ("_glBlendFuncSeparate", GlCall::BlendFuncSeparate, None),
+    ("_glColorMask", GlCall::ColorMask, None),
+    ("_glCullFace", GlCall::CullFace, None),
+    ("_glDepthFunc", GlCall::DepthFunc, None),
+    ("_glDepthMask", GlCall::DepthMask, None),
+    ("_glDisable", GlCall::Disable, None),
+    (
+        "_glDisableVertexAttribArray",
+        GlCall::DisableVertexAttribArray,
+        None,
+    ),
+    ("_glEnable", GlCall::Enable, None),
+    (
+        "_glEnableVertexAttribArray",
+        GlCall::EnableVertexAttribArray,
+        None,
+    ),
+    ("_glFrontFace", GlCall::FrontFace, None),
+    ("_glPolygonOffset", GlCall::PolygonOffset, None),
+    ("_glStencilFunc", GlCall::StencilFunc, None),
+    ("_glStencilMask", GlCall::StencilMask, None),
+    ("_glStencilOp", GlCall::StencilOp, None),
+    ("_glTexParameteri", GlCall::TexParameteri, None),
+    ("_glUniform1f", GlCall::Uniform1f, None),
+    ("_glUniform1fv", GlCall::Uniform1fv, Some((2, 4))),
+    ("_glUniform1i", GlCall::Uniform1i, None),
+    ("_glUniform2fv", GlCall::Uniform2fv, Some((2, 8))),
+    ("_glUniform3fv", GlCall::Uniform3fv, Some((2, 12))),
+    ("_glUniform4fv", GlCall::Uniform4fv, Some((2, 16))),
+    (
+        "_glUniformMatrix3fv",
+        GlCall::UniformMatrix3fv,
+        Some((3, 36)),
+    ),
+    (
+        "_glUniformMatrix4fv",
+        GlCall::UniformMatrix4fv,
+        Some((3, 64)),
+    ),
+    ("_glUseProgram", GlCall::UseProgram, None),
+    ("_glVertexAttribPointer", GlCall::VertexAttribPointer, None),
+];
+/// Values of [LEAVES] from here on are indices into [GL_CALLS].
+const LEAF_GL_BASE: u8 = 64;
+/// Larger arrays are left to the main thread.
+const MAX_GL_ARRAY_SIZE: u32 = 0x4000;
+
+/// A queued function call. For arrays, the pointer argument is an offset into
+/// the job's data.
+pub struct QueuedGlCall {
+    pub call: GlCall,
+    pub args: [u32; 6],
+}
+
+/// Add a function call to the queue. Returns false to leave it to the main
+/// thread, which is always safe, since the queue gets emptied first.
+unsafe fn queue_gl_call(
+    index: usize,
+    regs: &[u32; 16],
+    base: *mut u8,
+    calls: &mut Vec<QueuedGlCall>,
+    data: &mut Vec<u8>,
+) -> bool {
+    let (_, call, array) = GL_CALLS[index];
+    let mut args = [regs[0], regs[1], regs[2], regs[3], 0, 0];
+    if matches!(call, GlCall::VertexAttribPointer) {
+        // The remaining arguments are on the stack.
+        let sp = regs[Cpu::SP];
+        args[4] = (base.add(sp as usize) as *const u32).read_unaligned();
+        args[5] = (base.add(sp as usize + 4) as *const u32).read_unaligned();
+    }
+    if let Some((pointer_arg, element_size)) = array {
+        let (count, pointer) = (args[1] as i32, args[pointer_arg]);
+        if count < 0 || count as u32 > MAX_GL_ARRAY_SIZE / element_size {
+            return false;
+        }
+        let size = count as u32 * element_size;
+        if pointer < NULL_LIMIT || pointer.checked_add(size).is_none() {
+            return false;
+        }
+        args[pointer_arg] = data.len() as u32;
+        data.extend_from_slice(std::slice::from_raw_parts(
+            base.add(pointer as usize),
+            size as usize,
+        ));
+    }
+    calls.push(QueuedGlCall { call, args });
+    true
+}
+
+/// The result of a guest code run. The GL calls need to run before anything
+/// else happens for the guest thread.
+pub struct JobResult {
+    pub context: Box<CpuContext>,
+    pub ticks: u64,
+    pub state: CpuState,
+    pub gl_calls: Vec<QueuedGlCall>,
+    pub gl_data: Vec<u8>,
+}
+
 struct Job {
     thread: usize,
+    gl_calls: Vec<QueuedGlCall>,
+    gl_data: Vec<u8>,
     context: Box<CpuContext>,
     ticks: u64,
     mem: *mut Mem,
@@ -445,6 +604,8 @@ impl Pool {
         unsafe {
             *worker.job.get() = Some(Job {
                 thread,
+                gl_calls: Vec::new(),
+                gl_data: Vec::new(),
                 context,
                 ticks,
                 mem,
@@ -483,13 +644,19 @@ impl Pool {
         self.idle_spins = 0;
     }
 
-    pub fn take_result(&self, index: usize) -> (Box<CpuContext>, u64, CpuState) {
+    pub fn take_result(&self, index: usize) -> JobResult {
         let worker = &self.workers[index];
         assert!(worker.phase.load(Ordering::Acquire) == DONE);
         // SAFETY: the worker doesn't touch this until it sees JOB_READY.
         let job = unsafe { (*worker.job.get()).take().unwrap() };
         worker.phase.store(IDLE, Ordering::Release);
-        (job.context, job.ticks, job.state.unwrap())
+        JobResult {
+            context: job.context,
+            ticks: job.ticks,
+            state: job.state.unwrap(),
+            gl_calls: job.gl_calls,
+            gl_data: job.gl_data,
+        }
     }
 }
 
@@ -534,8 +701,17 @@ fn worker_main(cpu: WorkerCpu, worker: Arc<Worker>, main_thread: Arc<Sleeper>) {
             let CpuState::Svc(svc) = state else {
                 break state;
             };
-            let leaf = leaf_for_svc(svc);
-            if !unsafe { run_leaf(leaf, cpu.regs_mut(), base, job.thread) } {
+            let leaf = LEAVES
+                .get(svc as usize)
+                .map_or(0, |leaf| leaf.load(Ordering::Relaxed));
+            let handled = if leaf >= LEAF_GL_BASE {
+                let index = (leaf - LEAF_GL_BASE) as usize;
+                let (calls, data) = (&mut job.gl_calls, &mut job.gl_data);
+                unsafe { queue_gl_call(index, cpu.regs(), base, calls, data) }
+            } else {
+                unsafe { run_leaf(leaf_for_svc(svc), cpu.regs_mut(), base, job.thread) }
+            };
+            if !handled {
                 break state;
             }
             job.ticks = job.ticks.saturating_sub(LEAF_CALL_TICKS);

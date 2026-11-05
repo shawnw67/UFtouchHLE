@@ -11,6 +11,7 @@
 
 mod eagl;
 mod gles_guest;
+pub use gles_guest::run_queued_calls;
 mod matrix_palette;
 pub(crate) mod p2g_wide;
 mod software_vao;
@@ -49,6 +50,8 @@ pub struct State {
     next_sync_handle: GLuint,
     /// See [gles_guest]'s `bioshock_framebuffer`.
     bioshock_view_framebuffer: GLuint,
+    /// Guest buffer for [gles_guest::run_queued_calls], and its size.
+    queued_gl_buffer: Option<(crate::mem::MutVoidPtr, u32)>,
     /// The framebuffer object the guest currently has bound, per thread.
     bound_framebuffers: std::collections::HashMap<crate::ThreadId, GLuint>,
     /// Framebuffer objects whose colour attachment is a *texture*.
@@ -82,6 +85,26 @@ impl State {
     fn current_ctx_for_thread(&mut self, thread: crate::ThreadId) -> &mut Option<crate::objc::id> {
         // PERF: this runs on every guest GL call; one hash lookup, not two.
         self.current_ctxs.entry(thread).or_insert(None)
+    }
+
+    /// Get the guest buffer for queued GL call data, big enough for `size`.
+    pub fn queued_gl_data(
+        &mut self,
+        mem: &mut crate::mem::Mem,
+        size: usize,
+    ) -> crate::mem::MutVoidPtr {
+        let size = (size as u32).max(0x10000);
+        match self.queued_gl_buffer {
+            Some((buffer, buffer_size)) if buffer_size >= size => buffer,
+            old => {
+                if let Some((buffer, _)) = old {
+                    mem.free(buffer);
+                }
+                let buffer = mem.alloc(size);
+                self.queued_gl_buffer = Some((buffer, size));
+                buffer
+            }
+        }
     }
 
     pub fn set_bound_framebuffer(&mut self, thread: crate::ThreadId, framebuffer: GLuint) {

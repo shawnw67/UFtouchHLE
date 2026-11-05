@@ -13,6 +13,7 @@ use crate::frameworks::opengles::software_vao::{self, ArrayPointer, FixedArray};
 use crate::gles::{gles11_raw as gles11, GuestGlesCallGuard, GLES};
 use crate::mem::{ConstPtr, ConstVoidPtr, GuestISize, GuestUSize, Mem, MutPtr, MutVoidPtr, Ptr};
 use crate::objc::nil;
+use crate::parallel_jit::{GlCall, QueuedGlCall};
 use crate::window::DeviceFamily;
 use crate::Environment;
 use std::collections::HashMap;
@@ -9006,6 +9007,75 @@ fn glGetObjectLabelEXT(
     }
     if !length.is_null() {
         env.mem.write(length, 0);
+    }
+}
+
+/// Run calls queued by a worker, see [crate::parallel_jit].
+pub fn run_queued_calls(env: &mut Environment, calls: &[QueuedGlCall], data: &[u8]) {
+    if calls.is_empty() {
+        return;
+    }
+    // Arrays go through a guest buffer so they get the usual handling.
+    let data_ptr = env
+        .framework_state
+        .opengles
+        .queued_gl_data(&mut env.mem, data.len());
+    if !data.is_empty() {
+        let size = data.len() as GuestUSize;
+        env.mem
+            .bytes_at_mut(data_ptr.cast(), size)
+            .copy_from_slice(data);
+    }
+    let floats = |offset: u32| -> ConstPtr<GLfloat> { Ptr::from_bits(data_ptr.to_bits() + offset) };
+    let float = f32::from_bits;
+    for &QueuedGlCall { call, args: a } in calls {
+        match call {
+            GlCall::ActiveTexture => glActiveTexture(env, a[0]),
+            GlCall::BindBuffer => glBindBuffer(env, a[0], a[1]),
+            GlCall::BindTexture => glBindTexture(env, a[0], a[1]),
+            GlCall::BlendColor => {
+                glBlendColor(env, float(a[0]), float(a[1]), float(a[2]), float(a[3]))
+            }
+            GlCall::BlendEquationSeparate => glBlendEquationSeparate(env, a[0], a[1]),
+            GlCall::BlendFunc => glBlendFunc(env, a[0], a[1]),
+            GlCall::BlendFuncSeparate => glBlendFuncSeparate(env, a[0], a[1], a[2], a[3]),
+            GlCall::ColorMask => glColorMask(env, a[0] as _, a[1] as _, a[2] as _, a[3] as _),
+            GlCall::CullFace => glCullFace(env, a[0]),
+            GlCall::DepthFunc => glDepthFunc(env, a[0]),
+            GlCall::DepthMask => glDepthMask(env, a[0] as _),
+            GlCall::Disable => glDisable(env, a[0]),
+            GlCall::DisableVertexAttribArray => glDisableVertexAttribArray(env, a[0]),
+            GlCall::Enable => glEnable(env, a[0]),
+            GlCall::EnableVertexAttribArray => glEnableVertexAttribArray(env, a[0]),
+            GlCall::FrontFace => glFrontFace(env, a[0]),
+            GlCall::PolygonOffset => glPolygonOffset(env, float(a[0]), float(a[1])),
+            GlCall::StencilFunc => glStencilFunc(env, a[0], a[1] as _, a[2]),
+            GlCall::StencilMask => glStencilMask(env, a[0]),
+            GlCall::StencilOp => glStencilOp(env, a[0], a[1], a[2]),
+            GlCall::TexParameteri => glTexParameteri(env, a[0], a[1], a[2] as _),
+            GlCall::Uniform1f => glUniform1f(env, a[0] as _, float(a[1])),
+            GlCall::Uniform1fv => glUniform1fv(env, a[0] as _, a[1] as _, floats(a[2])),
+            GlCall::Uniform1i => glUniform1i(env, a[0] as _, a[1] as _),
+            GlCall::Uniform2fv => glUniform2fv(env, a[0] as _, a[1] as _, floats(a[2])),
+            GlCall::Uniform3fv => glUniform3fv(env, a[0] as _, a[1] as _, floats(a[2])),
+            GlCall::Uniform4fv => glUniform4fv(env, a[0] as _, a[1] as _, floats(a[2])),
+            GlCall::UniformMatrix3fv => {
+                glUniformMatrix3fv(env, a[0] as _, a[1] as _, a[2] as _, floats(a[3]))
+            }
+            GlCall::UniformMatrix4fv => {
+                glUniformMatrix4fv(env, a[0] as _, a[1] as _, a[2] as _, floats(a[3]))
+            }
+            GlCall::UseProgram => glUseProgram(env, a[0]),
+            GlCall::VertexAttribPointer => glVertexAttribPointer(
+                env,
+                a[0],
+                a[1] as _,
+                a[2],
+                a[3] as _,
+                a[4] as _,
+                Ptr::from_bits(a[5]),
+            ),
+        }
     }
 }
 
