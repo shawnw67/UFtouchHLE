@@ -53,6 +53,8 @@ struct CTFontHostObject {
     cg_fonts: [CGFontRef; 2],
     size: CGFloat,
     uses_fallback: bool,
+    /// How much to enlarge narrow glyphs, see [narrow_glyph_scale_for_app].
+    narrow_glyph_scale: CGFloat,
     /// The `UIFont` this was created from, if any.
     font: id,
 }
@@ -418,6 +420,45 @@ fn font_and_size(env: &Environment, font: CTFontRef) -> (&Font, CGFloat) {
 }
 
 /// The font to use for a glyph ID, and the glyph ID in that font.
+/// Bundle ID of Monster Hunter Freedom Unite, and the start of its function
+/// that draws a glyph, to check that it's the expected version.
+const MHFU_BUNDLE_ID: &str = "jp.co.capcom.mhp2gwd";
+const MHFU_DRAW_GLYPH: (u32, u32) = (0x2aea48, 0xaf03b5f0);
+/// This looks right on an S10e: letters fill much more of their cell without
+/// touching their neighbours.
+const MHFU_NARROW_GLYPH_SCALE: CGFloat = 1.3;
+/// Glyphs narrower than this many ems count as narrow.
+const NARROW_GLYPH_WIDTH: CGFloat = 0.75;
+
+/// MHFU uses the engine of the Japanese P2G, which centres each character in a
+/// cell made for Japanese text. English letters are only about half as wide, so
+/// they come out small and far apart. Drawing them larger makes them readable.
+fn narrow_glyph_scale_for_app(env: &Environment) -> CGFloat {
+    let (address, instruction) = MHFU_DRAW_GLYPH;
+    if env.window.is_some()
+        && env.bundle.bundle_identifier() == MHFU_BUNDLE_ID
+        && env.mem.read(ConstPtr::<u32>::from_bits(address)) == instruction
+    {
+        MHFU_NARROW_GLYPH_SCALE
+    } else {
+        1.0
+    }
+}
+
+/// The size to draw a glyph at.
+fn glyph_size(env: &Environment, font: CTFontRef, cg_font: CGFontRef, glyph: CGGlyph) -> CGFloat {
+    let host = env.objc.borrow::<CTFontHostObject>(font);
+    let size = host.size;
+    if host.narrow_glyph_scale != 1.0 {
+        let font = &env.objc.borrow::<CGFontHostObject>(cg_font).font;
+        let rect = glyph_rect(font, size, glyph);
+        if rect.size.width < size * NARROW_GLYPH_WIDTH {
+            return size * host.narrow_glyph_scale;
+        }
+    }
+    size
+}
+
 fn font_for_glyph(env: &Environment, font: CTFontRef, glyph: CGGlyph) -> (CGFontRef, CGGlyph) {
     let host = env.objc.borrow::<CTFontHostObject>(font);
     let cg_fonts = host.cg_fonts;
@@ -468,10 +509,12 @@ fn CTFontCreateWithName(
         from_font(env, main.with_em_size()),
         from_font(env, fallback.with_em_size()),
     ];
+    let narrow_glyph_scale = narrow_glyph_scale_for_app(env);
     let host_object = Box::new(CTFontHostObject {
         cg_fonts,
         size,
         uses_fallback: true,
+        narrow_glyph_scale,
         font: nil,
     });
     let class = env.objc.get_known_class("_Podroid_CTFont", &mut env.mem);
@@ -890,6 +933,7 @@ fn CTFontCreateWithGraphicsFont(
             cg_fonts,
             size,
             uses_fallback: false,
+            narrow_glyph_scale: 1.0,
             font: nil,
         }),
         &mut env.mem,
@@ -960,7 +1004,7 @@ fn CTFontGetBoundingRectsForGlyphs(
     for i in 0..count {
         let glyph = env.mem.read(glyphs + i);
         let (cg_font, glyph) = font_for_glyph(env, font, glyph);
-        let size = font_and_size(env, font).1;
+        let size = glyph_size(env, font, cg_font, glyph);
         let rect = glyph_rect(
             &env.objc.borrow::<CGFontHostObject>(cg_font).font,
             size,
@@ -1028,12 +1072,12 @@ fn CTFontDrawGlyphs(
     count: GuestUSize,
     context: CGContextRef,
 ) {
-    let size = env.objc.borrow::<CTFontHostObject>(font).size;
     // Each glyph may be from a different font, so draw them one at a time.
     let glyph_ptr: MutPtr<CGGlyph> = env.mem.alloc_and_write(0);
     for i in 0..count {
         let glyph = env.mem.read(glyphs + i);
         let (cg_font, glyph) = font_for_glyph(env, font, glyph);
+        let size = glyph_size(env, font, cg_font, glyph);
         env.mem.write(glyph_ptr, glyph);
         show_glyphs_with_font(
             env,
