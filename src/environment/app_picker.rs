@@ -92,9 +92,7 @@ fn enumerate_apps(apps_dir: &Path, languages: &[String]) -> Result<Vec<AppInfo>,
     let mut apps = Vec::new();
     for app in std::fs::read_dir(apps_dir)? {
         let app_path = app?.path();
-        if app_path.extension() != Some(OsStr::new("app"))
-            && app_path.extension() != Some(OsStr::new("ipa"))
-        {
+        if app_path.extension() != Some(OsStr::new("app")) {
             continue;
         }
 

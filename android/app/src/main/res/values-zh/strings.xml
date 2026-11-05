@@ -6,12 +6,13 @@
 <!-- 简体中文。繁体中文在 values-b+zh+Hant 里。 -->
 <resources>
     <string name="launcher_hint">点击图标启动游戏 · 长按可管理</string>
-    <string name="import_games">导入游戏</string>
+    <string name="import_games">安装 IPA</string>
     <string name="settings">设置</string>
     <string name="last_run_crashed">上次游戏出错退出了，点这里查看日志</string>
     <string name="loading_games">正在读取游戏列表…</string>
-    <string name="no_games">还没有游戏\n\n点击「导入游戏」，选择 .ipa 文件即可。</string>
-    <string name="importing">正在导入…</string>
+    <string name="no_games">还没有游戏\n\n点击「安装 IPA」，选择 .ipa 文件即可。</string>
+    <string name="importing">正在安装…</string>
+    <string name="importing_percent">正在安装… %1$d%%</string>
     <string name="list_separator">、</string>
 
     <string name="cancel">取消</string>
@@ -126,10 +127,10 @@
     <string name="language_system">跟随系统</string>
 
     <plurals name="imported_games">
-        <item quantity="other">已导入 %1$d 个游戏。</item>
+        <item quantity="other">已安装 %1$d 个游戏。</item>
     </plurals>
     <string name="skipped_not_ipa">不是 .ipa 文件，已跳过：%1$s</string>
-    <string name="import_failed">导入失败：%1$s</string>
+    <string name="import_failed">安装失败：%1$s</string>
 
     <string name="no_saves_yet">「%1$s」还没有存档。</string>
     <string name="export_save_failed">导出存档失败：%1$s</string>
@@ -146,8 +147,8 @@
     <string name="zip_has_no_saves">这个 zip 里没有存档文件。</string>
     <string name="zip_unreadable">无法读取这个文件，它是存档 zip 吗？</string>
     <string name="save_mismatch_title">存档和游戏不一致</string>
-    <string name="save_mismatch_message">这个存档来自另一个游戏（%1$s），不是「%2$s」（%3$s）。仍然导入吗？</string>
-    <string name="import_anyway">仍然导入</string>
+    <string name="save_mismatch_message">这个存档来自另一个游戏（%1$s），不是「%2$s」（%3$s）。仍然安装吗？</string>
+    <string name="import_anyway">仍然安装</string>
     <string name="step_move_old_saves">移走旧存档</string>
     <string name="step_write_new_saves">写入新存档</string>
     <plurals name="imported_saves">
@@ -216,4 +217,10 @@
         <item>已通关</item>
         <item>搁置</item>
     </string-array>
+    <string name="unpack_old_title">要解压游戏吗?</string>
+    <string name="unpack_old_confirm">解压</string>
+    <plurals name="unpack_old_message">
+        <item quantity="one">游戏现在从解压后的文件运行,不再使用 IPA。有 %1$d 个游戏需要解压,完成后会删除本应用目录里的 IPA。解压之前,这些游戏不会出现在列表中。</item>
+        <item quantity="other">游戏现在从解压后的文件运行,不再使用 IPA。有 %1$d 个游戏需要解压,完成后会删除本应用目录里的 IPA。解压之前,这些游戏不会出现在列表中。</item>
+    </plurals>
 </resources>

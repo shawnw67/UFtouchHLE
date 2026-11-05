@@ -260,8 +260,20 @@ final class Posters {
     }
 
     /// The iTunesArtwork at the root of an IPA (outside its app bundle), if
-    /// it has one. Extracted app bundles don't include it.
+    /// it has one. Importing an IPA puts this inside the unpacked bundle.
     private static Bitmap readArtwork(String ipaPath) {
+        if (ipaPath != null && ipaPath.toLowerCase(Locale.ROOT).endsWith(".app")) {
+            for (String name : new String[]{"iTunesArtwork@2x", "iTunesArtwork"}) {
+                java.io.File file = new java.io.File(ipaPath, name);
+                if (file.isFile() && file.length() <= MAX_DOWNLOAD) {
+                    Bitmap bitmap = BitmapFactory.decodeFile(file.getPath());
+                    if (bitmap != null) {
+                        return bitmap;
+                    }
+                }
+            }
+            return null;
+        }
         if (ipaPath == null || !ipaPath.toLowerCase(Locale.ROOT).endsWith(".ipa")) {
             return null;
         }

@@ -13,11 +13,10 @@
 //! directory (`Documents` etc).
 //!
 //! All files in the guest filesystem must have a corresponding file in the host
-//! filesystem, or a corresponding file inside a `.ipa` file (ZIP archive) in
-//! the host filesystem. Accessing a file requires traversing the guest
-//! filesystem's directory structure to find out the host path, or ZIP file
-//! member. After that point, the underlying file is accessed directly; there is
-//! no virtualization of file I/O.
+//! filesystem. Accessing a file requires traversing the guest filesystem's
+//! directory structure to find out the host path. After that point, the
+//! underlying file is accessed directly; there is no virtualization of file
+//! I/O.
 //!
 //! Directories only need a corresponding directory in the host filesystem if
 //! they are writeable (i.e. if new files can be created in them).
@@ -26,9 +25,10 @@
 
 mod bundle;
 
+#[cfg(target_os = "android")]
+pub use bundle::unpack_ipa;
 pub use bundle::BundleData;
 
-use crate::fs::bundle::{IpaFile, IpaFileRef};
 use crate::paths;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -45,8 +45,6 @@ use std::time::UNIX_EPOCH;
 enum FileLocation {
     /// Path for a normal file. Can be read or written.
     Path(PathBuf),
-    /// Reference to a file inside a `.ipa` file (ZIP archive). Read only.
-    IpaFileRef(IpaFileRef),
     /// Name of a resource file bundled with touchHLE. Read only.
     ResourceFilePath(String),
 }
@@ -142,12 +140,6 @@ impl FsNode {
         };
         assert!(children.insert(String::from(name), child).is_none());
         self
-    }
-    fn bundle_zip_file(file_ref: IpaFileRef) -> Self {
-        FsNode::File {
-            location: FileLocation::IpaFileRef(file_ref),
-            writeable: false,
-        }
     }
     fn resource_file(name: String) -> Self {
         FsNode::File {
@@ -448,7 +440,6 @@ impl Drop for PipeEnd {
 pub enum GuestFile {
     Directory,
     File(File),
-    IpaBundleFile(IpaFile),
     ResourceFile(paths::ResourceFile),
     Socket,
     PipeRead(PipeEnd),
@@ -475,10 +466,6 @@ impl GuestFile {
         GuestFile::File(file)
     }
 
-    fn from_ipa_file(file: &IpaFileRef) -> GuestFile {
-        GuestFile::IpaBundleFile(file.open())
-    }
-
     fn from_resource_file(file: paths::ResourceFile) -> GuestFile {
         GuestFile::ResourceFile(file)
     }
@@ -491,7 +478,7 @@ impl GuestFile {
         match self {
             GuestFile::Shared(file) => file.borrow().sync_all(),
             GuestFile::File(file) => file.sync_all(),
-            GuestFile::IpaBundleFile(_) | GuestFile::ResourceFile(_) => Ok(()),
+            GuestFile::ResourceFile(_) => Ok(()),
             GuestFile::Directory => {
                 log!("Warning: syncing directory as a guest file.");
                 Ok(())
@@ -507,9 +494,6 @@ impl GuestFile {
         match self {
             GuestFile::Shared(file) => file.borrow().set_len(len),
             GuestFile::File(file) => file.set_len(len),
-            GuestFile::IpaBundleFile(file) => {
-                panic!("Attempt to resize a read-only file: {file:?}")
-            }
             GuestFile::ResourceFile(file) => {
                 panic!("Attempt to resize a read-only file: {file:?}")
             }
@@ -550,7 +534,6 @@ impl Read for GuestFile {
         match self {
             GuestFile::Shared(file) => file.borrow_mut().read(buf),
             GuestFile::File(file) => file.read(buf),
-            GuestFile::IpaBundleFile(file) => file.read(buf),
             GuestFile::ResourceFile(file) => file.get().read(buf),
             GuestFile::PipeRead(pipe) => {
                 let mut pipe = pipe.borrow_mut();
@@ -590,9 +573,6 @@ impl Write for GuestFile {
         match self {
             GuestFile::Shared(file) => file.borrow_mut().write(buf),
             GuestFile::File(file) => file.write(buf),
-            GuestFile::IpaBundleFile(file) => {
-                panic!("Attempt to write to a read-only file: {file:?}")
-            }
             GuestFile::ResourceFile(file) => {
                 panic!("Attempt to write to a read-only file: {file:?}")
             }
@@ -620,10 +600,6 @@ impl Write for GuestFile {
         match self {
             GuestFile::Shared(file) => file.borrow_mut().flush(),
             GuestFile::File(file) => file.flush(),
-            GuestFile::IpaBundleFile(file) => Err(std::io::Error::new(
-                std::io::ErrorKind::ReadOnlyFilesystem,
-                format!("Attempt to flush a read-only file: {file:?}"),
-            )),
             GuestFile::ResourceFile(file) => {
                 panic!("Attempt to flush a read-only file: {file:?}")
             }
@@ -639,7 +615,6 @@ impl Seek for GuestFile {
         match self {
             GuestFile::Shared(file) => file.borrow_mut().seek(pos),
             GuestFile::File(file) => file.seek(pos),
-            GuestFile::IpaBundleFile(file) => file.seek(pos),
             GuestFile::ResourceFile(file) => file.get().seek(pos),
             GuestFile::Directory => {
                 // Note: directories as supposed to be seekable on iOS! https://stackoverflow.com/questions/65911066/what-does-lseek-mean-for-a-directory-file-descriptor
@@ -980,18 +955,6 @@ impl Fs {
         let node = self.lookup_node(path).ok_or(())?;
         match node {
             FsNode::File { location, .. } => match location {
-                // Note: the returned time is consistent with 'Date' and 'Time'
-                // of files inside IPA archive as reported by 7-zip.
-                // But it can be few hours off in comparison with modification
-                // time reported by NSFileModificationDate for app bundle files
-                // and changes if system timezone changes and apps gets
-                // re-installed!
-                // This shouldn't be a big problem as we're always assuming
-                // GMT in the codebase right now.
-                // TODO: double check that when we support different timezones
-                FileLocation::IpaFileRef(ipa_file_ref) => {
-                    Ok(ipa_file_ref.get_last_modified().into())
-                }
                 FileLocation::Path(path) => {
                     // TODO: account for the current timezone, here it's in GMT
                     fs::metadata(path)
@@ -1016,7 +979,6 @@ impl Fs {
         let node = self.lookup_node(path).ok_or(())?;
         match node {
             FsNode::File { location, .. } => match location {
-                FileLocation::IpaFileRef(ipa_file_ref) => Ok(ipa_file_ref.get_size()),
                 FileLocation::Path(path) => {
                     fs::metadata(path).map(|meta| meta.len()).map_err(|_| ())
                 }
@@ -1121,7 +1083,6 @@ impl Fs {
                     let host_file = handle_open_err(File::open(host_path), host_path);
                     Ok(GuestFile::from_host_file(host_file))
                 }
-                FileLocation::IpaFileRef(file) => Ok(GuestFile::from_ipa_file(file)),
                 FileLocation::ResourceFilePath(name) => {
                     let resource_file = handle_open_err(paths::ResourceFile::open(name), name);
                     Ok(GuestFile::from_resource_file(resource_file))
@@ -1240,10 +1201,6 @@ impl Fs {
                             );
                             return Ok(GuestFile::File(file));
                         }
-                        FileLocation::IpaFileRef(file) => {
-                            assert!(!(writeable || append || write));
-                            return Ok(GuestFile::from_ipa_file(file));
-                        }
                         FileLocation::ResourceFilePath(name) => {
                             assert!(!(writeable || append || write));
                             let resource_file =
@@ -1349,7 +1306,7 @@ impl Fs {
 
                 let host_path = match location {
                     FileLocation::Path(host_path) => host_path,
-                    FileLocation::IpaFileRef(_) | FileLocation::ResourceFilePath(_) => panic!(),
+                    FileLocation::ResourceFilePath(_) => panic!(),
                 };
 
                 handle_open_err(std::fs::remove_file(host_path), host_path);

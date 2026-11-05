@@ -13,10 +13,16 @@
 //! [crate::paths::user_data_base_path]).
 
 use crate::bundle::Bundle;
-use crate::fs::BundleData;
+use crate::fs::{unpack_ipa, BundleData};
 use jni_sys::{jbyteArray, jclass, jobject, jsize, jstring, JNIEnv};
 use std::ffi::{c_char, c_int, c_void, CStr, CString, OsStr};
+use std::fs::File;
+use std::os::fd::FromRawFd;
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
+
+/// How far along [nativeUnpackIpa] is, in percent.
+static UNPACK_PROGRESS: AtomicU32 = AtomicU32::new(0);
 
 unsafe fn get_string(env: *mut JNIEnv, string: jstring) -> String {
     let chars = ((**env).GetStringUTFChars.unwrap())(env, string, std::ptr::null_mut());
@@ -37,6 +43,41 @@ unsafe fn new_byte_array(env: *mut JNIEnv, bytes: &[u8]) -> jbyteArray {
         ((**env).SetByteArrayRegion.unwrap())(env, array, 0, len, bytes.as_ptr().cast());
     }
     array
+}
+
+/// Unpack the IPA open as `fd`, which this takes ownership of, to `dest`.
+/// Returns an error message, which is empty if it worked.
+#[no_mangle]
+pub unsafe extern "system" fn Java_org_podroid_android_LauncherActivity_nativeUnpackIpa(
+    env: *mut JNIEnv,
+    _class: jclass,
+    fd: c_int,
+    dest: jstring,
+) -> jbyteArray {
+    crate::log::LOG_TO_FILE.store(false, std::sync::atomic::Ordering::Relaxed);
+    let dest = get_string(env, dest);
+    let ipa = File::from_raw_fd(fd);
+    UNPACK_PROGRESS.store(0, Ordering::Relaxed);
+    let result = std::panic::catch_unwind(|| {
+        unpack_ipa(ipa, Path::new(&dest), &mut |done, total| {
+            let percent = done.saturating_mul(100) / total.max(1);
+            UNPACK_PROGRESS.store(percent as u32, Ordering::Relaxed);
+        })
+    });
+    let error = match result {
+        Ok(Ok(())) => String::new(),
+        Ok(Err(error)) => error,
+        Err(_) => "Unpacking the IPA crashed".to_string(),
+    };
+    new_byte_array(env, error.as_bytes())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_org_podroid_android_LauncherActivity_nativeUnpackProgress(
+    _env: *mut JNIEnv,
+    _class: jclass,
+) -> c_int {
+    UNPACK_PROGRESS.load(Ordering::Relaxed) as c_int
 }
 
 /// Lists the apps in `apps_dir`. Their icons are written to `icons_dir` as
@@ -75,10 +116,7 @@ fn scan_apps(apps_dir: &Path, icons_dir: &Path, languages: &[String]) -> String 
     };
     let mut paths: Vec<_> = entries
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| {
-            path.extension() == Some(OsStr::new("app"))
-                || path.extension() == Some(OsStr::new("ipa"))
-        })
+        .filter(|path| path.extension() == Some(OsStr::new("app")))
         .collect();
     paths.sort();
 

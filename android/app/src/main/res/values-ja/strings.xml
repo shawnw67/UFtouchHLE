@@ -6,12 +6,13 @@
 <!-- 日本語 -->
 <resources>
     <string name="launcher_hint">アイコンをタップしてゲームを起動 · 長押しで管理</string>
-    <string name="import_games">ゲームを追加</string>
+    <string name="import_games">IPA をインストール</string>
     <string name="settings">設定</string>
     <string name="last_run_crashed">前回ゲームがエラーで終了しました。ここをタップしてログを表示</string>
     <string name="loading_games">ゲーム一覧を読み込み中…</string>
-    <string name="no_games">ゲームがまだありません\n\n「ゲームを追加」をタップして .ipa ファイルを選んでください。</string>
-    <string name="importing">追加中…</string>
+    <string name="no_games">ゲームがまだありません\n\n「IPA をインストール」をタップして .ipa ファイルを選んでください。</string>
+    <string name="importing">インストール中…</string>
+    <string name="importing_percent">インストール中… %1$d%%</string>
     <string name="list_separator">、</string>
 
     <string name="cancel">キャンセル</string>
@@ -126,10 +127,10 @@
     <string name="language_system">システムに合わせる</string>
 
     <plurals name="imported_games">
-        <item quantity="other">%1$d 本のゲームを追加しました。</item>
+        <item quantity="other">%1$d 本のゲームをインストールしました。</item>
     </plurals>
     <string name="skipped_not_ipa">.ipa ファイルではないためスキップしました：%1$s</string>
-    <string name="import_failed">追加できませんでした：%1$s</string>
+    <string name="import_failed">インストールできませんでした：%1$s</string>
 
     <string name="no_saves_yet">「%1$s」にはまだセーブがありません。</string>
     <string name="export_save_failed">セーブを書き出せませんでした：%1$s</string>
@@ -216,4 +217,10 @@
         <item>クリア済み</item>
         <item>中断</item>
     </string-array>
+    <string name="unpack_old_title">ゲームを展開しますか?</string>
+    <string name="unpack_old_confirm">展開</string>
+    <plurals name="unpack_old_message">
+        <item quantity="one">ゲームは IPA ではなく、展開したファイルから実行するようになりました。%1$d 個のゲームを展開すると、このアプリのフォルダ内の IPA は削除されます。展開するまで一覧には表示されません。</item>
+        <item quantity="other">ゲームは IPA ではなく、展開したファイルから実行するようになりました。%1$d 個のゲームを展開すると、このアプリのフォルダ内の IPA は削除されます。展開するまで一覧には表示されません。</item>
+    </plurals>
 </resources>

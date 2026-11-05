@@ -103,10 +103,7 @@ fn fstat_inner(env: &mut Environment, fd: FileDescriptor, buf: MutPtr<stat>) -> 
     let mut stat = stat::default();
 
     match file.file {
-        GuestFile::File(_)
-        | GuestFile::IpaBundleFile(_)
-        | GuestFile::ResourceFile(_)
-        | GuestFile::Shared(_)
+        GuestFile::File(_) | GuestFile::ResourceFile(_) | GuestFile::Shared(_)
             if !file.file.is_directory() =>
         {
             stat.st_mode |= S_IFREG;

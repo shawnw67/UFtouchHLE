@@ -15,7 +15,7 @@ Maintained by [shawnw67](https://github.com/shawnw67). This fork includes AI-ass
 ## Features added in this fork
 
 - **Game compatibility:** Additional APIs and fixes for P2G, Vice City, Inotia 1 / 2, Resident Evil Mercenaries VS., Dead Rising Mobile, and other games.
-- **Android launcher:** Import games, long-press to manage them, view and share logs, and configure device profiles, game network access, and update checks.
+- **Android launcher:** Install IPAs, long-press to manage them, view and share logs, and configure device profiles, game network access, and update checks.
 - **Save transfers:** Import and export saves as ZIP files, with existing saves backed up before import.
 - **Device profiles:** Automatically select a profile based on screen aspect ratio, or choose a global or per-game profile manually.
 - **Controller support:** Implements the GameController APIs used by games, with P2G and Vice City tested on real hardware. Touch mappings and a virtual cursor remain available for other games.
@@ -55,7 +55,7 @@ Games are not included. Supply your own legally obtained, decrypted apps suitabl
 The launcher currently uses Chinese labels. The English descriptions below explain the relevant buttons:
 
 1. Install the APK and open the app.
-2. Tap **导入游戏** (Import game) and select an `.ipa` file.
+2. Tap **安装 IPA** (Install IPA) and select an `.ipa` file.
 3. Tap a game to launch it, or long-press it to open its management menu.
 4. Use the gear icon for global settings, or long-press a game to choose its device profile.
 

@@ -34,6 +34,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.DocumentsContract;
+import android.os.ParcelFileDescriptor;
 import android.provider.OpenableColumns;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -43,6 +44,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.WindowInsets;
+import android.util.Log;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.GridView;
@@ -96,10 +98,16 @@ public class LauncherActivity extends Activity {
 
     /** See src/android_launcher.rs. */
     private static native byte[] nativeScanApps(String appsDir, String iconsDir, String languages);
+    private static native byte[] nativeUnpackIpa(int fd, String dest);
+    private static native int nativeUnpackProgress();
     private static native byte[] nativeCopyrightText(android.content.res.AssetManager assets);
     private static native byte[] nativeVersion();
     private static native byte[] nativeImportPspSave(byte[] file, byte[] sfo, byte[] current);
 
+    private static final String TAG = "PodroidLauncher";
+    /// Must match NOT_SEEKABLE_ERROR in src/fs/bundle.rs.
+    private static final String UNPACK_NOT_SEEKABLE = "not seekable";
+    private boolean askedAboutOldIpas;
     private static final String APPS_DIR = "Podroid_apps";
     private static final String LOG_FILE = "Podroid_log.txt";
     private static final String[] WALLPAPER_FILES = {
@@ -362,6 +370,7 @@ public class LauncherActivity extends Activity {
                 loading = false;
                 refreshLibrary();
                 fetchPosters(found);
+                offerToUnpackOldIpas();
             });
         }).start();
     }
@@ -1865,9 +1874,12 @@ public class LauncherActivity extends Activity {
             // Don't let a strange name escape the apps directory.
             name = name.replace('/', '_').replace('\\', '_');
             try {
-                copy(uri, new File(appsDir, name));
+                unpackIpa(uri, name, appsDir);
+                // An older version of this game may have been kept as an IPA.
+                new File(appsDir, name).delete();
                 imported++;
             } catch (Exception e) {
+                Log.e(TAG, "Couldn't import " + name, e);
                 failed.add(name);
             }
         }
@@ -1896,6 +1908,142 @@ public class LauncherActivity extends Activity {
             // Fall back to the URI below.
         }
         return uri.getLastPathSegment();
+    }
+
+    /// Imports an IPA by unpacking its app bundle, like installing an app on an
+    /// iPhone. The original file stays where it is.
+    private void unpackIpa(Uri uri, String name, File appsDir) throws Exception {
+        long size = fileSize(uri);
+        if (size > 0 && appsDir.getUsableSpace() < size) {
+            throw new Exception("Not enough storage for " + name);
+        }
+        File dest = appDirFor(appsDir, name);
+        ParcelFileDescriptor file = getContentResolver().openFileDescriptor(uri, "r");
+        if (file == null) {
+            throw new Exception("Couldn't open " + uri);
+        }
+        String error = unpackWithProgress(file, dest);
+        if (UNPACK_NOT_SEEKABLE.equals(error)) {
+            // Some providers only offer a stream, so it needs a local copy.
+            File temp = new File(getCacheDir(), "import.ipa");
+            try {
+                copy(uri, temp);
+                error = unpackWithProgress(
+                    ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY), dest);
+            } finally {
+                temp.delete();
+            }
+        }
+        if (!error.isEmpty()) {
+            throw new Exception(error);
+        }
+    }
+
+    private static File appDirFor(File appsDir, String ipaName) {
+        return new File(appsDir, ipaName.substring(0, ipaName.length() - ".ipa".length()) + ".app");
+    }
+
+    /// Returns the error message, which is empty if it worked. The unpacker
+    /// takes over the file.
+    private String unpackWithProgress(ParcelFileDescriptor file, File dest) {
+        final java.util.concurrent.atomic.AtomicBoolean done =
+            new java.util.concurrent.atomic.AtomicBoolean();
+        Thread progress = new Thread(() -> {
+            while (!done.get()) {
+                final int percent = nativeUnpackProgress();
+                runOnUiThread(() -> {
+                    if (!done.get()) {
+                        statusText.setText(getString(R.string.importing_percent, percent));
+                    }
+                });
+                try {
+                    Thread.sleep(250);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        });
+        progress.start();
+        try {
+            return new String(nativeUnpackIpa(file.detachFd(), dest.getPath()),
+                StandardCharsets.UTF_8);
+        } finally {
+            done.set(true);
+        }
+    }
+
+    /// Earlier versions kept IPAs here and ran games from them.
+    private void offerToUnpackOldIpas() {
+        if (askedAboutOldIpas) {
+            return;
+        }
+        final File appsDir = getAppsDir();
+        final File[] ipas = appsDir.listFiles(
+            (dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".ipa"));
+        if (ipas == null || ipas.length == 0) {
+            return;
+        }
+        askedAboutOldIpas = true;
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.unpack_old_title)
+            .setMessage(getResources().getQuantityString(
+                R.plurals.unpack_old_message, ipas.length, ipas.length))
+            .setPositiveButton(R.string.unpack_old_confirm, (dialog, which) -> {
+                loading = true;
+                updateStatus();
+                statusText.setText(R.string.importing);
+                new Thread(() -> {
+                    final String message = unpackOldIpas(ipas, appsDir);
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                        rescan();
+                    });
+                }).start();
+            })
+            .setNegativeButton(R.string.cancel, null)
+            .show();
+    }
+
+    private String unpackOldIpas(File[] ipas, File appsDir) {
+        int unpacked = 0;
+        List<String> failed = new ArrayList<>();
+        for (File ipa : ipas) {
+            String error;
+            try {
+                error = unpackWithProgress(
+                    ParcelFileDescriptor.open(ipa, ParcelFileDescriptor.MODE_READ_ONLY),
+                    appDirFor(appsDir, ipa.getName()));
+            } catch (Exception e) {
+                error = e.toString();
+            }
+            if (error.isEmpty()) {
+                ipa.delete();
+                unpacked++;
+            } else {
+                Log.e(TAG, "Couldn't unpack " + ipa + ": " + error);
+                failed.add(ipa.getName());
+            }
+        }
+        StringBuilder message = new StringBuilder(
+            getResources().getQuantityString(R.plurals.imported_games, unpacked, unpacked));
+        if (!failed.isEmpty()) {
+            message.append('\n').append(getString(
+                R.string.import_failed,
+                TextUtils.join(getString(R.string.list_separator), failed)));
+        }
+        return message.toString();
+    }
+
+    private long fileSize(Uri uri) {
+        try (Cursor cursor = getContentResolver().query(
+                uri, new String[]{OpenableColumns.SIZE}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0)) {
+                return cursor.getLong(0);
+            }
+        } catch (Exception e) {
+            // The size is only for progress and a quick storage check.
+        }
+        return -1;
     }
 
     private void copy(Uri uri, File dest) throws Exception {

@@ -8,12 +8,13 @@
 <resources>
     <!-- Main screen -->
     <string name="launcher_hint">Tap an icon to start a game · Long-press to manage it</string>
-    <string name="import_games">Import games</string>
+    <string name="import_games">Install IPA</string>
     <string name="settings">Settings</string>
     <string name="last_run_crashed">The game crashed last time. Tap here to see the log.</string>
     <string name="loading_games">Loading games…</string>
-    <string name="no_games">No games yet\n\nTap “Import games” and choose an .ipa file.</string>
-    <string name="importing">Importing…</string>
+    <string name="no_games">No games yet\n\nTap “Install IPA” and choose an .ipa file.</string>
+    <string name="importing">Installing…</string>
+    <string name="importing_percent">Installing… %1$d%%</string>
     <string name="list_separator">", "</string>
 
     <!-- Common buttons -->
@@ -135,8 +136,8 @@
 
     <!-- Importing games -->
     <plurals name="imported_games">
-        <item quantity="one">Imported %1$d game.</item>
-        <item quantity="other">Imported %1$d games.</item>
+        <item quantity="one">Installed %1$d game.</item>
+        <item quantity="other">Installed %1$d games.</item>
     </plurals>
     <string name="skipped_not_ipa">Skipped, not .ipa files: %1$s</string>
     <string name="import_failed">Couldn’t import: %1$s</string>
@@ -160,7 +161,7 @@
     <string name="zip_unreadable">Couldn’t read this file. Is it a save zip?</string>
     <string name="save_mismatch_title">The save doesn’t match the game</string>
     <string name="save_mismatch_message">This save is from another game (%1$s), not “%2$s” (%3$s). Import it anyway?</string>
-    <string name="import_anyway">Import anyway</string>
+    <string name="import_anyway">Install anyway</string>
     <string name="step_move_old_saves">moving the old saves</string>
     <string name="step_write_new_saves">writing the new saves</string>
     <plurals name="imported_saves">
@@ -236,4 +237,10 @@
         <item>Completed</item>
         <item>On hold</item>
     </string-array>
+    <string name="unpack_old_title">Unpack games?</string>
+    <string name="unpack_old_confirm">Unpack</string>
+    <plurals name="unpack_old_message">
+        <item quantity="one">Games now run from unpacked files instead of IPAs. %1$d game needs unpacking. Its IPA in this app’s folder is then deleted, and it won’t appear in the list until it’s unpacked.</item>
+        <item quantity="other">Games now run from unpacked files instead of IPAs. %1$d games need unpacking. Their IPAs in this app’s folder are then deleted, and they won’t appear in the list until they’re unpacked.</item>
+    </plurals>
 </resources>
