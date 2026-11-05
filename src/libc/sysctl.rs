@@ -33,6 +33,7 @@ const KERN_PROC_ALL: i32 = 0;
 const HW_MACHINE: i32 = 1;
 const HW_MODEL: i32 = 2;
 const HW_NCPU: i32 = 3;
+pub(crate) const GUEST_PROCESSOR_COUNT: i32 = 1;
 const HW_PHYSMEM: i32 = 5;
 const HW_USERMEM: i32 = 6;
 const HW_PAGESIZE: i32 = 7;
@@ -52,11 +53,13 @@ enum SysCtlNamePath {
 // Clippy complains about the type.
 // Below values corresponds to the original iPhone.
 // Reference https://www.mail-archive.com/misc@openbsd.org/msg80988.html
-static SYSCTL_VALUES: [(SysCtlNamePath, &str, SysInfoType); 18] = [
+static SYSCTL_VALUES: [(SysCtlNamePath, &str, SysInfoType); 20] = [
     // Generic CPU, I/O
     (SysCtlNamePath::Length2(CTL_HW, HW_MACHINE), "hw.machine", SysInfoType::String(b"iPhone1,1")),
     (SysCtlNamePath::Length2(CTL_HW, HW_MODEL), "hw.model", SysInfoType::String(b"M68AP")),
-    (SysCtlNamePath::Length2(CTL_HW, HW_NCPU), "hw.ncpu", SysInfoType::Int32(1)),
+    (SysCtlNamePath::Length2(CTL_HW, HW_NCPU), "hw.ncpu", SysInfoType::Int32(GUEST_PROCESSOR_COUNT)),
+    (SysCtlNamePath::Undefined, "hw.physicalcpu", SysInfoType::Int32(GUEST_PROCESSOR_COUNT)),
+    (SysCtlNamePath::Undefined, "hw.logicalcpu", SysInfoType::Int32(GUEST_PROCESSOR_COUNT)),
     (SysCtlNamePath::Undefined, "hw.cputype", SysInfoType::Int32(12)),
     (SysCtlNamePath::Undefined, "hw.cpusubtype", SysInfoType::Int32(6)),
     (SysCtlNamePath::Length2(CTL_HW, HW_CPU_FREQ), "hw.cpufrequency", SysInfoType::Int64(412000000)),

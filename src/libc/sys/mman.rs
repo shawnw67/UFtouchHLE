@@ -12,7 +12,7 @@ use crate::libc::errno::{set_errno, EINVAL, ENOTSUP};
 use crate::libc::posix_io;
 use crate::libc::posix_io::{off_t, FileDescriptor, SEEK_SET};
 use crate::mem::VMAllocError;
-use crate::mem::{ConstPtr, GuestUSize, MutVoidPtr, PAGE_SIZE_ALIGN_MASK};
+use crate::mem::{ConstPtr, GuestUSize, MutVoidPtr, PAGE_SIZE, PAGE_SIZE_ALIGN_MASK};
 use std::collections::HashMap;
 
 #[allow(dead_code)]
@@ -77,7 +77,10 @@ fn mmap(
     };
 
     assert!(!env.libc_state.mman.mmap_allocations.contains_key(&ptr));
-    env.libc_state.mman.mmap_allocations.insert(ptr, len);
+    env.libc_state
+        .mman
+        .mmap_allocations
+        .insert(ptr, len.max(1).next_multiple_of(PAGE_SIZE));
 
     ptr
 }
@@ -88,19 +91,44 @@ fn munmap(env: &mut Environment, addr: MutVoidPtr, len: GuestUSize) -> i32 {
 
     log_dbg!("munmap({:?}, {})", addr, len);
 
-    if len == 0 {
+    let start = u64::from(addr.to_bits());
+    let end = start + u64::from(len).next_multiple_of(u64::from(PAGE_SIZE));
+    if len == 0 || addr.to_bits() & PAGE_SIZE_ALIGN_MASK != 0 || end > (1u64 << 32) {
         set_errno(env, EINVAL);
-        // TODO: should we clear allocations for `addr` here too?
         log!("Warning: munmap({:?}, {}) failed, returning -1", addr, len);
         return -1;
     }
-    assert_eq!(
-        *env.libc_state.mman.mmap_allocations.get(&addr).unwrap(),
-        len
-    );
-    env.mem.vm_free(addr, len);
-    env.libc_state.mman.mmap_allocations.remove(&addr);
-    0 // success
+
+    // Only free pages owned by mmap. Other guest VM allocations may share
+    // the requested range. Keep any part of a mapping outside the range.
+    let mappings = &mut env.libc_state.mman.mmap_allocations;
+    let overlaps: Vec<_> = mappings
+        .iter()
+        .filter_map(|(&base, &size)| {
+            let low = u64::from(base.to_bits());
+            let high = low + u64::from(size);
+            (low < end && start < high).then_some((base, low, high))
+        })
+        .collect();
+    for (base, low, high) in overlaps {
+        let first = low.max(start);
+        let last = high.min(end);
+        mappings.remove(&base);
+        if low < first {
+            mappings.insert(base, (first - low) as GuestUSize);
+        }
+        if last < high {
+            mappings.insert(
+                MutVoidPtr::from_bits(last as u32),
+                (high - last) as GuestUSize,
+            );
+        }
+        env.mem.vm_free(
+            MutVoidPtr::from_bits(first as u32),
+            (last - first) as GuestUSize,
+        );
+    }
+    0
 }
 
 fn madvise(env: &mut Environment, addr: MutVoidPtr, len: GuestUSize, advice: i32) -> i32 {

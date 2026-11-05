@@ -5,10 +5,10 @@
  */
 //! `NSProcessInfo`.
 
-use super::NSTimeInterval;
+use super::{NSTimeInterval, NSUInteger};
 use crate::frameworks::foundation::ns_string;
 use crate::libc::mach::host::PHYSICAL_MEMORY;
-use crate::objc::{id, msg, msg_class, objc_classes, ClassExports};
+use crate::objc::{autorelease, id, msg, msg_class, objc_classes, ClassExports};
 use crate::Environment;
 use std::time::Instant;
 
@@ -45,9 +45,37 @@ pub const CLASSES: ClassExports = objc_classes! {
     }
 }
 
+- (id)environment {
+    // Snapshot the emulated process environment, not the host's variables.
+    let vars: Vec<(String, String)> = env.env_vars.iter().map(|(key, value)| {
+        (String::from_utf8_lossy(key).into_owned(),
+         env.mem.cstr_at_utf8(*value).unwrap().to_string())
+    }).collect();
+    let dictionary: id = msg_class![env; NSMutableDictionary new];
+    for (key, value) in vars {
+        let key = ns_string::from_rust_string(env, key);
+        let value = ns_string::from_rust_string(env, value);
+        () = msg![env; dictionary setObject:value forKey:key];
+        crate::objc::release(env, key);
+        crate::objc::release(env, value);
+    }
+    let snapshot: id = msg![env; dictionary copy];
+    crate::objc::release(env, dictionary);
+    autorelease(env, snapshot)
+}
+
 - (NSTimeInterval)systemUptime {
     assert_process_info_singleton(env, this); // TODO
     Instant::now().duration_since(env.startup_time).as_secs_f64()
+}
+
+- (NSUInteger)processorCount {
+    assert_process_info_singleton(env, this);
+    crate::libc::sysctl::GUEST_PROCESSOR_COUNT as NSUInteger
+}
+
+- (NSUInteger)activeProcessorCount {
+    msg![env; this processorCount]
 }
 
 - (u64)physicalMemory {

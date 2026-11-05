@@ -6,7 +6,7 @@
 //! `UIButton`.
 
 use super::{UIControlState, UIControlStateNormal};
-use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect};
+use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::ns_string::{from_rust_string, get_static_str, to_rust_string};
 use crate::frameworks::foundation::NSInteger;
 use crate::frameworks::uikit::ui_font::UITextAlignmentCenter;
@@ -250,14 +250,39 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())layoutSubviews {
-    let label = env.objc.borrow_mut::<UIButtonHostObject>(this).title_label;
-    let background_image_view = env.objc.borrow_mut::<UIButtonHostObject>(this).background_image_view;
+    let host = env.objc.borrow::<UIButtonHostObject>(this);
+    let (label, background_image_view, image_view) =
+        (host.title_label, host.background_image_view, host.image_view);
     let bounds: CGRect = msg![env; this bounds];
 
     () = msg![env; background_image_view setFrame:bounds];
     () = msg![env; label setFrame:bounds];
-    // TODO: layout for image
+    () = msg![env; image_view setFrame:bounds];
+}
 
+- (())setFrame:(CGRect)frame {
+    () = msg_super![env; this setFrame:frame];
+    () = msg![env; this layoutSubviews];
+}
+
+- (())setBounds:(CGRect)bounds {
+    () = msg_super![env; this setBounds:bounds];
+    () = msg![env; this layoutSubviews];
+}
+
+- (CGSize)sizeThatFits:(CGSize)_size {
+    let title: id = msg![env; this currentTitle];
+    let label: id = msg![env; this titleLabel];
+    let font: id = msg![env; label font];
+    let title_size: CGSize = msg![env; title sizeWithFont:font];
+    let image: id = msg![env; this currentImage];
+    let image_size: CGSize = msg![env; image size];
+    let background: id = msg![env; this currentBackgroundImage];
+    let background_size: CGSize = msg![env; background size];
+    CGSize {
+        width: background_size.width.max(title_size.width + image_size.width),
+        height: background_size.height.max(title_size.height.max(image_size.height)),
+    }
 }
 
 - (UIButtonType)buttonType {

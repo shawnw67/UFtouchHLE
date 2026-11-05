@@ -182,6 +182,7 @@ pub const DYLIB: crate::dyld::HostDylib = crate::dyld::HostDylib {
         ns_persistent_store_coordinator::CONSTANTS,
         ns_calendar::CONSTANTS,
         ns_error::CONSTANTS,
+        ns_url::CONSTANTS,
         ns_exception::CONSTANTS,
         ns_file_manager::CONSTANTS,
         ns_keyed_unarchiver::CONSTANTS,
@@ -217,6 +218,7 @@ pub struct State {
     ns_thread: ns_thread::State,
     ns_time_zone: ns_time_zone::State,
     ns_user_defaults: ns_user_defaults::State,
+    ns_value: ns_value::State,
     ns_url_connection: ns_url_connection::State,
 }
 

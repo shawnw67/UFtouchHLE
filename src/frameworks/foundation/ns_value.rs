@@ -17,13 +17,19 @@ use crate::frameworks::core_foundation::cf_number::{
 use crate::frameworks::core_graphics::{CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::ns_keyed_archiver::get_value_to_encode_for_current_key;
 use crate::frameworks::foundation::NSInteger;
-use crate::mem::{ConstVoidPtr, MutVoidPtr};
+use crate::mem::{ConstPtr, ConstVoidPtr, MutVoidPtr};
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, Class, ClassExports,
     HostObject, NSZonePtr,
 };
 use crate::Environment;
 use std::cmp::Ordering;
+use std::collections::HashMap;
+
+#[derive(Default)]
+pub struct State {
+    encodings: HashMap<&'static str, ConstPtr<u8>>,
+}
 
 #[derive(Debug)]
 pub(super) enum NSValueHostObject {
@@ -415,6 +421,25 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.borrow::<NSNumberHostObject>(this).as_int()
 }
 
+- (ConstPtr<u8>)objCType {
+    use NSNumberHostObject::*;
+    let encoding = match env.objc.borrow::<NSNumberHostObject>(this) {
+        Bool(_) | Char(_) => "c",
+        UnsignedLongLong(_) => "Q",
+        UnsignedInt(_) => "I",
+        Int(_) => "i",
+        LongLong(_) => "q",
+        Float(_) => "f",
+        Double(_) => "d",
+        Short(_) => "s",
+        UnsignedShort(_) => "S",
+    };
+    let encodings = &mut env.framework_state.foundation.ns_value.encodings;
+    *encodings.entry(encoding).or_insert_with(|| {
+        env.mem.alloc_and_write_cstr(encoding.as_bytes()).cast_const()
+    })
+}
+
 - (f32)floatValue {
     env.objc.borrow::<NSNumberHostObject>(this).as_float()
 }
@@ -497,8 +522,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     // The only requirement for [obj hash] is that values that compare equal
     // (via [obj isEqual] have the same hash. Hashing the underlying
     // bits works here.
-    let value =
-    match env.objc.borrow(this) {
+    let number = env.objc.borrow::<NSNumberHostObject>(this);
+    if number.as_double().is_nan() {
+        return super::hash_helper(&f64::NAN.to_bits());
+    }
+    let value = match number {
         NSNumberHostObject::Bool(value) => *value as u64,
         NSNumberHostObject::UnsignedLongLong(value) => *value,
         NSNumberHostObject::UnsignedInt(value) => *value as u64,
@@ -536,8 +564,15 @@ pub const CLASSES: ClassExports = objc_classes! {
         (false, false) => num.as_i128().cmp(&other_num.as_i128()),
         // In case of having a float, we promote to double for comparison
         _ => {
-            // TODO: handle partial cmp fails
-            let res = num.as_double().partial_cmp(&other_num.as_double()).unwrap();
+            let (left, right) = (num.as_double(), other_num.as_double());
+            // CFNumber treats NaN as equal to itself and sorts it between
+            // negative and nonnegative values.
+            let Some(res) = left.partial_cmp(&right) else {
+                let rank = |value: f64| {
+                    if value.is_nan() { 1 } else if value.is_sign_negative() { 0 } else { 2 }
+                };
+                return from_rust_ordering(rank(left).cmp(&rank(right)));
+            };
             if res == Ordering::Equal {
                 // On ties, we compare as i128 as well
                 num.as_i128().cmp(&other_num.as_i128())

@@ -6,8 +6,9 @@
 //! `NSURLConnection`.
 
 use super::{ns_string, NSInteger};
+use crate::abi::CallFromHost;
 use crate::environment::Environment;
-use crate::mem::MutPtr;
+use crate::mem::{MutPtr, MutVoidPtr};
 use crate::objc::{
     autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
     NSZonePtr,
@@ -23,7 +24,13 @@ const NSURLErrorNotConnectedToInternet: NSURLErrorCode = -1009;
 #[derive(Default)]
 pub struct State {
     pending: Vec<id>,
+    completions: Vec<(id, id)>, // retained queue and invocation operation
 }
+
+struct Completion {
+    block: MutVoidPtr,
+}
+impl HostObject for Completion {}
 #[derive(Default)]
 struct Connection {
     request: id,
@@ -38,6 +45,8 @@ impl HostObject for Connection {}
 /// holding a nonexistent connection. No HTTP request is made.
 pub(crate) fn pump(env: &mut Environment) {
     let pending = std::mem::take(&mut env.framework_state.foundation.ns_url_connection.pending);
+    let completions =
+        std::mem::take(&mut env.framework_state.foundation.ns_url_connection.completions);
     for connection in pending {
         let c = env.objc.borrow::<Connection>(connection);
         let (delegate, cancelled) = (c.delegate, c.cancelled);
@@ -61,6 +70,11 @@ pub(crate) fn pump(env: &mut Environment) {
         release(env, delegate);
         release(env, connection);
     }
+    for (queue, operation) in completions {
+        let _: () = msg![env; queue addOperation:operation];
+        release(env, operation);
+        release(env, queue);
+    }
 }
 
 pub const CLASSES: ClassExports = objc_classes! {
@@ -69,8 +83,27 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 @implementation NSURLConnection: NSObject
 
++ (bool)canHandleRequest:(id)_request {
+    // This connection backend reports offline failures and cannot load URLs.
+    false
+}
+
 + (id)allocWithZone:(NSZonePtr)_zone {
     env.objc.alloc_object(this,Box::<Connection>::default(),&mut env.mem)
+}
++ (())sendAsynchronousRequest:(id)_request queue:(id)queue completionHandler:(id)handler {
+    if handler == nil { return; }
+    // Match the existing offline HTTP backend, delivering failure later.
+    let block = crate::libc::dispatch::_Block_copy(env, handler.cast_const().cast());
+    let class = env.objc.get_known_class("_PodroidURLConnectionCompletion", &mut env.mem);
+    let target = env.objc.alloc_object(class, Box::new(Completion { block }), &mut env.mem);
+    let selector = env.objc.register_host_selector("complete".into(), &mut env.mem);
+    let operation: id = msg_class![env; NSInvocationOperation alloc];
+    let operation: id = msg![env; operation initWithTarget:target selector:selector object:nil];
+    release(env, target);
+    let queue = if queue == nil { msg_class![env; NSOperationQueue mainQueue] } else { queue };
+    retain(env, queue);
+    env.framework_state.foundation.ns_url_connection.completions.push((queue, operation));
 }
 + (id)sendSynchronousRequest:(id)request // NSURLRequest *
            returningResponse:(MutPtr<id>)response // NSURLResponse **
@@ -156,6 +189,25 @@ pub const CLASSES: ClassExports = objc_classes! {
     );
     release(env, this);
     nil
+}
+
+@end
+
+@implementation _PodroidURLConnectionCompletion: NSObject
+
+- (id)complete {
+    let block = env.objc.borrow::<Completion>(this).block;
+    let domain = ns_string::get_static_str(env, NSURLErrorDomain);
+    let error: id = msg_class![env; NSError errorWithDomain:domain code:NSURLErrorNotConnectedToInternet userInfo:nil];
+    let invoke = crate::libc::dispatch::block_invoke_function(env, block.cast_const());
+    let _: () = invoke.call_from_host(env, (block, nil, nil, error));
+    nil
+}
+
+- (())dealloc {
+    let block = env.objc.borrow::<Completion>(this).block;
+    crate::libc::dispatch::_Block_release(env, block);
+    env.objc.dealloc_object(this, &mut env.mem);
 }
 
 @end

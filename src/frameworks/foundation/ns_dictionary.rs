@@ -588,6 +588,19 @@ pub const CLASSES: ClassExports = objc_classes! {
     autorelease(env, dictionary)
 }
 
+- (id)objectsForKeys:(id)keys notFoundMarker:(id)marker {
+    let count: NSUInteger = msg![env; keys count];
+    let values: id = msg_class![env; NSMutableArray arrayWithCapacity:count];
+    for index in 0..count {
+        let key: id = msg![env; keys objectAtIndex:index];
+        let value: id = msg![env; this objectForKey:key];
+        let value = if value == nil { marker } else { value };
+        () = msg![env; values addObject:value];
+    }
+    let snapshot: id = msg![env; values copy];
+    autorelease(env, snapshot)
+}
+
 - (id)init {
     todo!("TODO: Implement [dictionary init] for custom subclasses")
 }

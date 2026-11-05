@@ -188,6 +188,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     () = msg_class![env; CATransaction setValue:value forKey:(get_static_str(env, Podroid_kCATransactionAnimationDelay))];
 }
 
++ (())setAnimationBeginsFromCurrentState:(bool)from_current_state {
+    // Animations here always start from the current state of the layer tree.
+    log_dbg!("[UIView setAnimationBeginsFromCurrentState:{}]", from_current_state);
+}
+
 + (())setAnimationCurve:(UIViewAnimationCurve)curve {
     log_dbg!("[UIView setAnimationCurve:{:?}]", curve);
     let timing_function: id = match curve {
@@ -477,6 +482,10 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (bool)isUserInteractionEnabled {
     env.objc.borrow::<UIViewHostObject>(this).user_interaction_enabled
 }
+- (())setAccessibilityLabel:(id)_label { // NSString*
+    // There's no accessibility support.
+}
+
 - (())setUserInteractionEnabled:(bool)enabled {
     env.objc.borrow_mut::<UIViewHostObject>(this).user_interaction_enabled = enabled;
 }
@@ -569,6 +578,16 @@ pub const CLASSES: ClassExports = objc_classes! {
 
     assert!(index >= 0);
     () = msg![env; this_layer insertSublayer:subview_layer atIndex:(index as u32)];
+}
+
+- (())insertSubview:(id)view aboveSubview:(id)sibling {
+    let subviews = &env.objc.borrow::<UIViewHostObject>(this).subviews;
+    let index = subviews
+        .iter()
+        .filter(|&&subview| subview != view)
+        .position(|&subview| subview == sibling)
+        .unwrap();
+    () = msg![env; this insertSubview:view atIndex:((index + 1) as NSInteger)];
 }
 
 - (())insertSubview:(id)view belowSubview:(id)sibling {

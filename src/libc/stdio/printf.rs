@@ -358,9 +358,8 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
                 assert!(!left_justified);
                 // Note: on 32-bit system unsigned int and unsigned long
                 // are u32, so length_modifier is ignored
-                let uint: u32 = if length_modifier == Some("ll") {
-                    let uint: u64 = args.next(env);
-                    uint.try_into().unwrap()
+                let uint: u64 = if length_modifier == Some("ll") {
+                    args.next(env)
                 } else if length_modifier == Some("hh") {
                     let uint: u8 = args.next(env);
                     uint.into()
@@ -370,7 +369,7 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
                 } else {
                     assert!(length_modifier.is_none() || length_modifier == Some("l"));
                     let uint: u32 = args.next(env);
-                    uint
+                    uint.into()
                 };
                 if pad_width > 0 {
                     assert!(precision.is_none()); // TODO
@@ -398,9 +397,8 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
                 assert!(precision.is_none());
                 // Note: on 32-bit system unsigned int and unsigned long
                 // are u32, so length_modifier is ignored
-                let uint: u32 = if length_modifier == Some("ll") {
-                    let uint: u64 = args.next(env);
-                    uint.try_into().unwrap()
+                let uint: u64 = if length_modifier == Some("ll") {
+                    args.next(env)
                 } else if length_modifier == Some("hh") {
                     let uint: u8 = args.next(env);
                     uint.into()
@@ -410,7 +408,7 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
                 } else {
                     assert!(length_modifier.is_none() || length_modifier == Some("l"));
                     let uint: u32 = args.next(env);
-                    uint
+                    uint.into()
                 };
                 if pad_width > 0 {
                     let pad_width = pad_width as usize;

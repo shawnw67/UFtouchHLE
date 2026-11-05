@@ -817,13 +817,15 @@ impl ObjC {
                     let align_mask = max_alignment - 1;
                     diff = (diff + align_mask) & !align_mask;
 
-                    for (offset, _) in ivars.values_mut() {
+                    for (offset, _) in ivars.values() {
                         if offset.is_null() {
                             // anonymous bitfield
                             continue;
                         }
 
-                        *offset = Ptr::from_bits((*offset).to_bits() + diff);
+                        // Guest methods load the offset from this slot.
+                        let adjusted = mem.read(*offset).checked_add(diff).unwrap();
+                        mem.write(offset.cast_mut(), adjusted);
                     }
                 }
 

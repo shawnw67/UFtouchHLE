@@ -8,7 +8,7 @@
 use super::movie_decoder::{MovieDecoder, Subtitle};
 use crate::audio::openal::al_types::*;
 use crate::audio::openal::{
-    AL_BUFFER, AL_FORMAT_MONO16, AL_FORMAT_STEREO16, AL_SOURCE_STATE, AL_STOPPED,
+    AL_BUFFER, AL_FORMAT_MONO16, AL_FORMAT_STEREO16, AL_PITCH, AL_SOURCE_STATE, AL_STOPPED,
 };
 use crate::dyld::{ConstantExports, HostConstant};
 use crate::frameworks::core_graphics::cg_affine_transform::CGAffineTransform;
@@ -40,11 +40,14 @@ struct Playback {
     /// Full-screen black view on top of the app's window, which can be tapped
     /// to skip the movie (like the "Done" button on iPhone OS).
     view: id,
+    embedded: bool,
     /// The view showing the video frames.
     video_view: id,
     /// OpenAL source and buffer for the audio, if there is any.
     audio: Option<(ALuint, ALuint)>,
     started: Instant,
+    elapsed: Duration,
+    rate: f32,
     /// Subtitles in the user's language (or English), if there are any.
     subtitles: Vec<Subtitle>,
     /// `UILabel*` showing the current subtitle.
@@ -197,6 +200,10 @@ pub const CONSTANTS: ConstantExports = &[
 struct MPMoviePlayerControllerHostObject {
     // NSURL *
     content_url: id,
+    source_type: NSInteger,
+    playback_rate: f32,
+    repeat_mode: NSInteger,
+    view: id,
 }
 impl HostObject for MPMoviePlayerControllerHostObject {}
 
@@ -211,6 +218,10 @@ pub const CLASSES: ClassExports = objc_classes! {
 + (id)allocWithZone:(NSZonePtr)_zone {
     let host_object = Box::new(MPMoviePlayerControllerHostObject {
         content_url: nil,
+        source_type: 0,
+        playback_rate: 1.0,
+        repeat_mode: 0,
+        view: nil,
     });
     env.objc.alloc_object(this, host_object, &mut env.mem)
 }
@@ -238,14 +249,55 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())dealloc {
-    let url = env.objc.borrow::<MPMoviePlayerControllerHostObject>(this).content_url;
+    let host = env.objc.borrow::<MPMoviePlayerControllerHostObject>(this);
+    let (url, view) = (host.content_url, host.view);
     release(env, url);
+    release(env, view);
 
     env.objc.dealloc_object(this, &mut env.mem);
 }
 
 - (id)contentURL {
     env.objc.borrow::<MPMoviePlayerControllerHostObject>(this).content_url
+}
+
+- (NSInteger)movieSourceType {
+    env.objc.borrow::<MPMoviePlayerControllerHostObject>(this).source_type
+}
+
+- (())setMovieSourceType:(NSInteger)source_type {
+    env.objc.borrow_mut::<MPMoviePlayerControllerHostObject>(this).source_type = source_type;
+}
+
+- (f32)currentPlaybackRate {
+    env.objc.borrow::<MPMoviePlayerControllerHostObject>(this).playback_rate
+}
+
+- (())setCurrentPlaybackRate:(f32)rate {
+    if !rate.is_finite() || !(0.0..=16.0).contains(&rate) {
+        return;
+    }
+    env.objc.borrow_mut::<MPMoviePlayerControllerHostObject>(this).playback_rate = rate;
+    let Some(playback) = State::get(env).playback.as_mut().filter(|p| p.player == this) else {
+        return;
+    };
+    playback.elapsed += playback.started.elapsed().mul_f32(playback.rate);
+    playback.started = Instant::now();
+    let was_paused = playback.rate == 0.0;
+    playback.rate = rate;
+    if let Some((source, _)) = playback.audio {
+        let al = env.framework_state.audio_toolbox.make_al_context_current(&mut env.openal_manager);
+        unsafe {
+            if rate == 0.0 {
+                al.SourcePause(source);
+            } else {
+                al.Sourcef(source, AL_PITCH, rate);
+                if was_paused {
+                    al.SourcePlay(source);
+                }
+            }
+        }
+    }
 }
 
 - (id)backgroundColor {
@@ -275,15 +327,23 @@ pub const CLASSES: ClassExports = objc_classes! {
     true
 }
 - (())setRepeatMode:(NSInteger)mode {
-    // TODO: MPMovieRepeatModeOne
-    todo_objc_setter!(this, mode);
+    env.objc.borrow_mut::<MPMoviePlayerControllerHostObject>(this).repeat_mode = mode;
 }
 - (())setInitialPlaybackTime:(NSTimeInterval)initial_time {
     todo_objc_setter!(this, initial_time);
 }
 
 - (id)view {
-    nil // TODO
+    let existing = env.objc.borrow::<MPMoviePlayerControllerHostObject>(this).view;
+    if existing != nil {
+        return existing;
+    }
+    // Apps can add controls to this view (BioShock's main menu is built on top
+    // of its looping background movie), so it has to accept touches. Unhandled
+    // ones still reach the superview through the responder chain.
+    let view: id = msg_class![env; UIView new];
+    env.objc.borrow_mut::<MPMoviePlayerControllerHostObject>(this).view = view;
+    view
 }
 
 - (MPMoviePlaybackState)playbackState {
@@ -354,11 +414,12 @@ pub const CLASSES: ClassExports = objc_classes! {
         let playback = State::get(env).playback.take().unwrap();
         finish_playback(env, playback, /* notify: */ false);
     }
-    if env.framework_state.media_player.movie_player.active_player.is_some() {
-        // Some applications (like NOVA2) may send 2 `stop` messages for each
-        // 1 `play` message for the player. In that case, we want to release
-        // the active player only once.
-        assert!(this == env.framework_state.media_player.movie_player.active_player.take().unwrap());
+    // Some applications (like NOVA2) may send 2 `stop` messages for each
+    // 1 `play` message for the player. In that case, we want to release
+    // the active player only once. BioShock also stops a new player before
+    // playing it, which must leave the player that's still active alone.
+    if env.framework_state.media_player.movie_player.active_player == Some(this) {
+        env.framework_state.media_player.movie_player.active_player = None;
         release(env, this);
     }
 }
@@ -421,10 +482,8 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 /// Start playing the movie of `player`. Returns `false` if it can't be played.
 fn start_playback(env: &mut Environment, player: id) -> bool {
-    let url = env
-        .objc
-        .borrow::<MPMoviePlayerControllerHostObject>(player)
-        .content_url;
+    let host = env.objc.borrow::<MPMoviePlayerControllerHostObject>(player);
+    let (url, rate, player_view) = (host.content_url, host.playback_rate, host.view);
     if url == nil {
         return false;
     }
@@ -460,16 +519,27 @@ fn start_playback(env: &mut Environment, player: id) -> bool {
     }
     log!("Playing movie {:?}", path);
 
-    let bounds: CGRect = msg![env; window bounds];
-    let view: id = msg_class![env; _Podroid_MoviePlayerView alloc];
-    let view: id = msg![env; view initWithFrame:bounds];
-    let black: id = msg_class![env; UIColor blackColor];
-    () = msg![env; view setBackgroundColor:black];
+    let parent: id = msg![env; player_view superview];
+    let embedded = parent != nil;
+    let (view, bounds) = if embedded {
+        retain(env, player_view);
+        let bounds: CGRect = msg![env; player_view bounds];
+        (player_view, bounds)
+    } else {
+        let bounds: CGRect = msg![env; window bounds];
+        let view: id = msg_class![env; _Podroid_MoviePlayerView alloc];
+        let view: id = msg![env; view initWithFrame:bounds];
+        let black: id = msg_class![env; UIColor blackColor];
+        () = msg![env; view setBackgroundColor:black];
+        (view, bounds)
+    };
 
     // Movies are shown in landscape, in the same orientation as the app if
     // it's a landscape app.
     let orientation: NSInteger = msg![env; ui_application statusBarOrientation];
+    let landscape_view = embedded && bounds.size.width >= bounds.size.height;
     let angle: CGFloat = match orientation {
+        _ if landscape_view => 0.0,
         // These are interface orientations, whose values are swapped
         // compared to the device orientation constants for landscape.
         UIDeviceOrientationLandscapeLeft => std::f32::consts::FRAC_PI_2,
@@ -477,7 +547,11 @@ fn start_playback(env: &mut Environment, player: id) -> bool {
         UIDeviceOrientationPortraitUpsideDown => -std::f32::consts::FRAC_PI_2,
         _ => std::f32::consts::FRAC_PI_2,
     };
-    let (screen_width, screen_height) = (bounds.size.height, bounds.size.width);
+    let (screen_width, screen_height) = if landscape_view {
+        (bounds.size.width, bounds.size.height)
+    } else {
+        (bounds.size.height, bounds.size.width)
+    };
     let (video_width, video_height) = decoder.dimensions();
     let scale =
         (screen_width / video_width as CGFloat).min(screen_height / video_height as CGFloat);
@@ -516,7 +590,9 @@ fn start_playback(env: &mut Environment, player: id) -> bool {
     () = msg![env; video_view addSubview:subtitle_label];
 
     () = msg![env; view addSubview:video_view];
-    () = msg![env; window addSubview:view];
+    if !embedded {
+        () = msg![env; window addSubview:view];
+    }
 
     let audio = audio.map(|audio| {
         let format = if audio.channels == 1 {
@@ -541,7 +617,10 @@ fn start_playback(env: &mut Environment, player: id) -> bool {
             );
             al.GenSources(1, &mut source);
             al.Sourcei(source, AL_BUFFER, buffer as ALint);
-            al.SourcePlay(source);
+            if rate > 0.0 {
+                al.Sourcef(source, AL_PITCH, rate);
+                al.SourcePlay(source);
+            }
         }
         (source, buffer)
     });
@@ -550,9 +629,12 @@ fn start_playback(env: &mut Environment, player: id) -> bool {
         player,
         decoder,
         view,
+        embedded,
         video_view,
         audio,
         started: Instant::now(),
+        elapsed: Duration::ZERO,
+        rate,
         subtitles,
         subtitle_label,
         current_subtitle: None,
@@ -601,6 +683,10 @@ fn update_playback(env: &mut Environment) {
     let Some(mut playback) = State::get(env).playback.take() else {
         return;
     };
+    if playback.rate == 0.0 {
+        State::get(env).playback = Some(playback);
+        return;
+    }
 
     // The audio is the clock if there is any, so that the video stays in
     // sync with it, including when touchHLE is paused.
@@ -629,7 +715,12 @@ fn update_playback(env: &mut Environment) {
         ))
     });
     let audio_clock_works = audio_clock.is_some();
-    let (time, audio_finished) = audio_clock.unwrap_or_else(|| (playback.started.elapsed(), false));
+    let (time, audio_finished) = audio_clock.unwrap_or_else(|| {
+        (
+            playback.elapsed + playback.started.elapsed().mul_f32(playback.rate),
+            false,
+        )
+    });
 
     let mut latest_frame = None;
     let mut video_finished = false;
@@ -658,6 +749,32 @@ fn update_playback(env: &mut Environment) {
     }
 
     if audio_finished || (video_finished && !audio_clock_works) {
+        let repeats = env
+            .objc
+            .borrow::<MPMoviePlayerControllerHostObject>(playback.player)
+            .repeat_mode
+            == 1;
+        if repeats {
+            match playback.decoder.rewind() {
+                Ok(()) => {
+                    playback.started = Instant::now();
+                    playback.elapsed = Duration::ZERO;
+                    if let Some((source, _)) = playback.audio {
+                        let al = env
+                            .framework_state
+                            .audio_toolbox
+                            .make_al_context_current(&mut env.openal_manager);
+                        unsafe {
+                            al.SourceRewind(source);
+                            al.SourcePlay(source);
+                        }
+                    }
+                    State::get(env).playback = Some(playback);
+                    return;
+                }
+                Err(error) => log!("Couldn't rewind movie: {error}"),
+            }
+        }
         finish_playback(env, playback, /* notify: */ true);
     } else {
         State::get(env).playback = Some(playback);
@@ -667,7 +784,12 @@ fn update_playback(env: &mut Environment) {
 /// Stop showing and playing the movie, and tell the app if `notify` is set.
 fn finish_playback(env: &mut Environment, playback: Playback, notify: bool) {
     log!("Movie playback finished");
-    () = msg![env; (playback.view) removeFromSuperview];
+    let view = if playback.embedded {
+        playback.video_view
+    } else {
+        playback.view
+    };
+    () = msg![env; view removeFromSuperview];
     release(env, playback.subtitle_label);
     release(env, playback.video_view);
     release(env, playback.view);

@@ -11,7 +11,7 @@ use crate::frameworks::core_graphics::cg_image::{
     self, CGImageGetHeight, CGImageGetWidth, CGImageRef, CGImageRelease, CGImageRetain,
 };
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
-use crate::frameworks::foundation::ns_string::get_static_str;
+use crate::frameworks::foundation::ns_string::{from_rust_string, get_static_str};
 use crate::frameworks::foundation::{ns_data, ns_string, NSInteger};
 use crate::frameworks::uikit::ui_graphics::UIGraphicsGetCurrentContext;
 use crate::fs::GuestPath;
@@ -21,6 +21,7 @@ use crate::objc::{
     autorelease, id, msg, msg_class, msg_send, nil, objc_classes, release, retain, ClassExports,
     HostObject, NSZonePtr, SEL,
 };
+use crate::window::DeviceFamily;
 use crate::Environment;
 use std::collections::HashMap;
 
@@ -43,8 +44,47 @@ impl State {
 
 struct UIImageHostObject {
     cg_image: CGImageRef,
+    scale: CGFloat,
 }
 impl HostObject for UIImageHostObject {}
+
+/// Build the `name@2x~device.ext` and `name@2x.ext` resource names to try for
+/// `name.ext`, most specific first.
+fn high_res_image_names(name: &str, device_suffix: &str) -> [String; 2] {
+    let (dir, file) = name
+        .rsplit_once('/')
+        .map_or(("", name), |(dir, file)| (dir, file));
+    let (stem, ext) = file.rsplit_once('.').unwrap_or((file, "png"));
+    let dir = if dir.is_empty() {
+        String::new()
+    } else {
+        format!("{dir}/")
+    };
+    [
+        format!("{dir}{stem}@2x{device_suffix}.{ext}"),
+        format!("{dir}{stem}@2x.{ext}"),
+    ]
+}
+
+/// On Retina devices, find the `@2x` variant of a bundle image, if any.
+fn high_res_image_path(env: &mut Environment, bundle: id, name: &str) -> Option<id> {
+    if env.options.screen_scale() != 2 || env.window.is_none() {
+        return None;
+    }
+    let device_suffix = match env.window().device_family() {
+        DeviceFamily::iPhone => "~iphone",
+        DeviceFamily::iPad => "~ipad",
+    };
+    for candidate in high_res_image_names(name, device_suffix) {
+        let candidate = from_rust_string(env, candidate);
+        autorelease(env, candidate);
+        let path: id = msg![env; bundle pathForResource:candidate ofType:nil];
+        if path != nil {
+            return Some(path);
+        }
+    }
+    None
+}
 
 pub const CLASSES: ClassExports = objc_classes! {
 
@@ -53,7 +93,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 @implementation UIImage: NSObject
 
 + (id)allocWithZone:(NSZonePtr)_zone {
-    let host_object = Box::new(UIImageHostObject { cg_image: nil });
+    let host_object = Box::new(UIImageHostObject { cg_image: nil, scale: 1.0 });
     env.objc.alloc_object(this, host_object, &mut env.mem)
 }
 
@@ -66,8 +106,17 @@ pub const CLASSES: ClassExports = objc_classes! {
 + (id)imageNamed:(id)name { // NSString*
     // TODO: figure out whether this is actually correct in all cases
     let bundle: id = msg_class![env; NSBundle mainBundle];
-    let path: id = msg![env; bundle pathForResource:name ofType:nil];
     let name_str = ns_string::to_rust_string(env, name).to_string();
+    let high_res_path = high_res_image_path(env, bundle, &name_str);
+    let scale: CGFloat = if high_res_path.is_some() { 2.0 } else { 1.0 };
+    let mut path: id = high_res_path.unwrap_or(nil);
+    if path == nil {
+        path = msg![env; bundle pathForResource:name ofType:nil];
+    }
+    if path == nil && !name_str.rsplit('/').next().unwrap_or("").contains('.') {
+        let png = ns_string::get_static_str(env, "png");
+        path = msg![env; bundle pathForResource:name ofType:png];
+    }
     if path == nil {
         log!("Warning: [UIImage imageNamed:{:?}] => nil", name_str);
         return nil;
@@ -81,7 +130,10 @@ pub const CLASSES: ClassExports = objc_classes! {
         }
     }
     if !State::get(env).cached_images.contains_key(&name_str) {
-        let img = msg![env; this imageWithContentsOfFile:path];
+        let img: id = msg![env; this imageWithContentsOfFile:path];
+        if img != nil {
+            env.objc.borrow_mut::<UIImageHostObject>(img).scale = scale;
+        }
         retain(env, img);
         State::get_mut(env).cached_images.insert(name_str.clone(), img);
     }
@@ -101,7 +153,7 @@ pub const CLASSES: ClassExports = objc_classes! {
 }
 
 - (())dealloc {
-    let &UIImageHostObject { cg_image } = env.objc.borrow(this);
+    let &UIImageHostObject { cg_image, .. } = env.objc.borrow(this);
     CGImageRelease(env, cg_image);
 
     env.objc.dealloc_object(this, &mut env.mem)
@@ -163,15 +215,15 @@ pub const CLASSES: ClassExports = objc_classes! {
 - (CGSize)size {
     let image = env.objc.borrow::<UIImageHostObject>(this).cg_image;
     let (width, height) = cg_image::borrow_image(&env.objc, image).dimensions();
+    let scale = env.objc.borrow::<UIImageHostObject>(this).scale;
     CGSize {
-        width: width as _,
-        height: height as _,
+        width: width as CGFloat / scale,
+        height: height as CGFloat / scale,
     }
 }
 
 - (CGFloat)scale {
-    // TODO: support other scales, such as @2x
-    1.0
+    env.objc.borrow::<UIImageHostObject>(this).scale
 }
 
 - (())drawInRect:(CGRect)rect {
@@ -393,3 +445,23 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(UIImagePNGRepresentation(_)),
     export_c_func!(UIImageJPEGRepresentation(_, _)),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::high_res_image_names;
+
+    #[test]
+    fn high_res_names_keep_extension_and_directory() {
+        assert_eq!(
+            high_res_image_names("BIK_MainMenu_Button.png", "~iphone"),
+            [
+                "BIK_MainMenu_Button@2x~iphone.png",
+                "BIK_MainMenu_Button@2x.png"
+            ]
+        );
+        assert_eq!(
+            high_res_image_names("ui/button", "~ipad"),
+            ["ui/button@2x~ipad.png", "ui/button@2x.png"]
+        );
+    }
+}

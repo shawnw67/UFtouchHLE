@@ -12,7 +12,7 @@
 use super::UIViewHostObject;
 use crate::dyld::{ConstantExports, HostConstant};
 use crate::frameworks::core_graphics::cg_affine_transform::CGAffineTransform;
-use crate::frameworks::core_graphics::{CGPoint, CGRect};
+use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect};
 use crate::frameworks::foundation::{ns_string, NSUInteger};
 use crate::frameworks::uikit::ui_application::{
     UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight,
@@ -139,6 +139,11 @@ pub const CLASSES: ClassExports = objc_classes! {
 
     // TODO: post UIWindowDidBecomeVisibleNotification
     () = msg![env; this setHidden:false];
+}
+
+- (())setWindowLevel:(CGFloat)level {
+    // TODO: windows are always shown in the order they were made visible.
+    log_dbg!("TODO: [(UIWindow*){:?} setWindowLevel:{}]", this, level);
 }
 
 - (id)rootViewController {

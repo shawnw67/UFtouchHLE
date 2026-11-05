@@ -10,6 +10,17 @@ use crate::objc::{
     autorelease, id, msg, msg_class, objc_classes, retain, ClassExports, HostObject, NSZonePtr,
 };
 use std::collections::HashSet;
+use std::sync::LazyLock;
+
+static DECIMAL_DIGITS: LazyLock<HashSet<unichar>> = LazyLock::new(|| {
+    let decimal = regex::Regex::new(r"^\p{Nd}$").unwrap();
+    (0..=unichar::MAX)
+        .filter(|&unit| {
+            char::from_u32(unit.into())
+                .is_some_and(|ch| decimal.is_match(ch.encode_utf8(&mut [0; 4])))
+        })
+        .collect()
+});
 
 // Unicode General Category Zs and CHARACTER TABULATION (U+0009).
 const WHITESPACE_CHARACTERS: [char; 18] = [
@@ -89,6 +100,12 @@ pub const CLASSES: ClassExports = objc_classes! {
     let new: id = msg![env; this alloc];
     env.objc.borrow_mut::<CharacterSetHostObject>(new).set = set;
 
+    autorelease(env, new)
+}
+
++ (id)decimalDigitCharacterSet {
+    let new: id = msg![env; this alloc];
+    env.objc.borrow_mut::<CharacterSetHostObject>(new).set = DECIMAL_DIGITS.clone();
     autorelease(env, new)
 }
 

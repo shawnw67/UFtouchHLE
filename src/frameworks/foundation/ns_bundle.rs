@@ -128,6 +128,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     msg![env; this bundleWithPath:path]
 }
 
++ (id)bundleForClass:(id)_class {
+    // The loader does not track separate bundles for Objective-C classes.
+    msg![env; this mainBundle]
+}
+
 + (id)mainBundle {
     if let Some(bundle) = env.framework_state.foundation.ns_bundle.main_bundle {
         bundle

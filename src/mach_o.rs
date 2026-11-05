@@ -52,6 +52,8 @@ pub struct MachO {
     pub external_relocations: Vec<(u32, String)>,
     /// Address/program counter value for the entry point.
     pub entry_point_pc: Option<u32>,
+    /// LC_MAIN points directly to C main, rather than a crt start routine.
+    pub entry_point_is_main: bool,
     /// End address of the highest-addressed segment.
     /// This is used by get_end() to return the first address after the last
     /// segment in the executable.
@@ -629,6 +631,7 @@ impl MachO {
         let mut indirect_undef_symbols: Vec<Option<String>> = Vec::new();
         let mut external_relocations: Vec<(u32, String)> = Vec::new();
         let mut entry_point_pc: Option<u32> = None;
+        let mut entry_point_is_main = false;
 
         let slide = slide_to_address;
 
@@ -877,6 +880,7 @@ impl MachO {
                     assert!(entry_point_pc.is_none());
                     let entryoff: u32 = entryoff.try_into().unwrap();
                     entry_point_pc = Some(text_segment_base.unwrap() + entryoff);
+                    entry_point_is_main = true;
                 }
                 // Used in iOS 3.1+ apps. Also contains info about
                 // weak and lazy binds, but we already handle those.
@@ -998,6 +1002,7 @@ impl MachO {
             external_symbols,
             external_relocations,
             entry_point_pc,
+            entry_point_is_main,
             last_segment_end,
             text_base: text_segment_base.unwrap_or(first_segment_base.unwrap_or(0)),
         })

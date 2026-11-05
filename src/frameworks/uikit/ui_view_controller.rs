@@ -216,6 +216,11 @@ pub const CLASSES: ClassExports = objc_classes! {
     retain(env, new_view);
     release(env, old_view);
 }
+- (NSInteger)interfaceOrientation {
+    let app: id = msg_class![env; UIApplication sharedApplication];
+    msg![env; app statusBarOrientation]
+}
+
 - (id)view {
     let view = env.objc.borrow_mut::<UIViewControllerHostObject>(this).view;
     if view == nil {

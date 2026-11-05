@@ -5,11 +5,11 @@
  */
 //! `NSFileManager` etc.
 
-use super::{ns_array, ns_string, NSUInteger};
+use super::{ns_array, ns_string, NSInteger, NSUInteger};
 use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
 use crate::frameworks::foundation::ns_error::{NSCocoaErrorDomain, NSFileReadNoSuchFileError};
 use crate::frameworks::foundation::ns_string::get_static_str;
-use crate::fs::{FsError, GuestPath, GuestPathBuf};
+use crate::fs::{Fs, FsError, GuestPath, GuestPathBuf};
 use crate::mem::{ConstPtr, MutPtr, Ptr};
 use crate::objc::NSZonePtr;
 use crate::objc::{
@@ -166,6 +166,38 @@ struct NSDirectoryEnumeratorHostObject {
 }
 impl HostObject for NSDirectoryEnumeratorHostObject {}
 
+fn copy_item(fs: &mut Fs, src: &GuestPath, dst: &GuestPath) -> Result<(), NSInteger> {
+    if !fs.exists(src) {
+        return Err(NSFileReadNoSuchFileError);
+    }
+    if fs.exists(dst) {
+        return Err(516); // NSFileWriteFileExistsError
+    }
+    if fs.is_dir(src) {
+        let src_components = crate::fs::resolve_path(src, Some(fs.working_directory()));
+        let dst_components = crate::fs::resolve_path(dst, Some(fs.working_directory()));
+        if dst_components.starts_with(&src_components) {
+            return Err(512); // NSFileWriteUnknownError: can't copy into itself.
+        }
+        let paths = fs.enumerate_recursive(src).map_err(|_| 256)?;
+        fs.create_dir(dst).map_err(|_| 512)?;
+        for relative in paths {
+            let src = src.join(relative.as_str());
+            let dst = dst.join(relative.as_str());
+            if fs.is_dir(&src) {
+                fs.create_dir(&dst).map_err(|_| 512)?;
+            } else {
+                let data = fs.read(&src).map_err(|_| 256)?;
+                fs.write(&dst, &data).map_err(|_| 512)?;
+            }
+        }
+    } else {
+        let data = fs.read(src).map_err(|_| 256)?;
+        fs.write(dst, &data).map_err(|_| 512)?;
+    }
+    Ok(())
+}
+
 pub const CLASSES: ClassExports = objc_classes! {
 
 (env, this, _cmd);
@@ -185,6 +217,24 @@ pub const CLASSES: ClassExports = objc_classes! {
 // No iCloud account or ubiquity containers are available to guest apps.
 - (id)URLForUbiquityContainerIdentifier:(id)_identifier {
     nil
+}
+
+- (id)URLsForDirectory:(NSSearchPathDirectory)directory
+             inDomains:(NSSearchPathDomainMask)domains {
+    if domains & NSUserDomainMask == 0 {
+        return msg_class![env; NSArray array];
+    }
+    let paths = NSSearchPathForDirectoriesInDomains(env, directory, NSUserDomainMask, true);
+    let count: NSUInteger = msg![env; paths count];
+    let mut urls = Vec::with_capacity(count as usize);
+    for index in 0..count {
+        let path: id = msg![env; paths objectAtIndex:index];
+        let url: id = msg_class![env; NSURL fileURLWithPath:path];
+        crate::objc::retain(env, url);
+        urls.push(url);
+    }
+    let urls = ns_array::from_vec(env, urls);
+    autorelease(env, urls)
 }
 
 - (id)currentDirectoryPath {
@@ -419,18 +469,18 @@ pub const CLASSES: ClassExports = objc_classes! {
                  error:(MutPtr<id>)error { // NSError**
     let src = ns_string::to_rust_string(env, src);
     let dst = ns_string::to_rust_string(env, dst);
-    let data = match env.fs.read(GuestPath::new(src.as_ref())) {
-        Ok(d) => d,
-        Err(_) => {
-            assert!(error.is_null()); // TODO
-            return false;
+    match copy_item(&mut env.fs, GuestPath::new(src.as_ref()), GuestPath::new(dst.as_ref())) {
+        Ok(()) => true,
+        Err(code) => {
+            log!("copyItemAtPath {} toPath {} failed with Cocoa error {}", src, dst, code);
+            if !error.is_null() {
+                let domain = get_static_str(env, NSCocoaErrorDomain);
+                let value = msg_class![env; NSError errorWithDomain:domain code:code userInfo:nil];
+                env.mem.write(error, value);
+            }
+            false
         }
-    };
-    if env.fs.write(GuestPath::new(dst.as_ref()), &data).is_err() {
-        assert!(error.is_null()); // TODO
-        return false;
     }
-    true
 }
 
 - (ConstPtr<u8>)fileSystemRepresentationWithPath:(id)path { // NSString*
@@ -438,6 +488,19 @@ pub const CLASSES: ClassExports = objc_classes! {
     assert!(length > 0);
     // TODO: throw an exception if conversion fails
     msg![env; path UTF8String]
+}
+
+- (id)stringWithFileSystemRepresentation:(ConstPtr<u8>)bytes
+                                  length:(NSUInteger)length {
+    if bytes.is_null() {
+        return nil;
+    }
+    let bytes = env.mem.bytes_at(bytes, length);
+    let Ok(path) = std::str::from_utf8(bytes) else {
+        return nil;
+    };
+    let path = ns_string::from_rust_string(env, path.to_owned());
+    autorelease(env, path)
 }
 
 - (id)fileAttributesAtPath:(id)path // NSString *

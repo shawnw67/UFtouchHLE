@@ -59,6 +59,8 @@ struct NSRunLoopHostObject {
     /// Strong references to `NSTimer*` in no particular order. Timers are owned
     /// by the run loop. The timer must remove itself when invalidated.
     timers: Vec<id>,
+    // Ports remain registered even though Mach message delivery is unavailable.
+    ports: Vec<(id, String)>,
     cf_sources: Vec<id>,
     cf_streams: Vec<(id, bool)>,
     owner: ThreadId,
@@ -214,6 +216,30 @@ pub const CLASSES: ClassExports = objc_classes! {
     assert!(!host_object.timers.contains(&timer)); // TODO: what do we do here?
     host_object.timers.push(timer);
     ns_timer::set_run_loop(env, timer, this);
+}
+
+- (())addPort:(id)port forMode:(NSRunLoopMode)mode {
+    if port == nil || mode == nil {
+        return;
+    }
+    let entry = (port, ns_string::to_rust_string(env, mode).into_owned());
+    let ports = &mut env.objc.borrow_mut::<NSRunLoopHostObject>(this).ports;
+    if !ports.contains(&entry) {
+        ports.push(entry);
+        retain(env, port);
+    }
+}
+
+- (())removePort:(id)port forMode:(NSRunLoopMode)mode {
+    if port == nil || mode == nil {
+        return;
+    }
+    let mode = ns_string::to_rust_string(env, mode);
+    let ports = &mut env.objc.borrow_mut::<NSRunLoopHostObject>(this).ports;
+    if let Some(index) = ports.iter().position(|(object, name)| *object == port && name == mode.as_ref()) {
+        ports.remove(index);
+        release(env, port);
+    }
 }
 
 - (())run {
@@ -650,6 +676,7 @@ fn run_loop_for_thread(env: &mut Environment, this: Class, thread_id: ThreadId) 
             selector_objects: VecDeque::new(),
             timers: Vec::new(),
             cf_sources: Vec::new(),
+            ports: Vec::new(),
             cf_streams: Vec::new(),
             owner: thread_id,
             waiting: false,

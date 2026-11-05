@@ -9,6 +9,7 @@ use super::ns_string::{from_rust_string, get_static_str, to_rust_string};
 use super::NSUInteger;
 mod resolve;
 
+use crate::dyld::{ConstantExports, HostConstant};
 use crate::fs::{GuestPath, GuestPathBuf};
 use crate::mem::MutPtr;
 use crate::objc::{
@@ -17,6 +18,12 @@ use crate::objc::{
 };
 use crate::Environment;
 use std::borrow::Cow;
+
+const NSURLIsExcludedFromBackupKey: &str = "NSURLIsExcludedFromBackupKey";
+pub const CONSTANTS: ConstantExports = &[(
+    "_NSURLIsExcludedFromBackupKey",
+    HostConstant::NSString(NSURLIsExcludedFromBackupKey),
+)];
 
 /// It seems like there's two kinds of NSURLs: ones for file paths, and others.
 /// So far only the former is implemented (TODO).
@@ -247,6 +254,18 @@ pub const CLASSES: ClassExports = objc_classes! {
     }
 }
 
+- (bool)setResourceValue:(id)_value forKey:(id)key error:(MutPtr<id>)error {
+    let key = to_rust_string(env, key);
+    log_dbg!("Unsupported NSURL resource attribute: {}", key);
+    if !error.is_null() {
+        let domain = get_static_str(env, super::ns_error::NSCocoaErrorDomain);
+        let code: super::NSInteger = 3328; // NSFeatureUnsupportedError
+        let failure: id = msg_class![env; NSError errorWithDomain:domain code:code userInfo:nil];
+        env.mem.write(error, failure);
+    }
+    false
+}
+
 - (bool)checkResourceIsReachableAndReturnError:(MutPtr<id>)error { // NSError**
     let is_file_url: bool = msg![env; this isFileURL];
     let reachable = is_file_url && {
@@ -273,6 +292,11 @@ pub const CLASSES: ClassExports = objc_classes! {
         },
         NSURLHostObject::OtherURL { ns_string, .. } => *ns_string,
     }
+}
+
+- (id)lastPathComponent {
+    let path: id = msg![env; this path];
+    msg![env; path lastPathComponent]
 }
 
 - (id)path {
@@ -379,6 +403,10 @@ pub const CLASSES: ClassExports = objc_classes! {
         unimplemented!(); // TODO
     };
     msg![env; ns_string getFileSystemRepresentation:buffer maxLength:buffer_size]
+}
+
+- (id)URLByAppendingPathComponent:(id)path_component {
+    msg![env; this URLByAppendingPathComponent:path_component isDirectory:false]
 }
 
 - (id)URLByAppendingPathComponent:(id)path_component // NSString *

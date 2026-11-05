@@ -160,11 +160,18 @@ pub const CLASSES: ClassExports = objc_classes! {
     false // default value
 }
 - (())setAdjustsFontSizeToFitWidth:(bool)adjusts {
-    assert!(!adjusts); // TODO
+    // TODO: shrink the text to fit. Until then it's just drawn at full size.
+    if adjusts {
+        log!("TODO: ignoring [(UILabel*){:?} setAdjustsFontSizeToFitWidth:true]", this);
+    }
 }
 
 - (())setMinimumFontSize:(CGFloat)size {
     todo_objc_setter!(this, size);
+}
+
+- (())setHighlightedTextColor:(id)_color { // UIColor*
+    // TODO: labels are never drawn highlighted.
 }
 
 - (id)textColor {

@@ -583,6 +583,7 @@ impl Environment {
             }
         }
 
+        let entry_point_is_main = executable.entry_point_is_main;
         let entry_point_addr = executable
             .entry_point_pc
             .ok_or_else(|| {
@@ -721,6 +722,18 @@ impl Environment {
                         let envp = envp_ref_list.as_slice();
                         let apple = &[bin_path_apple_key.as_str()];
                         stack::prep_stack_for_start(&mut env.mem, &mut env.cpu, &argv, envp, apple);
+                        if entry_point_is_main {
+                            // LC_MAIN bypasses crt: use registers for C args.
+                            let sp = env.cpu.regs()[cpu::Cpu::SP];
+                            let argc = argv.len() as u32;
+                            let envp_addr = sp + (argc + 2) * 4;
+                            let regs = env.cpu.regs_mut();
+                            regs[0] = argc;
+                            regs[1] = sp + 4;
+                            regs[2] = envp_addr;
+                            regs[3] = envp_addr + (envp.len() as u32 + 1) * 4;
+                            regs[cpu::Cpu::SP] = sp & !7;
+                        }
                     }
 
                     // Manually call here, since running call_from_host pushes

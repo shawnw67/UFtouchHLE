@@ -402,9 +402,7 @@ impl MovieDecoder {
         // presentation order, and for streams with B-frames (e.g. Monster
         // Hunter Freedom Unite's movies) only after some later samples have
         // been decoded, which decode_next_frame() takes into account.
-        let config = DecoderConfig::new().flush_after_decode(Flush::NoFlush);
-        let decoder = Decoder::with_api_config(OpenH264API::from_source(), config)
-            .map_err(|e| format!("Couldn't create H.264 decoder: {e}"))?;
+        let decoder = Self::create_decoder()?;
         Ok((
             MovieDecoder {
                 file,
@@ -424,6 +422,21 @@ impl MovieDecoder {
             },
             audio,
         ))
+    }
+
+    fn create_decoder() -> Result<Decoder, String> {
+        let config = DecoderConfig::new().flush_after_decode(Flush::NoFlush);
+        Decoder::with_api_config(OpenH264API::from_source(), config)
+            .map_err(|e| format!("Couldn't create H.264 decoder: {e}"))
+    }
+
+    pub fn rewind(&mut self) -> Result<(), String> {
+        self.decoder = Self::create_decoder()?;
+        self.next_sample = 0;
+        self.outputs = 0;
+        self.flushed = false;
+        self.held_back.clear();
+        Ok(())
     }
 
     /// The subtitles to show for the first of `languages` (e.g. "en") that

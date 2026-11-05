@@ -130,6 +130,10 @@ pub const CLASSES: ClassExports = objc_classes! {
     msg![env; this setStatusBarStyle:style]
 }
 
+- (NSInteger)applicationState {
+    0 // UIApplicationStateActive
+}
+
 - (UIInterfaceOrientation)statusBarOrientation {
     match env.window().current_rotation() {
         DeviceOrientation::Portrait => UIDeviceOrientationPortrait,
