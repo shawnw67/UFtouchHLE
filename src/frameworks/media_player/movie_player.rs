@@ -683,6 +683,19 @@ fn update_playback(env: &mut Environment) {
     let Some(mut playback) = State::get(env).playback.take() else {
         return;
     };
+    // Releasing a player stops it, but the runtime holds a reference to the
+    // active player, so that has to be detected another way. BioShock leaves
+    // its main menu by removing the player's view and releasing the player,
+    // which otherwise keeps its background movie looping during the game.
+    if playback.embedded {
+        let (player, view) = (playback.player, playback.view);
+        let superview: id = msg![env; view superview];
+        if superview == nil {
+            State::get(env).playback = Some(playback);
+            let _: () = msg![env; player stop];
+            return;
+        }
+    }
     if playback.rate == 0.0 {
         State::get(env).playback = Some(playback);
         return;

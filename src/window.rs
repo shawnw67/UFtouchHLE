@@ -22,6 +22,7 @@ use sdl2::mouse::MouseButton;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::surface::Surface;
 use sdl2_sys::SDL_PowerState;
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::env;
 use std::f32::consts::{FRAC_PI_2, PI};
@@ -492,9 +493,36 @@ fn step_controller_swipe(
     }
 }
 
+/// Look up an OpenGL function, keeping the result on Android.
+///
+/// The bindings hold one set of function pointers, so they're reloaded whenever
+/// the current context changes. BioShock switches often enough for the lookups
+/// to take a tenth of its CPU time. On Android, the result doesn't depend on
+/// the context: these are trampolines that dispatch through thread-local hooks.
+fn cached_gl_proc_address(
+    video_ctx: &sdl2::VideoSubsystem,
+    cache: &RefCell<HashMap<String, usize>>,
+    procname: &str,
+) -> *const std::ffi::c_void {
+    // For some reason, rust-sdl2 uses *const (), but () is not meant to be
+    // used for void pointees (just void results), so let's fix that.
+    if !cfg!(target_os = "android") {
+        return video_ctx.gl_get_proc_address(procname) as *const _;
+    }
+    if let Some(&address) = cache.borrow().get(procname) {
+        return address as *const _;
+    }
+    let address = video_ctx.gl_get_proc_address(procname);
+    cache
+        .borrow_mut()
+        .insert(procname.to_string(), address as usize);
+    address as *const _
+}
+
 pub struct Window {
     _sdl_ctx: sdl2::Sdl,
     video_ctx: sdl2::VideoSubsystem,
+    gl_proc_addresses: RefCell<HashMap<String, usize>>,
     window: sdl2::video::Window,
     event_pump: sdl2::EventPump,
     event_queue: VecDeque<Event>,
@@ -836,6 +864,7 @@ impl Window {
         let mut window = Window {
             _sdl_ctx: sdl_ctx,
             video_ctx,
+            gl_proc_addresses: RefCell::new(HashMap::new()),
             window,
             event_pump,
             event_queue: VecDeque::new(),
@@ -1985,9 +2014,7 @@ impl Window {
     }
 
     pub fn gl_get_proc_address(&self, procname: &str) -> *const std::ffi::c_void {
-        // For some reason, rust-sdl2 uses *const (), but () is not meant to be
-        // used for void pointees (just void results), so let's fix that.
-        self.video_ctx.gl_get_proc_address(procname) as *const _
+        cached_gl_proc_address(&self.video_ctx, &self.gl_proc_addresses, procname)
     }
 
     pub fn set_share_with_current_context(&self, value: bool) {
@@ -2026,7 +2053,7 @@ impl Window {
                 .unwrap()
                 .make_current_unchecked_for_window(
                     &mut |gl_ctx| make_current_or_warn(&self.window, gl_ctx),
-                    &mut |s| self.video_ctx.gl_get_proc_address(s) as *const _,
+                    &mut |s| cached_gl_proc_address(&self.video_ctx, &self.gl_proc_addresses, s),
                 )
         };
         gl_ins
@@ -2050,7 +2077,7 @@ impl Window {
                 .unwrap()
                 .make_current_unchecked_for_window(
                     &mut |gl_ctx| make_current_or_warn(&self.window, gl_ctx),
-                    &mut |s| self.video_ctx.gl_get_proc_address(s) as *const _,
+                    &mut |s| cached_gl_proc_address(&self.video_ctx, &self.gl_proc_addresses, s),
                 );
 
             use crate::gles::gles11_raw as gles11; // constants only
@@ -2111,7 +2138,9 @@ impl Window {
                 unsafe {
                     let mut ctx = gl_ins.make_current_unchecked_for_window(
                         &mut |gl_ctx| make_current_or_warn(&self.window, gl_ctx),
-                        &mut |s| self.video_ctx.gl_get_proc_address(s) as *const _,
+                        &mut |s| {
+                            cached_gl_proc_address(&self.video_ctx, &self.gl_proc_addresses, s)
+                        },
                     );
                     use crate::gles::gles11_raw as gles11;
                     let mut vp = [0i32; 4];
