@@ -1,90 +1,60 @@
-# Contributing to touchHLE
+# Contributing to Podroid
 
 Please also read the [code of conduct](CODE_OF_CONDUCT.md).
 
+Podroid is an unofficial fork of [touchHLE](https://github.com/touchHLE/touchHLE) focused on Android. **Please report problems with Podroid here, not to touchHLE, and never submit code from this fork to touchHLE.** It doesn't accept AI-generated code, and this fork contains some.
+
 ## Issues
 
-Please bear in mind that there are infinitely many apps that do not work in touchHLE right now, so please don't open issues about broken apps unless one of these applies:
+Please bear in mind that many apps don't work in Podroid yet. Issues about broken apps are most useful if one of these applies:
 
-- You know that this specific version of the app worked in a previous version of touchHLE and you can reproduce this.
-- The app is partially working (e.g. loaded up to the menu but the main game doesn't work). The fact that an app's splash screen (Default.png) shows up doesn't mean it's partially working.
+- This specific version of the app worked in a previous version of Podroid, and you can reproduce the problem.
+- The app is partially working (e.g. it reaches the menu but the main game doesn't work). The app's splash screen (`Default.png`) showing up doesn't mean it's partially working.
 
-## Source control and review
+Please include your Podroid version, your device model and the app's version, and attach `Podroid_log.txt` if you can. Don't attach app files.
 
-### Setting up the repo
+## Pull requests
 
-touchHLE uses git source control. You can get the source code from GitHub like this:
-
-```
-$ git clone https://github.com/touchHLE/touchHLE.git
-$ cd touchHLE
-```
-
-touchHLE uses Gerrit for code review. [The touchHLE repo on GerritHub](https://review.gerrithub.io/admin/repos/touchHLE/touchHLE) is where you can submit patches.
-
-If you're unfamiliar with Gerrit or GerritHub, please read [Working with Gerrit: An example](https://gerrithub.io/Documentation/intro-gerrit-walkthrough.html) first to get an overview of the expected workflow.
-
-Log into GerritHub with your GitHub account. (If that fails with some server error, try again in a few hours; there are some reliability issues.) If it's your first time using GerritHub, you can then [go to “GitHub” &gt; “Profile” in the Gerrit UI](https://review.gerrithub.io/plugins/github-plugin/static/account.html) to set up your profile and import your SSH keys. It is recommended to provide a “Full name”, which is just a display name and does not have to be your legal name.
-
-You can then add GerritHub as a “remote” (replace `your-github-username-here` with your username):
+Get the source code like this:
 
 ```
-$ git remote add gerrit "ssh://your-github-username-here@review.gerrithub.io:29418/touchHLE/touchHLE"
+$ git clone --recurse-submodules https://github.com/shawnw67/Podroid.git
+$ cd Podroid
 ```
 
-Gerrit requires your commit messages to have a `Change-Id:` line in them. Gerrit provides a git hook that adds this line to your commit messages automatically. You can install it like this (Windows users may need to use git bash for this):
+Fork the repository on GitHub, make a branch based on `trunk`, then open a pull request against `trunk`.
 
-```
-$ (f=`git rev-parse --git-dir`/hooks/commit-msg ; mkdir -p $(dirname $f) ; curl -Lo $f https://review.gerrithub.io/tools/hooks/commit-msg ; chmod +x $f)
-```
+If your pull request has non-trivial changes, please open an issue first so we can figure out if it's likely to be accepted. It would be a shame if your effort had to be wasted.
 
-### Pushing changes
-
-Make a local branch based on `trunk` with your changes. Try to avoid bundling unrelated changes in one commit. If you make a mistake in a commit that hasn't been merged yet, please fix it by modifying the original commit (e.g. using `git commit --amend --reset-author`), rather than by adding a separate commit.
-
-Once you're happy with your changes, you can push them for review on Gerrit with:
-
-```
-$ git push gerrit HEAD:refs/for/trunk
-```
-
-Then go to GerritHub, make sure you didn't push anything you didn't intend to, and add `hikari_no_yume` and `ciciplusplus` as reviewers.
-
-If you're submitting a large number of changes with a common theme, e.g. improving compatibility with some app, it is recommended to _also_ create a GitHub pull request. This improves visibility and ensures your changes are tested by the GitHub CI. You can then tag the Gerrit reviews with a “topic” named like `touchHLE/pull/xxx` where xxx is the pull request number. You can bulk-tag things using the checkboxes on the GerritHub homepage.
-
-Please also see the following guidelines for what to do with code changes.
-
-### Submitting changes
-
-In order to submit a patch set (PS) on the GerritHub, following conditions should be met:
-
-- PS should receive a +2 code review
-- Verified +1 should be set (on practice this means that author checked that code compiles, tests passes and lint/clippy doesn't complain)
-- There are no merge conflicts with the trunk
-
-Once met, a `Submit` button should be visible in the GerritHub UI.
-On click, the changes would be accepted to the trunk of the repo and automatically synced to the GitHub as well.
-If you reached that stage - congrats! Your first contribution is accepted ;)
+Try to avoid bundling unrelated changes in one commit. We prefer smaller commits that can be reviewed independently.
 
 ## Code contributions
 
 The developer documentation can be found in [the `dev-docs` directory](dev-docs/) and throughout the codebase. At a minimum, you'll probably want to read [the building guide](dev-docs/building.md) and [the coding style guide](dev-docs/code-style.md).
 
-Please run [`dev-scripts/format.sh`](dev-scripts/format.sh) and [`dev-scripts/lint.sh`](dev-scripts/lint.sh) on your changes before committing.
+Before opening a pull request:
 
-You should also run `cargo test`. [Building the integration tests requires downloading LLVM and a custom toolchain](tests/README.md), so it's understandable if you want to skip them (`cargo test -- --skip test_app`) and let the GitHub Actions CI catch any issues when you submit your pull request. Alternatively, you can download a pre-built version of the integration tests app (TestApp) from GitHub Actions CI and run it in touchHLE.
+- Test your changes on a real Android phone. The Android emulator's OpenGL ES 1.1 translation has bugs that real phones don't. Say which device and app you tested with.
+- Run [`dev-scripts/format.sh`](dev-scripts/format.sh) and [`dev-scripts/lint.sh`](dev-scripts/lint.sh).
+- Run `cargo test`. [Building the integration tests requires downloading LLVM and a custom toolchain](tests/README.md), so you can skip them with `cargo test -- --skip test_app`.
 
-If you're going to open a pull request with non-trivial changes, please talk to us first so we can figure out if we're likely to accept them. It would be a shame if your effort had to be wasted.
+Game-specific workarounds should check that they are running the expected code (e.g. by comparing a function's start bytes) before patching or calling into the game.
 
-Avoid sending everything as big commit(s) - we prefer to have smaller self-mergeable commits which could be reviewed and submitted independently.
+Don't add app files to the repository or bundle them into builds.
 
-Please also understand that we maintain a certain code quality standards and your contribution would be accepted _only_ if it does meet them. If your don't have time or willingness to be involved in the review process to attain those, please avoid contributing. You could check [past merged patch sets](https://review.gerrithub.io/q/project:touchHLE/touchHLE+status:merged) to get an idea what is expected.
+### AI assistance
+
+AI assistants may be used to contribute to Podroid, with these conditions:
+
+- Say so in the pull request, and mark the commits involved (e.g. with a `Co-Authored-By` line).
+- You're responsible for what you submit: read it, understand it and test it on a real device.
+- The copyright rules below apply to AI-generated code too.
 
 ### Copyright and reverse engineering
 
 (Please also read the copyright rules in the code of conduct.)
 
-⚠️ Be **very** careful about copyright. To put it simply: **don't contribute if you've seen code you shouldn't have seen, don't copy code that isn't yours to copy, and especially don't _secretly_ copy and pretend you didn't**. Any infringement of Apple or other copyrights could threaten the foundations of the project, and the livelihoods of current contributors. **If in doubt, don't do it**, but in particular:
+⚠️ Be **very** careful about copyright. To put it simply: **don't contribute if you've seen code you shouldn't have seen, don't copy code that isn't yours to copy, and especially don't _secretly_ copy and pretend you didn't**. Any infringement of Apple or other copyrights could threaten the project. **If in doubt, don't do it**, but in particular:
 
 * ⚠️ When implementing an API, rely firstly and primarily on public documentation.
 * ⚠️ Do not under any circumstances look at or rely on _leaked_ code, documentation, tools, etc. Material being available somewhere does not mean it is open-source.
@@ -93,5 +63,3 @@ Please also understand that we maintain a certain code quality standards and you
 * ⚠️ Bear in mind that open-source code is still covered by copyright, and so the same caution applies to consulting open-source code. Especially try to avoid looking at the implementation files, unless there is no other option, and do not copy algorithms. (Note however that if it's under a compatible license, we may be able to bring the open-source code into the project _under that license, as a dependency_.)
 * ⚠️ If you work or have worked at Apple, or NeXT, or various other organisations, then you may have seen the proprietary source code used in components of iOS. If that's the case, please do not contribute to this project.
 * ⚠️ If your employment contract or applicable law in your country means that you don't own the copyright on code you want to contribute to this project, or if for some other reason you may need permission from your employer to contribute to this project: please do obtain that permission before contributing.
-
-Because large language models have most likely "seen" things during their training process that would break these rules, and because they are impossible to audit, ⚠️ **use of AI assistants or AI code generation like ChatGPT, Copilot or similar is also forbidden**.
