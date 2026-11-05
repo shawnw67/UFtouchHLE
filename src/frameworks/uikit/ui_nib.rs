@@ -98,7 +98,6 @@ pub const CLASSES: ClassExports = objc_classes! {
 
 - (id)instantiateWithOwner:(id)owner
                    options:(id)options { // NSDictionary *
-    assert!(owner != nil); // TODO
     assert!(options == nil); // TODO
 
     let bundle = env.objc.borrow::<UINibHostObject>(this).bundle;
@@ -154,7 +153,11 @@ pub const CLASSES: ClassExports = objc_classes! {
         let delegate_class: Class = msg![env; delegate class];
         assert!(msg![env; delegate_class isKindOfClass:ui_nib_class]);
         let file_owner = env.objc.borrow::<UINibHostObject>(delegate).file_owner;
-        assert!(file_owner != nil);
+        if file_owner == nil {
+            // Table cell nibs are often loaded with no owner. The proxy is
+            // left out of [NSBundle loadNibNamed:owner:options:]'s result.
+            return this;
+        }
         release(env, this);
         // NSKeyedUnarchiver holds ownership of already instantiated objects
         // and release them on dealloc. But here we replace a proxy object with

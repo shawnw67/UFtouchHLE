@@ -7,7 +7,7 @@
 
 use crate::frameworks::core_graphics::{CGPoint, CGRect, CGSize};
 use crate::frameworks::foundation::ns_string::get_static_str;
-use crate::frameworks::foundation::{NSInteger, NSUInteger};
+use crate::frameworks::foundation::NSInteger;
 use crate::frameworks::uikit::ui_view;
 use crate::frameworks::uikit::ui_view::ui_scroll_view::UIScrollViewHostObject;
 use crate::frameworks::uikit::ui_view_controller::UIViewControllerHostObject;
@@ -553,8 +553,8 @@ pub const CLASSES: ClassExports = objc_classes! {
             numberOfRowsInSection:section];
         for row in 0..row_count {
             let index_path: id = msg_class![env; NSIndexPath
-                indexPathForRow:(row as NSUInteger)
-                inSection:(section as NSUInteger)];
+                indexPathForRow:(row as NSInteger)
+                inSection:(section as NSInteger)];
             retain(env, index_path);
 
             let cell: id = msg![env; data_source

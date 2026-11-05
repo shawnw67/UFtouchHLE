@@ -699,9 +699,17 @@ pub const CLASSES: ClassExports = objc_classes! {
     for recognizer in gesture_recognizers {
         release(env, recognizer);
     }
+    if superview != nil {
+        // The superview should own this view, so this means something released
+        // it once too often. BioShock's profile screen ends up doing this. Keep
+        // the superview from being left with a dangling pointer.
+        log!("Warning: {:?} was deallocated while in superview {:?}", this, superview);
+        let siblings = &mut env.objc.borrow_mut::<UIViewHostObject>(superview).subviews;
+        siblings.retain(|&sibling| sibling != this);
+        () = msg![env; layer removeFromSuperlayer];
+    }
     release(env, layer);
     assert!(view_controller == nil);
-    assert!(superview == nil);
     for subview in subviews {
         env.objc.borrow_mut::<UIViewHostObject>(subview).superview = nil;
         release(env, subview);

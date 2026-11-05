@@ -21,7 +21,7 @@
 //! - reloadData with actual cell creation and positioning
 
 use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
-use crate::frameworks::foundation::{NSInteger, NSUInteger};
+use crate::frameworks::foundation::NSInteger;
 use crate::frameworks::uikit::ui_view::ui_scroll_view::UIScrollViewHostObject;
 use crate::objc::{
     id, impl_HostObject_with_superclass, msg, msg_class, msg_super, nil, objc_classes, release,
@@ -669,8 +669,8 @@ pub const CLASSES: ClassExports = objc_classes! {
 
         let mut col: i32 = 0;
         for item in 0..item_count {
-            let index_path: id = msg_class![env; NSIndexPath indexPathForItem:(item as NSUInteger)
-                                                                   inSection:(section as NSUInteger)];
+            let index_path: id = msg_class![env; NSIndexPath indexPathForItem:(item as NSInteger)
+                                                                   inSection:(section as NSInteger)];
             let cell: id =
                 msg![env; data_source collectionView:this cellForItemAtIndexPath:index_path];
             if cell == nil {

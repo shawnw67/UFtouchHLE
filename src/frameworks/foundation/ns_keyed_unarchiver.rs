@@ -430,6 +430,16 @@ pub fn decode_current_data(env: &mut Environment, unarchiver: id, is_mutable: bo
 /// TODO: mutability
 pub fn decode_current_string(env: &mut Environment, unarchiver: id) -> id {
     let key = get_static_str(env, "NS.bytes");
+    // Mutable strings store their contents as a string instead of bytes.
+    if get_value_to_decode_for_key(env, unarchiver, key).is_none() {
+        let key = get_static_str(env, "NS.string");
+        let string = get_value_to_decode_for_key(env, unarchiver, key)
+            .unwrap()
+            .as_string()
+            .unwrap()
+            .to_string();
+        return from_rust_string(env, string);
+    }
     // TODO: avoid copying (twice!)
     let bytes = get_value_to_decode_for_key(env, unarchiver, key)
         .unwrap()

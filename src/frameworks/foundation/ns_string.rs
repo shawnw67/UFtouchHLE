@@ -1750,6 +1750,16 @@ pub const CLASSES: ClassExports = objc_classes! {
     env.objc.alloc_object(this, host_object, &mut env.mem)
 }
 
+// NSCoding implementation
+- (id)initWithCoder:(id)coder {
+    // Decodes the immutable string, and makes this a mutable copy of it.
+    let archived: id = msg_class![env; _Podroid_NSString alloc];
+    let archived: id = msg![env; archived initWithCoder:coder];
+    let new: id = msg![env; this initWithString:archived];
+    release(env, archived);
+    new
+}
+
 - (id)initWithCapacity:(NSUInteger)_capacity {
     // TODO: capacity
     msg![env; this init]
