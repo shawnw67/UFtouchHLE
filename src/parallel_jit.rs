@@ -18,6 +18,7 @@ use crate::cpu::{Cpu, CpuContext, CpuState};
 use crate::dyld::Dyld;
 use crate::mem::{Mem, MutPtr};
 use std::cell::UnsafeCell;
+use std::collections::HashMap;
 use std::sync::atomic::{
     AtomicBool, AtomicPtr, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering,
 };
@@ -650,6 +651,8 @@ pub struct Pool {
     workers: Vec<Arc<Worker>>,
     main_thread: Arc<Sleeper>,
     idle_spins: u32,
+    preferred_workers: HashMap<usize, usize>,
+    next_preferred_worker: usize,
 }
 
 impl Pool {
@@ -695,21 +698,31 @@ impl Pool {
             workers,
             main_thread,
             idle_spins: 0,
+            preferred_workers: HashMap::new(),
+            next_preferred_worker: 0,
         }
     }
 
     /// Start running guest code. Gives the context back if no worker is free.
     pub fn submit(
-        &self,
+        &mut self,
         thread: usize,
         context: Box<CpuContext>,
         ticks: u64,
         mem: &mut Mem,
     ) -> Result<usize, Box<CpuContext>> {
-        let Some(index) = self
-            .workers
-            .iter()
-            .position(|worker| worker.phase.load(Ordering::Acquire) == IDLE)
+        // Each worker has its own generated code, so keeping a guest thread on
+        // the same one avoids compiling the same code several times.
+        let count = self.workers.len();
+        let preferred = *self.preferred_workers.entry(thread).or_insert_with(|| {
+            let worker = self.next_preferred_worker;
+            self.next_preferred_worker = (worker + 1) % count;
+            worker
+        });
+        let is_idle = |&index: &usize| self.workers[index].phase.load(Ordering::Acquire) == IDLE;
+        let Some(index) = (0..count)
+            .map(|offset| (preferred + offset) % count)
+            .find(is_idle)
         else {
             return Err(context);
         };

@@ -1813,7 +1813,7 @@ impl Environment {
         let mut context = Box::new(cpu::CpuContext::new());
         self.cpu.swap_context(&mut context);
         loop {
-            let pool = self.jit_pool.as_ref().unwrap();
+            let pool = self.jit_pool.as_mut().unwrap();
             match pool.submit(self.current_thread, context, ticks, &mut self.mem) {
                 Ok(worker) => {
                     self.yield_thread(ThreadBlock::GuestJit(worker));
