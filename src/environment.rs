@@ -615,7 +615,14 @@ impl Environment {
         let jit_pool = options
             .parallel_guest
             .filter(|_| options.direct_memory_access)
-            .map(|count| crate::parallel_jit::Pool::new(&mut mem, count, options.ignore_gl_errors));
+            .map(|count| {
+                crate::parallel_jit::Pool::new(
+                    &mut mem,
+                    count,
+                    options.ignore_gl_errors,
+                    options.fastmem,
+                )
+            });
 
         let main_thread_init_routine = Coroutine::new(move |yielder, mut env: Environment| {
             let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

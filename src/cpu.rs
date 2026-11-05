@@ -230,13 +230,14 @@ impl Cpu {
     /// becomes bound to that [Mem] instance (subsequent calls must use the same
     /// one).
     pub fn new(direct_memory_access: Option<&mut Mem>) -> Cpu {
-        Self::new_with_processor_id(direct_memory_access, 0)
+        Self::new_for_parallel_use(direct_memory_access, 0, false)
     }
 
     /// Like [Self::new], for one of several CPUs that run at the same time.
-    pub fn new_with_processor_id(
+    pub fn new_for_parallel_use(
         direct_memory_access: Option<&mut Mem>,
         processor_id: usize,
+        fastmem: bool,
     ) -> Cpu {
         // Null page count is in pages rather than bytes. Mem ensures it is
         // page aligned.
@@ -254,7 +255,12 @@ impl Cpu {
                 mem.direct_memory_access_ptr()
             });
         let dynarmic_wrapper = unsafe {
-            Podroid_DynarmicWrapper_new(direct_memory_access_ptr, null_page_count, processor_id)
+            Podroid_DynarmicWrapper_new(
+                direct_memory_access_ptr,
+                null_page_count,
+                processor_id,
+                fastmem,
+            )
         };
         Cpu {
             dynarmic_wrapper,

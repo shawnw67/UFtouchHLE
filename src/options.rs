@@ -147,6 +147,8 @@ pub struct Options {
     pub print_fps: bool,
     /// Experimental: number of workers for [crate::parallel_jit], if any.
     pub parallel_guest: Option<usize>,
+    /// Experimental: use true fastmem on [crate::parallel_jit] workers.
+    pub fastmem: bool,
     pub performance_test: Option<crate::performance::Mode>,
     pub audio_test: Option<crate::audio::sound_test::Mode>,
     pub fps_limit: Option<f64>,
@@ -231,6 +233,7 @@ impl Default for Options {
             headless: false,
             print_fps: false,
             parallel_guest: None,
+            fastmem: false,
             performance_test: None,
             audio_test: None,
             fps_limit: Some(60.0), // Original iPhone is 60Hz and uses v-sync,
@@ -522,6 +525,8 @@ impl Options {
             self.performance_test = Some(crate::performance::Mode::parse(mode)?);
         } else if arg == "--print-fps" {
             self.print_fps = true;
+        } else if arg == "--fastmem" {
+            self.fastmem = true;
         } else if arg == "--parallel-guest" {
             self.parallel_guest = Some(3);
         } else if let Some(value) = arg.strip_prefix("--parallel-guest=") {

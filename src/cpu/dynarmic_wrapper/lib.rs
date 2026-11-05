@@ -53,6 +53,7 @@ extern "C" {
         dynamic_memory_access_ptr: *mut std::ffi::c_void,
         null_page_count: usize,
         processor_id: usize,
+        fastmem: bool,
     ) -> *mut Podroid_DynarmicWrapper;
     pub fn Podroid_DynarmicWrapper_delete(cpu: *mut Podroid_DynarmicWrapper);
     pub fn Podroid_DynarmicWrapper_regs_const(cpu: *const Podroid_DynarmicWrapper) -> *const u32;

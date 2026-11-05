@@ -226,7 +226,7 @@ class DynarmicWrapper {
 
 public:
   DynarmicWrapper(void *direct_memory_access_ptr, size_t null_page_count,
-                  size_t processor_id) {
+                  size_t processor_id, bool fastmem) {
     Dynarmic::A32::UserConfig user_config;
     user_config.callbacks = &env;
     user_config.coprocessors[15] = std::make_shared<ArmDynarmicCP15>();
@@ -257,6 +257,13 @@ public:
       }
       user_config.page_table = &page_table;
       user_config.absolute_offset_page_table = true;
+      if (fastmem) {
+        // Accesses to the null pages fault, then the code is recompiled to use
+        // the page table above, which aborts execution.
+        user_config.fastmem_pointer =
+            reinterpret_cast<std::uintptr_t>(direct_memory_access_ptr);
+        user_config.check_halt_on_memory_access = false;
+      }
     } else if (no_fastmem && no_fastmem[0] == '1') {
       printf("[MHP2G] fastmem disabled for write tracing\n");
     }
@@ -322,9 +329,10 @@ extern "C" {
 
 DynarmicWrapper *Podroid_DynarmicWrapper_new(void *direct_memory_access_ptr,
                                              size_t null_page_count,
-                                             size_t processor_id) {
+                                             size_t processor_id,
+                                             bool fastmem) {
   return new DynarmicWrapper(direct_memory_access_ptr, null_page_count,
-                             processor_id);
+                             processor_id, fastmem);
 }
 void Podroid_DynarmicWrapper_delete(DynarmicWrapper *cpu) { delete cpu; }
 

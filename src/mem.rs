@@ -332,6 +332,14 @@ impl Mem {
         self.null_segment_size = new_null_segment_size;
     }
 
+    /// Make accesses to the null segment fault on the host, for true fastmem.
+    pub fn protect_null_segment(&mut self) {
+        let host_page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as usize;
+        let size = self.null_segment_size as usize / host_page_size * host_page_size;
+        let result = unsafe { libc::mprotect(self.bytes.cast(), size, libc::PROT_NONE) };
+        assert_eq!(result, 0);
+    }
+
     pub fn null_segment_size(&self) -> VAddr {
         self.null_segment_size
     }

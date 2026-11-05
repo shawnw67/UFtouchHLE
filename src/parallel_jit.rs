@@ -516,6 +516,7 @@ unsafe impl Send for Worker {}
 /// How long to spin for an event before sleeping. Most host calls are far
 /// shorter than this, but waiting for a long one shouldn't cost a CPU core.
 const SPIN_LIMIT: u32 = 4000;
+const SPINS_PER_WAIT: u32 = 200;
 
 /// Lets a spinning thread sleep until the other side has something for it.
 struct Sleeper {
@@ -555,7 +556,10 @@ pub struct Pool {
 }
 
 impl Pool {
-    pub fn new(mem: &mut Mem, count: usize, ignore_gl_errors: bool) -> Pool {
+    pub fn new(mem: &mut Mem, count: usize, ignore_gl_errors: bool, fastmem: bool) -> Pool {
+        if fastmem {
+            mem.protect_null_segment();
+        }
         ACTIVE.store(true, Ordering::Relaxed);
         IGNORE_GL_ERRORS.store(ignore_gl_errors, Ordering::Relaxed);
         let main_thread = Arc::new(Sleeper::current());
@@ -567,7 +571,7 @@ impl Pool {
                     sleeper: OnceLock::new(),
                 });
                 // The main CPU has processor ID 0.
-                let cpu = WorkerCpu(Cpu::new_with_processor_id(Some(&mut *mem), i + 1));
+                let cpu = WorkerCpu(Cpu::new_for_parallel_use(Some(&mut *mem), i + 1, fastmem));
                 let thread_worker = worker.clone();
                 let thread_main = main_thread.clone();
                 std::thread::Builder::new()
@@ -630,10 +634,16 @@ impl Pool {
     /// Wait a moment for a worker to finish. The scheduler needs to look again
     /// soon even then, because other threads could become ready meanwhile.
     pub fn wait_for_worker(&mut self) {
-        self.idle_spins += 1;
-        if self.idle_spins < SPIN_LIMIT {
+        // The scheduler's checks read the clock, which is slow on Android, so
+        // they shouldn't run on every iteration.
+        for _ in 0..SPINS_PER_WAIT {
+            if self.any_done() {
+                return;
+            }
             std::hint::spin_loop();
-        } else {
+        }
+        self.idle_spins += SPINS_PER_WAIT;
+        if self.idle_spins >= SPIN_LIMIT {
             let timeout = std::time::Duration::from_micros(500);
             self.main_thread.sleep(|| self.any_done(), timeout);
         }
