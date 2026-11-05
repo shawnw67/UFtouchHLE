@@ -221,17 +221,19 @@ public:
 class DynarmicWrapper {
   Environment env;
   std::unique_ptr<Dynarmic::A32::Jit> cpu;
-  std::unique_ptr<Dynarmic::ExclusiveMonitor> mon;
   std::array<std::uint8_t *, Dynarmic::A32::UserConfig::NUM_PAGE_TABLE_ENTRIES>
       page_table;
 
 public:
-  DynarmicWrapper(void *direct_memory_access_ptr, size_t null_page_count) {
+  DynarmicWrapper(void *direct_memory_access_ptr, size_t null_page_count,
+                  size_t processor_id) {
     Dynarmic::A32::UserConfig user_config;
     user_config.callbacks = &env;
     user_config.coprocessors[15] = std::make_shared<ArmDynarmicCP15>();
-    mon = std::make_unique<Dynarmic::ExclusiveMonitor>(1);
-    user_config.global_monitor = mon.get();
+    // Shared by all instances, since guest threads can run in parallel.
+    static Dynarmic::ExclusiveMonitor monitor(8);
+    user_config.global_monitor = &monitor;
+    user_config.processor_id = processor_id;
     // TODO: only do this in debug builds? it's probably expensive
     user_config.check_halt_on_memory_access = true;
     const char *no_fastmem = getenv("MHP2G_NO_FASTMEM");
@@ -319,8 +321,10 @@ public:
 extern "C" {
 
 DynarmicWrapper *Podroid_DynarmicWrapper_new(void *direct_memory_access_ptr,
-                                             size_t null_page_count) {
-  return new DynarmicWrapper(direct_memory_access_ptr, null_page_count);
+                                             size_t null_page_count,
+                                             size_t processor_id) {
+  return new DynarmicWrapper(direct_memory_access_ptr, null_page_count,
+                             processor_id);
 }
 void Podroid_DynarmicWrapper_delete(DynarmicWrapper *cpu) { delete cpu; }
 

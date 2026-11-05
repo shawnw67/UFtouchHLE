@@ -1,0 +1,481 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+//! Experimental: runs guest code on worker threads, so that guest threads can
+//! execute in parallel.
+//!
+//! Everything else stays on the main thread. A guest thread hands its registers
+//! to a worker, which runs guest code until it hits a host call or runs out of
+//! ticks. The guest thread's coroutine is blocked meanwhile, so other guest
+//! threads can run, and the host call is then handled as usual.
+//!
+//! Workers spin while they're waiting, since host calls are far too frequent
+//! to sleep between them.
+
+use crate::cpu::{Cpu, CpuContext, CpuState};
+use crate::mem::Mem;
+use std::cell::UnsafeCell;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+
+/// Charged for each host call handled by a worker.
+const LEAF_CALL_TICKS: u64 = 100;
+
+const IDLE: u8 = 0;
+const JOB_READY: u8 = 1;
+const RUNNING: u8 = 2;
+const DONE: u8 = 3;
+
+/// Whether code invalidations need to reach the workers.
+static ACTIVE: AtomicBool = AtomicBool::new(false);
+/// Let workers answer `glGetError`, see [crate::options::Options].
+static IGNORE_GL_ERRORS: AtomicBool = AtomicBool::new(false);
+static INVALIDATION_COUNT: AtomicUsize = AtomicUsize::new(0);
+static INVALIDATIONS: Mutex<Vec<(u32, u32)>> = Mutex::new(Vec::new());
+
+/// Called for any change to guest code, for example linking a function.
+pub fn invalidate_cache_range(base: u32, size: u32) {
+    if ACTIVE.load(Ordering::Relaxed) {
+        let mut invalidations = INVALIDATIONS.lock().unwrap();
+        invalidations.push((base, size));
+        INVALIDATION_COUNT.store(invalidations.len(), Ordering::Release);
+    }
+}
+
+/// Thread-specific data for keys and threads with low numbers, shared with
+/// `pthread_getspecific` etc so that worker threads can access it.
+pub const FAST_TLS_THREADS: usize = 64;
+pub const FAST_TLS_KEYS: usize = 64;
+#[allow(clippy::declare_interior_mutable_const)]
+const TLS_ZERO: AtomicU32 = AtomicU32::new(0);
+#[allow(clippy::declare_interior_mutable_const)]
+const TLS_ROW_ZERO: [AtomicU32; FAST_TLS_KEYS] = [TLS_ZERO; FAST_TLS_KEYS];
+static FAST_TLS: [[AtomicU32; FAST_TLS_KEYS]; FAST_TLS_THREADS] = [TLS_ROW_ZERO; FAST_TLS_THREADS];
+static FAST_TLS_KEY_VALID: [AtomicBool; FAST_TLS_KEYS] = {
+    #[allow(clippy::declare_interior_mutable_const)]
+    const FALSE: AtomicBool = AtomicBool::new(false);
+    [FALSE; FAST_TLS_KEYS]
+};
+
+pub fn fast_tls_get(thread: usize, key_index: usize) -> u32 {
+    FAST_TLS[thread][key_index].load(Ordering::Relaxed)
+}
+pub fn fast_tls_set(thread: usize, key_index: usize, value: u32) {
+    FAST_TLS[thread][key_index].store(value, Ordering::Relaxed);
+}
+/// Set up a key slot, or clear it if the key was deleted.
+pub fn fast_tls_reset_key(key_index: usize, valid: bool) {
+    for thread in &FAST_TLS {
+        thread[key_index].store(0, Ordering::Relaxed);
+    }
+    FAST_TLS_KEY_VALID[key_index].store(valid, Ordering::Relaxed);
+}
+
+/// Mutex lock states for mutexes with low IDs, which workers can change.
+/// Other mutexes only get used by the main thread.
+pub const FAST_MUTEX_COUNT: usize = 4096;
+#[allow(clippy::declare_interior_mutable_const)]
+const ZERO_U64: AtomicU64 = AtomicU64::new(0);
+pub static FAST_MUTEXES: [AtomicU64; FAST_MUTEX_COUNT] = [ZERO_U64; FAST_MUTEX_COUNT];
+#[allow(clippy::declare_interior_mutable_const)]
+const ZERO_U8: AtomicU8 = AtomicU8::new(0);
+static FAST_MUTEX_KINDS: [AtomicU8; FAST_MUTEX_COUNT] = [ZERO_U8; FAST_MUTEX_COUNT];
+const MUTEX_KIND_INVALID: u8 = 0;
+const MUTEX_KIND_OTHER: u8 = 1;
+const MUTEX_KIND_RECURSIVE: u8 = 2;
+
+/// Unlocked is 0, or the thread and count if the mutex is locked.
+pub fn encode_mutex_lock(thread: usize, count: u32) -> u64 {
+    ((thread as u64 + 1) << 32) | count as u64
+}
+pub fn decode_mutex_lock(word: u64) -> Option<(usize, u32)> {
+    (word != 0).then(|| ((word >> 32) as usize - 1, word as u32))
+}
+/// Tell workers about a new mutex, or that it was destroyed.
+pub fn set_fast_mutex_kind(id: u64, valid: bool, recursive: bool) {
+    if let Some(kind) = FAST_MUTEX_KINDS.get(id as usize) {
+        let value = match (valid, recursive) {
+            (false, _) => MUTEX_KIND_INVALID,
+            (true, false) => MUTEX_KIND_OTHER,
+            (true, true) => MUTEX_KIND_RECURSIVE,
+        };
+        kind.store(value, Ordering::Relaxed);
+    }
+}
+
+/// Get a mutex's ID from guest memory, if a worker can use it.
+unsafe fn fast_mutex_id(base: *mut u8, mutex: u32) -> Option<usize> {
+    if mutex < NULL_LIMIT || mutex > u32::MAX - 12 {
+        return None;
+    }
+    let ptr = base.add(mutex as usize);
+    if (ptr as *const u32).read_unaligned() != crate::libc::pthread::mutex::MAGIC_MUTEX {
+        return None;
+    }
+    let id = (ptr.add(4) as *const u64).read_unaligned();
+    ((id as usize) < FAST_MUTEX_COUNT).then_some(id as usize)
+}
+
+/// Host functions that workers can run themselves, instead of asking the main
+/// thread. These need to be simple, and must not touch the [Environment].
+#[derive(Clone, Copy, PartialEq)]
+#[repr(u8)]
+enum Leaf {
+    Unknown = 0,
+    NotLeaf,
+    ToUpper,
+    GetSpecific,
+    SetSpecific,
+    Memcpy,
+    Memset,
+    Strcmp,
+    Wcslen,
+    Umodsi3,
+    Udivsi3,
+    Ceilf,
+    Floorf,
+    MutexLock,
+    MutexUnlock,
+    GlGetError,
+    Memcmp,
+}
+const MAX_LEAF_SVC: usize = 8192;
+#[allow(clippy::declare_interior_mutable_const)]
+const LEAF_UNKNOWN: AtomicU8 = AtomicU8::new(Leaf::Unknown as u8);
+static LEAVES: [AtomicU8; MAX_LEAF_SVC] = [LEAF_UNKNOWN; MAX_LEAF_SVC];
+
+/// Tell workers which function a host call (SVC number) is linked to.
+pub fn note_svc(svc: u32, symbol: &str) {
+    let Some(slot) = LEAVES.get(svc as usize) else {
+        return;
+    };
+    if slot.load(Ordering::Relaxed) != Leaf::Unknown as u8 {
+        return;
+    }
+    let leaf = match symbol {
+        "___toupper" => Leaf::ToUpper,
+        "_pthread_getspecific" => Leaf::GetSpecific,
+        "_pthread_setspecific" => Leaf::SetSpecific,
+        "_memcpy" => Leaf::Memcpy,
+        "_memset" => Leaf::Memset,
+        "_strcmp" => Leaf::Strcmp,
+        "_wcslen" => Leaf::Wcslen,
+        "___umodsi3" => Leaf::Umodsi3,
+        "___udivsi3" => Leaf::Udivsi3,
+        "_ceilf" => Leaf::Ceilf,
+        "_floorf" => Leaf::Floorf,
+        "_pthread_mutex_lock" => Leaf::MutexLock,
+        "_pthread_mutex_unlock" => Leaf::MutexUnlock,
+        "_glGetError" if IGNORE_GL_ERRORS.load(Ordering::Relaxed) => Leaf::GlGetError,
+        "_memcmp" => Leaf::Memcmp,
+        _ => Leaf::NotLeaf,
+    };
+    slot.store(leaf as u8, Ordering::Relaxed);
+}
+
+fn leaf_for_svc(svc: u32) -> Leaf {
+    let Some(slot) = LEAVES.get(svc as usize) else {
+        return Leaf::NotLeaf;
+    };
+    match slot.load(Ordering::Relaxed) {
+        x if x == Leaf::ToUpper as u8 => Leaf::ToUpper,
+        x if x == Leaf::GetSpecific as u8 => Leaf::GetSpecific,
+        x if x == Leaf::SetSpecific as u8 => Leaf::SetSpecific,
+        x if x == Leaf::Memcpy as u8 => Leaf::Memcpy,
+        x if x == Leaf::Memset as u8 => Leaf::Memset,
+        x if x == Leaf::Strcmp as u8 => Leaf::Strcmp,
+        x if x == Leaf::Wcslen as u8 => Leaf::Wcslen,
+        x if x == Leaf::Umodsi3 as u8 => Leaf::Umodsi3,
+        x if x == Leaf::Udivsi3 as u8 => Leaf::Udivsi3,
+        x if x == Leaf::Ceilf as u8 => Leaf::Ceilf,
+        x if x == Leaf::Floorf as u8 => Leaf::Floorf,
+        x if x == Leaf::MutexLock as u8 => Leaf::MutexLock,
+        x if x == Leaf::MutexUnlock as u8 => Leaf::MutexUnlock,
+        x if x == Leaf::GlGetError as u8 => Leaf::GlGetError,
+        x if x == Leaf::Memcmp as u8 => Leaf::Memcmp,
+        _ => Leaf::NotLeaf,
+    }
+}
+
+const NULL_LIMIT: u32 = 0x1000;
+
+/// Run a host function on the worker. Returns false to leave it to the main
+/// thread, which also handles anything unusual, such as bad pointers.
+unsafe fn run_leaf(leaf: Leaf, regs: &mut [u32; 16], base: *mut u8, thread: usize) -> bool {
+    let (a, b, c) = (regs[0], regs[1], regs[2]);
+    let fine_range = |ptr: u32, len: u32| ptr >= NULL_LIMIT && ptr.checked_add(len).is_some();
+    match leaf {
+        Leaf::ToUpper => {
+            if (b'a' as u32..=b'z' as u32).contains(&a) {
+                regs[0] = a - 32;
+            }
+        }
+        Leaf::GetSpecific | Leaf::SetSpecific => {
+            let Some(key_index) = (a as usize).checked_sub(1) else {
+                return false;
+            };
+            if key_index >= FAST_TLS_KEYS
+                || thread >= FAST_TLS_THREADS
+                || !FAST_TLS_KEY_VALID[key_index].load(Ordering::Relaxed)
+            {
+                return false;
+            }
+            if leaf == Leaf::GetSpecific {
+                regs[0] = fast_tls_get(thread, key_index);
+            } else {
+                fast_tls_set(thread, key_index, b);
+                regs[0] = 0;
+            }
+        }
+        Leaf::Memcpy => {
+            if !fine_range(a, c) || !fine_range(b, c) {
+                return false;
+            }
+            std::ptr::copy(base.add(b as usize), base.add(a as usize), c as usize);
+        }
+        Leaf::Memset => {
+            if !fine_range(a, c) {
+                return false;
+            }
+            std::ptr::write_bytes(base.add(a as usize), b as u8, c as usize);
+        }
+        Leaf::Strcmp => {
+            if a < NULL_LIMIT || b < NULL_LIMIT {
+                return false;
+            }
+            let (mut x, mut y) = (a, b);
+            let result = loop {
+                let (p, q) = (*base.add(x as usize), *base.add(y as usize));
+                if p != q || p == 0 {
+                    break (p as i32 - q as i32).signum();
+                }
+                x = x.wrapping_add(1);
+                y = y.wrapping_add(1);
+            };
+            regs[0] = result as u32;
+        }
+        Leaf::Wcslen => {
+            if a < NULL_LIMIT {
+                return false;
+            }
+            let mut len = 0u32;
+            while (base.add(a.wrapping_add(len * 4) as usize) as *const u32).read_unaligned() != 0 {
+                len += 1;
+            }
+            regs[0] = len;
+        }
+        Leaf::Umodsi3 | Leaf::Udivsi3 => {
+            if b == 0 {
+                return false;
+            }
+            regs[0] = if leaf == Leaf::Umodsi3 { a % b } else { a / b };
+        }
+        Leaf::MutexLock => {
+            let Some(id) = fast_mutex_id(base, a) else {
+                return false;
+            };
+            let kind = FAST_MUTEX_KINDS[id].load(Ordering::Relaxed);
+            if kind == MUTEX_KIND_INVALID {
+                return false;
+            }
+            let word = &FAST_MUTEXES[id];
+            match decode_mutex_lock(word.load(Ordering::Relaxed)) {
+                None => {
+                    let locked = encode_mutex_lock(thread, 1);
+                    if word
+                        .compare_exchange(0, locked, Ordering::Acquire, Ordering::Relaxed)
+                        .is_err()
+                    {
+                        return false;
+                    }
+                }
+                Some((owner, count)) if owner == thread && kind == MUTEX_KIND_RECURSIVE => {
+                    word.store(encode_mutex_lock(thread, count + 1), Ordering::Relaxed);
+                }
+                // The main thread will block this thread.
+                Some(_) => return false,
+            }
+            regs[0] = 0;
+        }
+        Leaf::MutexUnlock => {
+            let Some(id) = fast_mutex_id(base, a) else {
+                return false;
+            };
+            if FAST_MUTEX_KINDS[id].load(Ordering::Relaxed) == MUTEX_KIND_INVALID {
+                return false;
+            }
+            let word = &FAST_MUTEXES[id];
+            match decode_mutex_lock(word.load(Ordering::Relaxed)) {
+                Some((owner, 1)) if owner == thread => word.store(0, Ordering::Release),
+                Some((owner, count)) if owner == thread => {
+                    word.store(encode_mutex_lock(thread, count - 1), Ordering::Release);
+                }
+                _ => return false,
+            }
+            regs[0] = 0;
+        }
+        Leaf::GlGetError => regs[0] = 0,
+        Leaf::Memcmp => {
+            if !fine_range(a, c) || !fine_range(b, c) {
+                return false;
+            }
+            let x = std::slice::from_raw_parts(base.add(a as usize), c as usize);
+            let y = std::slice::from_raw_parts(base.add(b as usize), c as usize);
+            regs[0] = match x.cmp(y) {
+                std::cmp::Ordering::Less => -1i32 as u32,
+                std::cmp::Ordering::Equal => 0,
+                std::cmp::Ordering::Greater => 1,
+            };
+        }
+        Leaf::Ceilf => regs[0] = f32::from_bits(a).ceil().to_bits(),
+        Leaf::Floorf => regs[0] = f32::from_bits(a).floor().to_bits(),
+        Leaf::Unknown | Leaf::NotLeaf => return false,
+    }
+    true
+}
+
+struct Job {
+    thread: usize,
+    context: Box<CpuContext>,
+    ticks: u64,
+    mem: *mut Mem,
+    state: Option<CpuState>,
+}
+
+struct Worker {
+    phase: AtomicU8,
+    job: UnsafeCell<Option<Job>>,
+}
+// SAFETY: `phase` decides which thread may access `job`.
+unsafe impl Sync for Worker {}
+unsafe impl Send for Worker {}
+
+struct WorkerCpu(Cpu);
+// SAFETY: only the worker thread uses this after creating it.
+unsafe impl Send for WorkerCpu {}
+
+pub struct Pool {
+    workers: Vec<Arc<Worker>>,
+}
+
+impl Pool {
+    pub fn new(mem: &mut Mem, count: usize, ignore_gl_errors: bool) -> Pool {
+        ACTIVE.store(true, Ordering::Relaxed);
+        IGNORE_GL_ERRORS.store(ignore_gl_errors, Ordering::Relaxed);
+        let workers = (0..count)
+            .map(|i| {
+                let worker = Arc::new(Worker {
+                    phase: AtomicU8::new(IDLE),
+                    job: UnsafeCell::new(None),
+                });
+                // The main CPU has processor ID 0.
+                let cpu = WorkerCpu(Cpu::new_with_processor_id(Some(&mut *mem), i + 1));
+                let thread_worker = worker.clone();
+                std::thread::Builder::new()
+                    .name(format!("GuestJit{i}"))
+                    .spawn(move || worker_main(cpu, thread_worker))
+                    .unwrap();
+                worker
+            })
+            .collect();
+        Pool { workers }
+    }
+
+    /// Start running guest code. Gives the context back if all workers are busy.
+    pub fn submit(
+        &self,
+        thread: usize,
+        context: Box<CpuContext>,
+        ticks: u64,
+        mem: &mut Mem,
+    ) -> Result<usize, Box<CpuContext>> {
+        let Some(index) = self
+            .workers
+            .iter()
+            .position(|worker| worker.phase.load(Ordering::Acquire) == IDLE)
+        else {
+            return Err(context);
+        };
+        let worker = &self.workers[index];
+        // SAFETY: the worker doesn't touch this until it sees JOB_READY.
+        unsafe {
+            *worker.job.get() = Some(Job {
+                thread,
+                context,
+                ticks,
+                mem,
+                state: None,
+            });
+        }
+        worker.phase.store(JOB_READY, Ordering::Release);
+        Ok(index)
+    }
+
+    pub fn is_done(&self, index: usize) -> bool {
+        self.workers[index].phase.load(Ordering::Acquire) == DONE
+    }
+
+    pub fn take_result(&self, index: usize) -> (Box<CpuContext>, u64, CpuState) {
+        let worker = &self.workers[index];
+        assert!(worker.phase.load(Ordering::Acquire) == DONE);
+        // SAFETY: the worker doesn't touch this until it sees JOB_READY.
+        let job = unsafe { (*worker.job.get()).take().unwrap() };
+        worker.phase.store(IDLE, Ordering::Release);
+        (job.context, job.ticks, job.state.unwrap())
+    }
+}
+
+fn worker_main(cpu: WorkerCpu, worker: Arc<Worker>) {
+    let WorkerCpu(mut cpu) = cpu;
+    let mut applied_invalidations = 0;
+    let mut idle_spins = 0u32;
+    loop {
+        if worker.phase.load(Ordering::Acquire) != JOB_READY {
+            idle_spins += 1;
+            if idle_spins > 20_000 {
+                std::thread::yield_now();
+            } else {
+                std::hint::spin_loop();
+            }
+            continue;
+        }
+        idle_spins = 0;
+        worker.phase.store(RUNNING, Ordering::Relaxed);
+
+        if INVALIDATION_COUNT.load(Ordering::Acquire) != applied_invalidations {
+            let invalidations = INVALIDATIONS.lock().unwrap();
+            for &(base, size) in &invalidations[applied_invalidations..] {
+                cpu.invalidate_own_cache_range(base, size);
+            }
+            applied_invalidations = invalidations.len();
+        }
+
+        // SAFETY: the main thread doesn't touch this until it sees DONE.
+        let job = unsafe { (*worker.job.get()).as_mut().unwrap() };
+        cpu.swap_context(&mut job.context);
+        // SAFETY: guest memory stays mapped, and generated code only uses the
+        // direct access pointer. Guest code on different threads racing with
+        // each other is the same as on a real multi-core device.
+        let mem = unsafe { &mut *job.mem };
+        let base = unsafe { mem.direct_memory_access_ptr() }.cast::<u8>();
+        let state = loop {
+            let state = cpu.run_or_step(mem, Some(&mut job.ticks));
+            let CpuState::Svc(svc) = state else {
+                break state;
+            };
+            let leaf = leaf_for_svc(svc);
+            if !unsafe { run_leaf(leaf, cpu.regs_mut(), base, job.thread) } {
+                break state;
+            }
+            job.ticks = job.ticks.saturating_sub(LEAF_CALL_TICKS);
+            if job.ticks == 0 {
+                break CpuState::Normal;
+            }
+        };
+        cpu.swap_context(&mut job.context);
+        job.state = Some(state);
+        worker.phase.store(DONE, Ordering::Release);
+    }
+}

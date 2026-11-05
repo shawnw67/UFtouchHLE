@@ -56,6 +56,7 @@ mod mem;
 mod network_trace;
 mod objc;
 mod options;
+mod parallel_jit;
 mod paths;
 mod performance;
 mod save_research;

@@ -230,6 +230,14 @@ impl Cpu {
     /// becomes bound to that [Mem] instance (subsequent calls must use the same
     /// one).
     pub fn new(direct_memory_access: Option<&mut Mem>) -> Cpu {
+        Self::new_with_processor_id(direct_memory_access, 0)
+    }
+
+    /// Like [Self::new], for one of several CPUs that run at the same time.
+    pub fn new_with_processor_id(
+        direct_memory_access: Option<&mut Mem>,
+        processor_id: usize,
+    ) -> Cpu {
         // Null page count is in pages rather than bytes. Mem ensures it is
         // page aligned.
         let null_page_count: usize = direct_memory_access
@@ -245,8 +253,9 @@ impl Cpu {
             .map_or(std::ptr::null_mut(), |mem| unsafe {
                 mem.direct_memory_access_ptr()
             });
-        let dynarmic_wrapper =
-            unsafe { Podroid_DynarmicWrapper_new(direct_memory_access_ptr, null_page_count) };
+        let dynarmic_wrapper = unsafe {
+            Podroid_DynarmicWrapper_new(direct_memory_access_ptr, null_page_count, processor_id)
+        };
         Cpu {
             dynarmic_wrapper,
             direct_memory_access_ptr,
@@ -350,6 +359,12 @@ impl Cpu {
     /// This is of interest to the dynamic linker, which will sometimes rewrite
     /// code.
     pub fn invalidate_cache_range(&mut self, base: VAddr, size: GuestUSize) {
+        crate::parallel_jit::invalidate_cache_range(base, size);
+        self.invalidate_own_cache_range(base, size);
+    }
+
+    /// Like [Self::invalidate_cache_range], without telling other CPUs.
+    pub fn invalidate_own_cache_range(&mut self, base: VAddr, size: GuestUSize) {
         unsafe { Podroid_DynarmicWrapper_invalidate_cache_range(self.dynarmic_wrapper, base, size) }
     }
 

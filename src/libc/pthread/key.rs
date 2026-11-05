@@ -9,6 +9,9 @@ use crate::abi::GuestFunction;
 use crate::dyld::{export_c_func, FunctionExports};
 use crate::libc::errno::{EAGAIN, EINVAL};
 use crate::mem::{ConstVoidPtr, MutPtr, MutVoidPtr, Ptr};
+use crate::parallel_jit::{
+    fast_tls_get, fast_tls_reset_key, fast_tls_set, FAST_TLS_KEYS, FAST_TLS_THREADS,
+};
 use crate::{Environment, ThreadId};
 use std::collections::HashMap;
 
@@ -38,6 +41,9 @@ fn pthread_key_create(
         if slot.is_none() {
             let key: pthread_key_t = (idx + 1).try_into().unwrap();
             *slot = Some((HashMap::new(), destructor));
+            if idx < FAST_TLS_KEYS {
+                fast_tls_reset_key(idx, true);
+            }
             env.mem.write(key_ptr, key);
             return 0; // success, reused old slot
         }
@@ -48,6 +54,9 @@ fn pthread_key_create(
         State::get(env)
             .keys
             .push(Some((HashMap::new(), destructor)));
+        if idx < FAST_TLS_KEYS {
+            fast_tls_reset_key(idx, true);
+        }
         env.mem.write(key_ptr, key);
         return 0; // success, created new slot
     }
@@ -59,6 +68,9 @@ fn pthread_getspecific(env: &mut Environment, key: pthread_key_t) -> MutVoidPtr 
     let idx: usize = key.checked_sub(1).unwrap().try_into().unwrap();
     let current_thread = env.current_thread;
     match State::get(env).keys.get(idx) {
+        Some(Some(_)) if idx < FAST_TLS_KEYS && current_thread < FAST_TLS_THREADS => {
+            Ptr::from_bits(fast_tls_get(current_thread, idx))
+        }
         Some(Some((map, _))) => map.get(&current_thread).copied().unwrap_or(Ptr::null()),
         _ => Ptr::null(), // failure, NULL for a deleted key, UB for an invalid key
     }
@@ -69,6 +81,10 @@ fn pthread_setspecific(env: &mut Environment, key: pthread_key_t, value: ConstVo
     let idx: usize = key.checked_sub(1).unwrap().try_into().unwrap();
     let current_thread = env.current_thread;
     match State::get(env).keys.get_mut(idx) {
+        Some(Some(_)) if idx < FAST_TLS_KEYS && current_thread < FAST_TLS_THREADS => {
+            fast_tls_set(current_thread, idx, value.to_bits());
+            0 // success
+        }
         Some(Some((map, _))) => {
             map.insert(current_thread, value.cast_mut());
             0 // success
@@ -83,6 +99,9 @@ fn pthread_key_delete(env: &mut Environment, key: pthread_key_t) -> i32 {
     match State::get(env).keys.get_mut(idx) {
         Some(slot @ Some(_)) => {
             *slot = None;
+            if idx < FAST_TLS_KEYS {
+                fast_tls_reset_key(idx, false);
+            }
             0 // success
         }
         _ => EINVAL, // failure, unused key or out of bounds

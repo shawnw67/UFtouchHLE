@@ -114,6 +114,8 @@ pub struct Environment {
     pub objc: NullableBox<objc::ObjC>,
     pub dyld: NullableBox<dyld::Dyld>,
     pub cpu: NullableBox<cpu::Cpu>,
+    /// See [crate::parallel_jit].
+    jit_pool: Option<crate::parallel_jit::Pool>,
     pub current_thread: ThreadId,
     pub threads: Vec<Thread>,
     pub libc_state: NullableBox<libc::State>,
@@ -165,6 +167,8 @@ pub enum ThreadBlock {
     Suspended(usize, Box<ThreadBlock>),
     // Thread is waiting on a FILE object lock.
     FileObjectLock(MutPtr<FILE>),
+    // Thread's guest code is running on this worker, see [crate::parallel_jit].
+    GuestJit(usize),
 }
 
 impl std::fmt::Display for ThreadBlock {
@@ -186,6 +190,7 @@ impl std::fmt::Display for ThreadBlock {
             ThreadBlock::Suspended(count, old) => {
                 write!(f, "Suspended (count {}, previously {})", count, old)
             }
+            ThreadBlock::GuestJit(worker) => write!(f, "Running on worker {worker}"),
             ThreadBlock::FileObjectLock(ptr) => write!(f, "Waiting for file to unlock {ptr:?}"),
             // Unlikely to be seen
             ThreadBlock::WaitingForDebugger(_) => write!(f, "Waiting for debugger"),
@@ -607,6 +612,8 @@ impl Environment {
             true => Some(&mut mem),
             false => None,
         });
+        let jit_pool = (options.parallel_guest && options.direct_memory_access)
+            .then(|| crate::parallel_jit::Pool::new(&mut mem, 3, options.ignore_gl_errors));
 
         let main_thread_init_routine = Coroutine::new(move |yielder, mut env: Environment| {
             let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -773,6 +780,7 @@ impl Environment {
             objc: NullableBox::new(objc),
             dyld: NullableBox::new(dyld),
             cpu: NullableBox::new(cpu),
+            jit_pool,
             current_thread: 0,
             threads: vec![main_thread],
             libc_state: Default::default(),
@@ -899,6 +907,7 @@ impl Environment {
             objc: NullableBox::new(objc),
             dyld: NullableBox::new(dyld),
             cpu: NullableBox::new(cpu),
+            jit_pool: None,
             current_thread: 0,
             threads: vec![main_thread],
             libc_state: Default::default(),
@@ -960,6 +969,7 @@ impl Environment {
             objc: NullableBox::null(),
             dyld: NullableBox::null(),
             cpu: NullableBox::null(),
+            jit_pool: None,
             current_thread: 0,
             threads: Vec::new(),
             libc_state: NullableBox::null(),
@@ -1709,6 +1719,9 @@ impl Environment {
                             svc_pc,
                             svc,
                         ) {
+                            if self.jit_pool.is_some() {
+                                crate::parallel_jit::note_svc(svc, symbol);
+                            }
                             let trace = crate::network_trace::c_begin(self, symbol);
                             f.call_from_guest(self);
                             crate::network_trace::end(self, trace);
@@ -1759,9 +1772,7 @@ impl Environment {
                 .is_none_or(|remaining_ticks| remaining_ticks > 0)
             {
                 let started = self.options.performance_test.map(|_| Instant::now());
-                let state = self
-                    .cpu
-                    .run_or_step(&mut self.mem, self.remaining_ticks.as_mut());
+                let state = self.run_guest_code();
                 if let Some(started) = started {
                     self.framework_state.performance.cpu += started.elapsed();
                 }
@@ -1779,6 +1790,37 @@ impl Environment {
                 }
             }
             self.yield_thread(ThreadBlock::NotBlocked);
+        }
+    }
+
+    /// Run guest code for the current thread until the host needs to act.
+    fn run_guest_code(&mut self) -> cpu::CpuState {
+        let Some(ticks) = self.remaining_ticks.filter(|_| self.jit_pool.is_some()) else {
+            return self
+                .cpu
+                .run_or_step(&mut self.mem, self.remaining_ticks.as_mut());
+        };
+        let mut context = Box::new(cpu::CpuContext::new());
+        self.cpu.swap_context(&mut context);
+        loop {
+            let pool = self.jit_pool.as_ref().unwrap();
+            match pool.submit(self.current_thread, context, ticks, &mut self.mem) {
+                Ok(worker) => {
+                    self.yield_thread(ThreadBlock::GuestJit(worker));
+                    let pool = self.jit_pool.as_ref().unwrap();
+                    let (mut context, ticks, state) = pool.take_result(worker);
+                    self.cpu.swap_context(&mut context);
+                    self.remaining_ticks = Some(ticks);
+                    return state;
+                }
+                Err(returned_context) => {
+                    // Other guest threads need to finish with the workers.
+                    context = returned_context;
+                    self.cpu.swap_context(&mut context);
+                    self.yield_thread(ThreadBlock::NotBlocked);
+                    self.cpu.swap_context(&mut context);
+                }
+            }
         }
     }
 
@@ -1833,6 +1875,7 @@ impl Environment {
             // Try to find a new thread to execute, starting with the thread
             // following the one currently executing.
             let mut next_awakening: Option<Instant> = None;
+            let mut guest_code_running = false;
             for i in 0..self.threads.len() {
                 let thread_id = (self.current_thread + 1 + i) % self.threads.len();
                 let candidate = &mut self.threads[thread_id];
@@ -1854,10 +1897,11 @@ impl Environment {
                         }
                     }
                     ThreadBlock::Mutex(mutex_id) => {
-                        if !self.mutex_state.mutex_is_locked(mutex_id) {
+                        if !self.mutex_state.mutex_is_locked(mutex_id)
+                            && self.relock_unblocked_mutex_for_thread(thread_id, mutex_id)
+                        {
                             log_dbg!("Thread {} was unblocked due to mutex #{} unlocking, relocking mutex.", thread_id, mutex_id);
                             self.threads[thread_id].blocked_by = ThreadBlock::NotBlocked;
-                            self.relock_unblocked_mutex_for_thread(thread_id, mutex_id);
                             return thread_id;
                         }
                     }
@@ -1892,22 +1936,35 @@ impl Environment {
                             .get_mut(&cond)
                             .unwrap();
                         let mutex = host_cond.curr_mutex.unwrap();
-                        if host_cond
+                        let is_waking = host_cond
                             .waking
                             .front()
-                            .is_some_and(|waking_thread| *waking_thread == thread_id)
-                            && !self.mutex_state.mutex_is_locked(mutex)
-                        {
-                            log_dbg!("Thread {} is unblocking on cond var {:?}.", thread_id, cond);
-                            host_cond.waking.pop_front();
-                            self.threads[thread_id].blocked_by = ThreadBlock::NotBlocked;
-                            self.relock_unblocked_mutex_for_thread(thread_id, mutex);
-                            return thread_id;
-                        } else if let Some(deadline) = deadline {
+                            .is_some_and(|waking_thread| *waking_thread == thread_id);
+                        let timed_out = deadline.is_some_and(|deadline| {
                             let time = SystemTime::now()
                                 .duration_since(SystemTime::UNIX_EPOCH)
                                 .unwrap();
-                            if deadline <= time {
+                            deadline <= time
+                        });
+                        if (is_waking || timed_out)
+                            && !self.mutex_state.mutex_is_locked(mutex)
+                            && self.relock_unblocked_mutex_for_thread(thread_id, mutex)
+                        {
+                            let host_cond = self
+                                .libc_state
+                                .pthread
+                                .cond
+                                .condition_variables
+                                .get_mut(&cond)
+                                .unwrap();
+                            if is_waking {
+                                log_dbg!(
+                                    "Thread {} is unblocking on cond var {:?}.",
+                                    thread_id,
+                                    cond
+                                );
+                                host_cond.waking.pop_front();
+                            } else {
                                 log_dbg!(
                                     "Thread {} is timed out on cond var {:?}.",
                                     thread_id,
@@ -1918,12 +1975,9 @@ impl Environment {
 
                                 assert!(host_cond.waking.is_empty());
                                 host_cond.waiting.retain(|&t| t != thread_id);
-
-                                assert!(!self.mutex_state.mutex_is_locked(mutex));
-                                self.threads[thread_id].blocked_by = ThreadBlock::NotBlocked;
-                                self.relock_unblocked_mutex_for_thread(thread_id, mutex);
-                                return thread_id;
                             }
+                            self.threads[thread_id].blocked_by = ThreadBlock::NotBlocked;
+                            return thread_id;
                         }
                     }
                     ThreadBlock::Joining(joinee_thread, ptr) => {
@@ -1946,6 +2000,13 @@ impl Environment {
                     ThreadBlock::NotBlocked => {
                         return thread_id;
                     }
+                    ThreadBlock::GuestJit(worker) => {
+                        if self.jit_pool.as_ref().unwrap().is_done(worker) {
+                            self.threads[thread_id].blocked_by = ThreadBlock::NotBlocked;
+                            return thread_id;
+                        }
+                        guest_code_running = true;
+                    }
                     ThreadBlock::WaitingForDebugger(_) => unreachable!(),
                     ThreadBlock::Suspended(cnt, _) => {
                         assert!(cnt > 0);
@@ -1963,6 +2024,11 @@ impl Environment {
                         }
                     }
                 }
+            }
+
+            if guest_code_running {
+                std::hint::spin_loop();
+                continue;
             }
 
             // All suitable threads are blocked and at least one is asleep.

@@ -7,9 +7,13 @@
 
 use std::collections::HashMap;
 use std::num::NonZeroU32;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::{Environment, ThreadId};
 use crate::libc::errno::{EBUSY, EDEADLK, EPERM};
+use crate::parallel_jit::{
+    decode_mutex_lock, encode_mutex_lock, set_fast_mutex_kind, FAST_MUTEXES, FAST_MUTEX_COUNT,
+};
 
 /// Stores and manages mutexes. Note that all the methods for locking and
 /// unlocking mutexes are on [Environment] instead, because they interact with
@@ -33,9 +37,31 @@ pub type MutexId = u64;
 struct Mutex {
     type_: MutexType,
     waiting_count: u32,
+    /// The current lock. Workers can change this for mutexes with low IDs, see
+    /// [crate::parallel_jit].
+    lock: &'static AtomicU64,
+}
+
+impl Mutex {
     /// The `NonZeroU32` is the number of locks on this thread (if it's a
     /// recursive mutex).
-    locked: Option<(ThreadId, NonZeroU32)>,
+    fn locked(&self) -> Option<(ThreadId, NonZeroU32)> {
+        decode_mutex_lock(self.lock.load(Ordering::Acquire))
+            .map(|(thread, count)| (thread, NonZeroU32::new(count).unwrap()))
+    }
+
+    fn set_locked(&self, locked: Option<(ThreadId, NonZeroU32)>) {
+        let word = locked.map_or(0, |(thread, count)| encode_mutex_lock(thread, count.get()));
+        self.lock.store(word, Ordering::Release);
+    }
+
+    /// Lock an unlocked mutex. This can fail if a worker gets there first.
+    fn try_lock(&self, thread: ThreadId) -> bool {
+        let word = encode_mutex_lock(thread, 1);
+        self.lock
+            .compare_exchange(0, word, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+    }
 }
 
 #[repr(i32)]
@@ -72,8 +98,16 @@ impl MutexState {
             Mutex {
                 type_: mutex_type,
                 waiting_count: 0,
-                locked: None,
+                lock: match usize::try_from(mutex_id) {
+                    Ok(index) if index < FAST_MUTEX_COUNT => &FAST_MUTEXES[index],
+                    _ => Box::leak(Box::new(AtomicU64::new(0))),
+                },
             },
+        );
+        set_fast_mutex_kind(
+            mutex_id,
+            true,
+            mutex_type == MutexType::PTHREAD_MUTEX_RECURSIVE,
         );
         log_dbg!("Created mutex #{}, type {:?}", mutex_id, mutex_type);
         mutex_id
@@ -84,7 +118,7 @@ impl MutexState {
     /// destroyed on an Err return.
     pub fn destroy_mutex(&mut self, mutex_id: MutexId) -> Result<(), i32> {
         let mutex = self.mutexes.get_mut(&mutex_id).unwrap();
-        if mutex.locked.is_some() {
+        if mutex.locked().is_some() {
             log_dbg!("Attempted to destroy currently locked mutex, returning EBUSY!");
             return Err(EBUSY);
         } else if mutex.waiting_count != 0 {
@@ -94,6 +128,7 @@ impl MutexState {
         // TODO?: If we switch to a vec-based system, we should reuse destroyed
         // ids if they are at the top of the stack.
         self.mutexes.remove(&mutex_id);
+        set_fast_mutex_kind(mutex_id, false, false);
         Ok(())
     }
 
@@ -107,7 +142,7 @@ impl MutexState {
     pub fn mutex_is_locked(&self, mutex_id: MutexId) -> bool {
         self.mutexes
             .get(&mutex_id)
-            .is_some_and(|mutex| mutex.locked.is_some())
+            .is_some_and(|mutex| mutex.locked().is_some())
     }
 
     pub fn mutex_is_recursive(&self, mutex_id: MutexId) -> bool {
@@ -118,7 +153,7 @@ impl MutexState {
 
     pub fn mutex_is_locked_by(&self, mutex_id: MutexId, thread: ThreadId) -> bool {
         self.mutexes.get(&mutex_id).is_some_and(|mutex| {
-            if let Some((lock_thread, _)) = mutex.locked {
+            if let Some((lock_thread, _)) = mutex.locked() {
                 lock_thread == thread
             } else {
                 false
@@ -129,35 +164,25 @@ impl MutexState {
 
 impl Environment {
     /// Relock mutex that was just unblocked. This should probably only be used
-    /// by the thread scheduler.
-    pub fn relock_unblocked_mutex_for_thread(&mut self, thread_id: ThreadId, mutex_id: MutexId) {
+    /// by the thread scheduler. It returns [false] if a worker locked the mutex
+    /// first, in which case the thread remains blocked.
+    pub fn relock_unblocked_mutex_for_thread(
+        &mut self,
+        thread_id: ThreadId,
+        mutex_id: MutexId,
+    ) -> bool {
+        let mutex: &mut _ = self.mutex_state.mutexes.get_mut(&mutex_id).unwrap();
         log_dbg!(
             "Relocking unblocked mutex {} for thread {}, waiting count {}",
             mutex_id,
-            self.current_thread,
-            self.mutex_state
-                .mutexes
-                .get_mut(&mutex_id)
-                .unwrap()
-                .waiting_count
+            thread_id,
+            mutex.waiting_count
         );
-        let mutex: &mut _ = self.mutex_state.mutexes.get_mut(&mutex_id).unwrap();
-        assert!(mutex.locked.is_none());
-        mutex.locked = Some((thread_id, NonZeroU32::new(1).unwrap()));
-        if self
-            .mutex_state
-            .mutexes
-            .get_mut(&mutex_id)
-            .unwrap()
-            .waiting_count
-            > 0
-        {
-            self.mutex_state
-                .mutexes
-                .get_mut(&mutex_id)
-                .unwrap()
-                .waiting_count -= 1;
+        if !mutex.try_lock(thread_id) {
+            return false;
         }
+        mutex.waiting_count = mutex.waiting_count.saturating_sub(1);
+        true
     }
 
     /// Locks a mutex and returns the lock count or an error (as errno). Similar
@@ -166,11 +191,15 @@ impl Environment {
         let current_thread = self.current_thread;
         let mutex: &mut _ = self.mutex_state.mutexes.get_mut(&mutex_id).unwrap();
 
-        let Some((locking_thread, lock_count)) = mutex.locked else {
+        if mutex.try_lock(current_thread) {
             log_dbg!("Locked mutex #{} for thread {}.", mutex_id, current_thread);
-            mutex.locked = Some((current_thread, NonZeroU32::new(1).unwrap()));
             return Ok(1);
-        };
+        }
+
+        // A worker could unlock it right now, so this can't assume it's locked.
+        let (locking_thread, lock_count) = mutex
+            .locked()
+            .unwrap_or((usize::MAX, NonZeroU32::new(1).unwrap()));
 
         if locking_thread == current_thread {
             match mutex.type_ {
@@ -195,7 +224,7 @@ impl Environment {
                         mutex_id,
                         locking_thread,
                     );
-                    mutex.locked = Some((locking_thread, lock_count.checked_add(1).unwrap()));
+                    mutex.set_locked(Some((locking_thread, lock_count.checked_add(1).unwrap())));
                     return Ok(lock_count.get() + 1);
                 }
             }
@@ -217,7 +246,7 @@ impl Environment {
         let current_thread = self.current_thread;
         let mutex: &mut _ = self.mutex_state.mutexes.get_mut(&mutex_id).unwrap();
 
-        let Some((locking_thread, lock_count)) = mutex.locked else {
+        let Some((locking_thread, lock_count)) = mutex.locked() else {
             match mutex.type_ {
                 MutexType::PTHREAD_MUTEX_NORMAL => {
                     // This case is undefined, we may as well panic.
@@ -265,7 +294,7 @@ impl Environment {
                 mutex_id,
                 current_thread
             );
-            mutex.locked = None;
+            mutex.set_locked(None);
             Ok(0)
         } else {
             assert!(mutex.type_ == MutexType::PTHREAD_MUTEX_RECURSIVE);
@@ -275,10 +304,10 @@ impl Environment {
                 lock_count,
                 locking_thread
             );
-            mutex.locked = Some((
+            mutex.set_locked(Some((
                 locking_thread,
                 NonZeroU32::new(lock_count.get() - 1).unwrap(),
-            ));
+            )));
             Ok(lock_count.get() - 1)
         }
     }

@@ -41,7 +41,7 @@ unsafe impl SafeRead for pthread_mutex_t {}
 /// Arbitrarily-chosen magic number for `pthread_mutexattr_t` (not Apple's).
 const MAGIC_MUTEXATTR: u32 = u32::from_be_bytes(*b"MuAt");
 /// Arbitrarily-chosen magic number for `pthread_mutex_t` (not Apple's).
-const MAGIC_MUTEX: u32 = u32::from_be_bytes(*b"MUTX");
+pub const MAGIC_MUTEX: u32 = u32::from_be_bytes(*b"MUTX");
 /// Magic number used by `PTHREAD_MUTEX_INITIALIZER`. This is part of the ABI!
 const MAGIC_MUTEX_STATIC: u32 = 0x32AAABA7;
 
