@@ -196,7 +196,7 @@ touchHLE © 2023–2026 touchHLE project contributors。本分支保留上游及
 
 touchHLE 自身源码采用 **Mozilla Public License 2.0**；由于依赖的许可证兼容要求，发行二进制采用 **GNU GPL v3 或更高版本**。附带动态库和字体的条款分别见 [Podroid_dylibs](Podroid_dylibs/) 和 [Podroid_fonts](Podroid_fonts/)。完整依赖版权信息可在应用设置或通过 `--copyright` 参数查看。
 
-感谢上游 touchHLE、HyperHLE-Reborn 及下方所有贡献者，以及 dynarmic、SDL、OpenAL Soft、Symphonia、Rust 生态及所有相关开源项目，也感谢协助测试、反馈问题的用户。
+感谢上游 touchHLE 及下方所有贡献者，以及 dynarmic、SDL、OpenAL Soft、Symphonia、Rust 生态及所有相关开源项目，也感谢协助测试、反馈问题的用户。
 
 本分支的部分改动由 AI 辅助完成（Anthropic Claude），相关提交带有 `Co-Authored-By` 标注。
 
@@ -213,10 +213,6 @@ touchHLE 自身源码采用 **Mozilla Public License 2.0**；由于依赖的许�
 **AI 协作**（Anthropic Claude，参与了本分支的部分改动）
 
 <a href="https://github.com/claude" title="Claude (AI)"><img src="https://github.com/claude.png?size=96" width="48" height="48" alt="Claude"></a>
-
-**[HyperHLE-Reborn](https://github.com/KlugKlugTG/HyperHLE-Reborn)**（本分支移植了其部分代码）
-
-<a href="https://github.com/KlugKlugTG/HyperHLE-Reborn/graphs/contributors"><img src="https://contrib.rocks/image?repo=KlugKlugTG/HyperHLE-Reborn&max=36&columns=12" alt="HyperHLE-Reborn contributors"></a>
 
 **[touchHLE](https://github.com/touchHLE/touchHLE)**
 

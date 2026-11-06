@@ -198,7 +198,7 @@ touchHLE © 2023–2026 touchHLE project contributors. This fork retains upstrea
 
 touchHLE's own source code is licensed under the **Mozilla Public License 2.0**. Due to dependency license compatibility requirements, distributed binaries are licensed under the **GNU GPL v3 or later**. Bundled libraries and fonts have their own terms; see [Podroid_dylibs](Podroid_dylibs/) and [Podroid_fonts](Podroid_fonts/). Dependency copyright information is available in the app's settings or through `--copyright`.
 
-Thanks to upstream touchHLE, HyperHLE-Reborn and all the contributors below, as well as dynarmic, SDL, OpenAL Soft, Symphonia, the Rust ecosystem, all other open-source dependencies, and everyone who helps test the fork and report issues.
+Thanks to upstream touchHLE and all the contributors below, as well as dynarmic, SDL, OpenAL Soft, Symphonia, the Rust ecosystem, all other open-source dependencies, and everyone who helps test the fork and report issues.
 
 Some changes in this fork are AI-assisted (Anthropic Claude). The commits involved carry a `Co-Authored-By` line.
 
@@ -215,10 +215,6 @@ Some changes in this fork are AI-assisted (Anthropic Claude). The commits involv
 **AI collaborator** (Anthropic Claude, involved in some of this fork's changes)
 
 <a href="https://github.com/claude" title="Claude (AI)"><img src="https://github.com/claude.png?size=96" width="48" height="48" alt="Claude"></a>
-
-**[HyperHLE-Reborn](https://github.com/KlugKlugTG/HyperHLE-Reborn)** (parts of its code are ported to this fork)
-
-<a href="https://github.com/KlugKlugTG/HyperHLE-Reborn/graphs/contributors"><img src="https://contrib.rocks/image?repo=KlugKlugTG/HyperHLE-Reborn&max=36&columns=12" alt="HyperHLE-Reborn contributors"></a>
 
 **[touchHLE](https://github.com/touchHLE/touchHLE)**
 
